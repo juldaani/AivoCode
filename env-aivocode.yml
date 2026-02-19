@@ -1,0 +1,23 @@
+name: env-aivocode
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - ipykernel
+  - spyder-kernels
+  - ruff
+  - numba=0.63.1
+  - numpy=1.26.4
+  - scipy=1.17.0
+  - matplotlib=3.10.8
+  - pandas=3.0.1
+  - fastapi=0.129.0
+  - faiss-cpu=1.9.0
+  - pip:
+    - torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+    - torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
+    - mcp[cli]==1.7.1
+    - pytest==9.0.2
+    - pyright
