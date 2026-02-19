@@ -30,6 +30,21 @@
 - Imports: use `import numpy as np` and `import torch as tc`.
 - Performance: prefer NumPy/PyTorch vectorized operations over Python loops when feasible.
 
+## Docs & Comments Policy
+- Docstrings/comments should explain: what it does (short), why it exists/why this way,
+  and how to use or extend it (contract, lifecycle, invariants).
+- Module docstring: required for non-trivial/infrastructure modules (protocols,
+  concurrency, parsing, caching). Include What/Why/How-to-read (entrypoints + flow).
+- Public API (non-`_`): docstring required (purpose, key params/returns, side effects,
+  assumptions).
+- Private helpers (`_`): docstring when non-obvious (protocol/concurrency/edge cases)
+  or reused.
+- Inline comments: be reasonably liberal to improve readability; avoid only the truly
+  obvious. Prioritize invariants, lock/concurrency rationale, protocol framing rules,
+  and failure modes/recovery behavior.
+- If broad exception handling is intentional (e.g., background loops), add a brief
+  comment explaining why it’s safe and what gets logged.
+
 ## Workflow
 1. Make focused changes (avoid unrelated diffs).
 2. Run `pytest` (targeted is fine during development).
