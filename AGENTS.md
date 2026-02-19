@@ -35,6 +35,19 @@
   and how to use or extend it (contract, lifecycle, invariants).
 - Module docstring: required for non-trivial/infrastructure modules (protocols,
   concurrency, parsing, caching). Include What/Why/How-to-read (entrypoints + flow).
+  Prefer a multi-line format with short sections and bullets when helpful. The
+  section titles are flexible; use whatever headings make sense for the module:
+
+  """
+  Title sentence.
+
+  Section title 1
+  - ...
+
+  Section title 2
+  - ...
+  """
+
 - Public API (non-`_`): docstring required (purpose, key params/returns, side effects,
   assumptions).
 - Private helpers (`_`): docstring when non-obvious (protocol/concurrency/edge cases)

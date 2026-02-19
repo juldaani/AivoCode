@@ -1,3 +1,9 @@
+"""Public exports for the LSP server utilities package.
+
+What this file provides
+- A curated import surface for the lsp_server package.
+"""
+
 from .async_process import AsyncStdioLspProcess, LspMethodNotFound, LspResponseError
 from .basedpyright import BasedPyrightProvider
 from .client import AsyncLspClient

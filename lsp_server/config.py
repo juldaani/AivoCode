@@ -1,3 +1,12 @@
+"""Config structures and validation helpers for LSP providers.
+
+What this file provides
+- Small config dataclasses and validation routines.
+
+Why this exists
+- Centralizes validation rules so providers stay clean and predictable.
+"""
+
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,10 +16,19 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class BasedPyrightConfig:
+    """Configuration required to start basedpyright."""
+
     config_root: Path
 
 
 def resolve_and_validate_config_root(*, workspace_root: Path, config_root: Path) -> Path:
+    """Resolve and validate the config root for basedpyright.
+
+    Rules:
+    - Accept absolute or workspace-relative paths.
+    - Require the directory to exist and contain pyproject.toml or pyrightconfig.json.
+    - Warn (but do not fail) if the config root is outside the workspace.
+    """
     workspace_root = workspace_root.resolve()
     if config_root.is_absolute():
         resolved = config_root
