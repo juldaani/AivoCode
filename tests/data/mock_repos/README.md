@@ -11,6 +11,7 @@ How the fixtures are organized
 - Each language has its own subfolder (for example, `python/`).
 - Files may have sidecar ground-truth JSON for symbol tests:
   - `file.py` + `file_tests_gt.json`
+- GT files may be server-specific via an `lsp_server` field when needed.
 
 Rules of thumb
 - Keep code tiny and deterministic; no external dependencies.

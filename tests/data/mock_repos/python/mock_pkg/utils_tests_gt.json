@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "source": "mock_pkg/utils.py",
+  "lsp_server": "basedpyright",
   "_symbol_kind_legend": {
     "5": "Class",
     "6": "Method",
@@ -16,14 +17,26 @@
         {
           "name": "greet",
           "kind": 6,
-          "children": []
+          "children": [
+            {
+              "name": "name",
+              "kind": 13,
+              "children": []
+            }
+          ]
         }
       ]
     },
     {
       "name": "hello",
       "kind": 12,
-      "children": []
+      "children": [
+        {
+          "name": "name",
+          "kind": 13,
+          "children": []
+        }
+      ]
     },
     {
       "name": "MAX_RETRIES",

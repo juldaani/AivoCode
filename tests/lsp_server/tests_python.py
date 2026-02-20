@@ -46,9 +46,14 @@ async def _run_document_symbols_test(tmp_path) -> None:
         raw = await document_symbols(client, file_path)
         got = normalize_document_symbols(raw)
         expected = load_tests_gt(gt_path)
+        expected_server = expected.get("lsp_server")
+        if expected_server != provider.id:
+            raise AssertionError(
+                f"GT lsp_server mismatch: {expected_server} != {provider.id}"
+            )
         dump_debug(tmp_path, "document_symbols_raw", raw)
         dump_debug(tmp_path, "document_symbols_normalized", got)
-        dump_debug(tmp_path, "document_symbols_expected", expected)
+        dump_debug(tmp_path, "document_symbols_expected", expected.get("symbols"))
         assert_symbols_match(got, expected["symbols"])
     finally:
         await client.shutdown()

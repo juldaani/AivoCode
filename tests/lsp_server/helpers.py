@@ -84,36 +84,19 @@ def normalize_document_symbols(result: JsonValue) -> list[JsonDict]:
     raise TypeError(f"Unexpected documentSymbol result shape: {type(result)}")
 
 
-def _normalize_document_symbol_list(
-    items: list[dict[str, Any]], parent_kind: int | None = None
-) -> list[JsonDict]:
-    """Normalize nested DocumentSymbol entries.
-
-    Drops parameter symbols that some servers report as children of methods.
-    """
-    normalized = [_normalize_document_symbol(item, parent_kind=parent_kind) for item in items]
+def _normalize_document_symbol_list(items: list[dict[str, Any]]) -> list[JsonDict]:
+    """Normalize nested DocumentSymbol entries."""
+    normalized = [_normalize_document_symbol(item) for item in items]
     return _sort_symbols(normalized)
 
 
-def _normalize_document_symbol(
-    item: dict[str, Any], parent_kind: int | None = None
-) -> JsonDict:
-    """Normalize a single DocumentSymbol entry.
-
-    Some servers expose method parameters as Variable children; we drop those
-    to keep GT stable and focused on top-level symbols.
-    """
-    if _should_drop_parameter_like_symbol(item, parent_kind=parent_kind):
-        return {"name": "__drop__", "kind": -999, "children": []}
-
+def _normalize_document_symbol(item: dict[str, Any]) -> JsonDict:
+    """Normalize a single DocumentSymbol entry."""
     children = item.get("children") or []
-    kind = item.get("kind")
     return {
         "name": item.get("name"),
-        "kind": kind,
-        "children": _normalize_document_symbol_list(children, parent_kind=kind)
-        if children
-        else [],
+        "kind": item.get("kind"),
+        "children": _normalize_document_symbol_list(children) if children else [],
     }
 
 
@@ -128,25 +111,7 @@ def _normalize_symbol_information_list(items: list[dict[str, Any]]) -> list[Json
 
 def _sort_symbols(symbols: list[JsonDict]) -> list[JsonDict]:
     """Sort symbols deterministically by kind then name."""
-    filtered = [symbol for symbol in symbols if symbol.get("name") != "__drop__"]
-    return sorted(filtered, key=lambda s: (_kind_sort_key(s.get("kind")), s.get("name")))
-
-
-def _should_drop_parameter_like_symbol(
-    item: dict[str, Any], *, parent_kind: int | None
-) -> bool:
-    """Return True if this looks like a parameter symbol under a method/function.
-
-    Basedpyright may report parameters as Variable children under Method/Function.
-    We drop these to avoid brittle GT files for tests focused on top-level symbols.
-    """
-    if parent_kind not in (6, 12):
-        return False
-    kind = item.get("kind")
-    if kind != 13:
-        return False
-    children = item.get("children") or []
-    return len(children) == 0
+    return sorted(symbols, key=lambda s: (_kind_sort_key(s.get("kind")), s.get("name")))
 
 
 def _kind_sort_key(kind: JsonValue) -> int:
