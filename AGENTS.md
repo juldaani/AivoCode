@@ -21,6 +21,10 @@
 - Run a single test: `pytest path/to/test_file.py::TestClass::test_name`
 - Run by keyword: `pytest -k "keyword"`
 
+### Executing code
+- Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
+  `conda run -n env-aivocode python path/to/script.py`
+
 ## Code Standards (Explicit)
 - Line length: max 100 characters.
 - Typing: follow PEP 484+; prefer explicit types for public functions/methods.
