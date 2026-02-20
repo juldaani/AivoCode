@@ -26,6 +26,10 @@ async def _run() -> None:
     # Use the same folder as the config root to satisfy basedpyright validation.
     config_root = PATH_TO_REPO
 
+    print("Starting LSP example")
+    print(f"Workspace root: {workspace_root}")
+    print(f"Config root: {config_root}")
+
     # Create a manager that caches and reuses LSP clients for this workspace.
     manager = WorkspaceLspManager()
     # Choose the basedpyright provider for Python LSP support.
@@ -38,11 +42,14 @@ async def _run() -> None:
         provider=provider, workspace_root=workspace_root, config=config
     )
 
+    print(f"Server running: {client.is_running()}")
+
     # The server is running in the background now. You can send LSP requests here.
     # Example: await client.request("textDocument/documentSymbol", params={...})
 
     # Gracefully stop the server once the example work is complete.
     await client.shutdown()
+    print("Server stopped")
 
 
 def main() -> None:
