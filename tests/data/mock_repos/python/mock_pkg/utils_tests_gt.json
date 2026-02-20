@@ -28,6 +28,119 @@
       ]
     },
     {
+      "name": "GreeterFactory",
+      "kind": 5,
+      "children": [
+        {
+          "name": "make",
+          "kind": 6,
+          "children": [
+            {
+              "name": "greeter",
+              "kind": 13,
+              "children": []
+            },
+            {
+              "name": "prefix",
+              "kind": 13,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GreetingStyle",
+      "kind": 5,
+      "children": [
+        {
+          "name": "FORMAL",
+          "kind": 14,
+          "children": []
+        },
+        {
+          "name": "FRIENDLY",
+          "kind": 14,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "LoudGreeter",
+      "kind": 5,
+      "children": [
+        {
+          "name": "greet",
+          "kind": 6,
+          "children": [
+            {
+              "name": "name",
+              "kind": 13,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "build_payload",
+      "kind": 12,
+      "children": [
+        {
+          "name": "message",
+          "kind": 13,
+          "children": []
+        },
+        {
+          "name": "name",
+          "kind": 13,
+          "children": []
+        },
+        {
+          "name": "var1",
+          "kind": 13,
+          "children": []
+        },
+        {
+          "name": "var2",
+          "kind": 13,
+          "children": []
+        },
+        {
+          "name": "var3",
+          "kind": 13,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "format_message",
+      "kind": 12,
+      "children": [
+        {
+          "name": "message",
+          "kind": 13,
+          "children": []
+        },
+        {
+          "name": "sep",
+          "kind": 13,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "goodbye",
+      "kind": 12,
+      "children": [
+        {
+          "name": "name",
+          "kind": 13,
+          "children": []
+        }
+      ]
+    },
+    {
       "name": "hello",
       "kind": 12,
       "children": [
@@ -39,13 +152,39 @@
       ]
     },
     {
+      "name": "hello_default",
+      "kind": 12,
+      "children": []
+    },
+    {
+      "name": "hello_many",
+      "kind": 12,
+      "children": [
+        {
+          "name": "names",
+          "kind": 13,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "DEFAULT_NAME",
+      "kind": 14,
+      "children": []
+    },
+    {
+      "name": "DEFAULT_SEPARATOR",
+      "kind": 14,
+      "children": []
+    },
+    {
       "name": "MAX_RETRIES",
-      "kind": [13, 14],
+      "kind": 14,
       "children": []
     },
     {
       "name": "WELCOME_MESSAGE",
-      "kind": [13, 14],
+      "kind": 14,
       "children": []
     }
   ]
