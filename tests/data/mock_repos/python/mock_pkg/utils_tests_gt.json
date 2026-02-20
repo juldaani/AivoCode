@@ -1,31 +1,38 @@
 {
   "schema_version": 1,
   "source": "mock_pkg/utils.py",
+  "_symbol_kind_legend": {
+    "5": "Class",
+    "6": "Method",
+    "12": "Function",
+    "13": "Variable",
+    "14": "Constant"
+  },
   "symbols": [
     {
       "name": "Greeter",
-      "kind": "Class",
+      "kind": 5,
       "children": [
         {
           "name": "greet",
-          "kind": "Method",
+          "kind": 6,
           "children": []
         }
       ]
     },
     {
       "name": "hello",
-      "kind": "Function",
+      "kind": 12,
       "children": []
     },
     {
       "name": "MAX_RETRIES",
-      "kind": "Constant",
+      "kind": [13, 14],
       "children": []
     },
     {
       "name": "WELCOME_MESSAGE",
-      "kind": "Constant",
+      "kind": [13, 14],
       "children": []
     }
   ]

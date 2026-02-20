@@ -16,10 +16,10 @@
 - Type check: `pyright`
 
 ### Tests
-- Run all tests: `pytest`
-- Run a single file: `pytest path/to/test_file.py`
-- Run a single test: `pytest path/to/test_file.py::TestClass::test_name`
-- Run by keyword: `pytest -k "keyword"`
+- Run all tests: `conda run -n env-aivocode pytest`
+- Run a single file: `conda run -n env-aivocode pytest path/to/test_file.py`
+- Run a single test: `conda run -n env-aivocode pytest path/to/test_file.py::TestClass::test_name`
+- Run by keyword: `conda run -n env-aivocode pytest -k "keyword"`
 
 ### Executing code
 - Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
