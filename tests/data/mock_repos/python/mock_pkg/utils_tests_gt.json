@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "source": "mock_pkg/utils.py",
+  "symbols": [
+    {
+      "name": "Greeter",
+      "kind": "Class",
+      "children": [
+        {
+          "name": "greet",
+          "kind": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "hello",
+      "kind": "Function",
+      "children": []
+    },
+    {
+      "name": "MAX_RETRIES",
+      "kind": "Constant",
+      "children": []
+    },
+    {
+      "name": "WELCOME_MESSAGE",
+      "kind": "Constant",
+      "children": []
+    }
+  ]
+}

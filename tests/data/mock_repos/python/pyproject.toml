@@ -1,0 +1,4 @@
+[tool.pyright]
+include = ["mock_pkg"]
+exclude = ["**/*.json", "**/__pycache__", ".venv", "venv"]
+pythonVersion = "3.11"
