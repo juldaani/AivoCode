@@ -1,0 +1,6 @@
+[server.aivocode]
+workspace_root = "tests/data/mock_repos/python"
+
+[server.lsp]
+provider = "basedpyright"
+config_root = ""
