@@ -33,6 +33,8 @@
 ## Docs & Comments Policy
 - Docstrings/comments should explain: what it does (short), why it exists/why this way,
   and how to use or extend it (contract, lifecycle, invariants).
+- Assume junior dev or someone not familiar with the current programming language 
+  reading the code -> liberal and more explaining commenting policy.
 - Module docstring: required for non-trivial/infrastructure modules (protocols,
   concurrency, parsing, caching). Include What/Why/How-to-read (entrypoints + flow).
   Prefer a multi-line format with short sections and bullets when helpful. The
