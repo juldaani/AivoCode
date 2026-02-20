@@ -19,4 +19,4 @@ Key files
 - `lsp_server/async_process.py`: stdio transport + JSON-RPC framing.
 - `lsp_server/client.py`: LSP initialize + request routing.
 - `lsp_server/manager.py`: cache and reuse clients per workspace.
-- `lsp_server/basedpyright.py`: basedpyright-specific provider.
+- `lsp_server/basedpyright/provider.py`: basedpyright-specific provider.

@@ -5,9 +5,9 @@ What this file provides
 """
 
 from .async_process import AsyncStdioLspProcess, LspMethodNotFound, LspResponseError
-from .basedpyright import BasedPyrightProvider
+from .basedpyright.provider import BasedPyrightProvider
 from .client import AsyncLspClient
-from .config import BasedPyrightConfig, resolve_and_validate_config_root
+from .basedpyright.config import BasedPyrightConfig, resolve_and_validate_config_root
 from .manager import WorkspaceLspManager
 from .provider import LspServerProvider
 from .spec import LspServerSpec

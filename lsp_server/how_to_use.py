@@ -13,8 +13,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from .basedpyright import BasedPyrightProvider
-from .config import BasedPyrightConfig
+from .basedpyright.provider import BasedPyrightProvider
+from .basedpyright.config import BasedPyrightConfig
 from .manager import WorkspaceLspManager
 
 PATH_TO_REPO = Path(__file__).resolve().parents[1] / "tests" / "data" / "mock_repos" / "python"

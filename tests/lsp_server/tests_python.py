@@ -8,8 +8,8 @@ What this file provides
 
 import asyncio
 
-from lsp_server.basedpyright import BasedPyrightProvider
-from lsp_server.config import BasedPyrightConfig
+from lsp_server.basedpyright.provider import BasedPyrightProvider
+from lsp_server.basedpyright.config import BasedPyrightConfig
 from lsp_server.manager import WorkspaceLspManager
 
 from .helpers import (
