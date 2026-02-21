@@ -14,31 +14,31 @@ In this repo, `watchfiles` is already included in the conda environment `env-aiv
 Run with the repo's conda environment:
 
 ```bash
-conda run -n env-aivocode python file_watcher/watch_repo.py /path/to/repo
+conda run -n env-aivocode python -m file_watcher.watch_repo /path/to/repo
 ```
 
 Watch multiple repos/paths (single merged stream of events):
 
 ```bash
-conda run -n env-aivocode python file_watcher/watch_repo.py /path/to/repo-a /path/to/repo-b
+conda run -n env-aivocode python -m file_watcher.watch_repo /path/to/repo-a /path/to/repo-b
 ```
 
 Disable gitignore filtering (keep watchfiles defaults/custom ignores):
 
 ```bash
-conda run -n env-aivocode python file_watcher/watch_repo.py /path/to/repo --no-gitignore-filter
+conda run -n env-aivocode python -m file_watcher.watch_repo /path/to/repo --no-gitignore-filter
 ```
 
 Disable watchfiles default filtering (includes `.git/` and other noisy directories):
 
 ```bash
-conda run -n env-aivocode python file_watcher/watch_repo.py /path/to/repo --no-defaults-filter
+conda run -n env-aivocode python -m file_watcher.watch_repo /path/to/repo --no-defaults-filter
 ```
 
 Add custom excludes (merged into watchfiles filtering):
 
 ```bash
-conda run -n env-aivocode python file_watcher/watch_repo.py /path/to/repo \
+conda run -n env-aivocode python -m file_watcher.watch_repo /path/to/repo \
   --ignore-dirs "dist,build" \
   --ignore-entity-globs "*.log,.goutputstream-*" \
   --ignore-paths "tmp/generated.txt"
@@ -47,7 +47,7 @@ conda run -n env-aivocode python file_watcher/watch_repo.py /path/to/repo \
 Faster feedback (smaller debounce window):
 
 ```bash
-conda run -n env-aivocode python file_watcher/watch_repo.py . --debounce-ms 200 --step-ms 25
+conda run -n env-aivocode python -m file_watcher.watch_repo . --debounce-ms 200 --step-ms 25
 ```
 
 ## Notes
