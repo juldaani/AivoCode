@@ -1,9 +1,30 @@
 #!/usr/bin/env python3
-"""CLI wrapper for the importable file watcher.
+"""Standalone demo showing how to use the file watcher from the command line.
 
-This script is intentionally standalone and suitable for quick manual testing.
-The underlying logic lives in the `file_watcher` package so it can be imported
-and used by production code.
+What it does
+- Watches one or more repository directories for file changes.
+- Prints each batch of events to stdout with human-readable labels.
+- Demonstrates the main configuration options available via CLI flags.
+
+Why this exists
+- Quick manual testing of the watcher without writing code.
+- Reference example for how to configure and invoke the importable API
+  (`file_watcher.watcher.watch_repos` and `awatch_repos`).
+
+How to read this file
+- Entry point: `main()` parses CLI args, builds a `WatchConfig`, and calls
+  the library function `watch_repos()` in a loop.
+- Configuration is split into: (1) watchfiles tuning (debounce, step, polling)
+  and (2) filtering (defaults, gitignore, custom excludes).
+- The loop prints a batch header, any warnings, and sorted event lines.
+
+Usage
+- Module invocation (recommended): python -m file_watcher.how_to_use /path/to/repo
+- Script invocation also works: python file_watcher/how_to_use.py /path/to/repo
+
+See Also
+- file_watcher/README.md for CLI examples and notes.
+- file_watcher.watcher for the importable API used by production code.
 """
 
 from __future__ import annotations
@@ -15,7 +36,7 @@ from typing import Sequence
 
 from watchfiles import Change
 
-# When executed as a script (`python file_watcher/watch_repo.py`), Python sets
+# When executed as a script (`python file_watcher/how_to_use.py`), Python sets
 # sys.path[0] to `.../file_watcher`, which breaks importing the `file_watcher`
 # package. Add the repo root to sys.path to support both script and module usage.
 _repo_root = Path(__file__).resolve().parent.parent
@@ -25,7 +46,7 @@ if str(_repo_root) not in sys.path:
 from file_watcher.types import WatchConfig  # noqa: E402
 from file_watcher.watcher import build_startup_info, watch_repos  # noqa: E402
 
-
+# Human-readable labels for the Change enum values used in output.
 _CHANGE_LABELS: dict[Change, str] = {
     Change.added: "ADDED",
     Change.modified: "MODIFIED",
@@ -34,6 +55,11 @@ _CHANGE_LABELS: dict[Change, str] = {
 
 
 def _split_csv(value: str | None) -> tuple[str, ...]:
+    """Parse a comma-separated string into a tuple of trimmed non-empty items.
+
+    Used for CLI flags that accept comma-separated lists (e.g. --ignore-dirs).
+    Returns an empty tuple if the input is None or empty.
+    """
     if not value:
         return ()
     parts = [p.strip() for p in value.split(",")]
@@ -41,9 +67,16 @@ def _split_csv(value: str | None) -> tuple[str, ...]:
 
 
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse command-line arguments for the watcher demo.
+
+    Arguments are grouped into:
+    - Positional: paths to watch (one or more directories).
+    - Filtering: toggles for defaults/gitignore and custom exclude options.
+    - Watch tuning: debounce, step, recursion, polling behavior.
+    """
     parser = argparse.ArgumentParser(
-        prog="watch_repo",
-        description="Watch one or more repository directories and print file change events.",
+        prog="file_watcher.how_to_use",
+        description="Demo: watch one or more repository directories and print file change events.",
     )
     parser.add_argument(
         "paths_to_repo",
@@ -123,6 +156,16 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the watcher demo: parse args, print configuration, and stream batches.
+
+    Returns
+    - 0 on clean exit (Ctrl+C or natural end).
+    - 2 on invalid input (e.g. non-existent directory).
+
+    Side effects
+    - Prints watcher configuration and event batches to stdout.
+    - On gitignore errors, prints warnings but continues (fail-open).
+    """
     args = _parse_args(sys.argv[1:] if argv is None else argv)
 
     roots = list(args.paths_to_repo)
@@ -140,12 +183,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         ignore_paths=_split_csv(args.ignore_paths),
     )
 
+    # Validate roots and compute effective filter configuration.
     try:
         root_info, watch_filter, git_status = build_startup_info(roots, cfg)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    # Print startup banner with effective configuration.
     defaults_label = "on" if cfg.defaults_filter else "off"
     gitignore_label = "on" if cfg.gitignore_filter else "off"
     print(
@@ -157,6 +202,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print("Press Ctrl+C to stop.", flush=True)
 
+    # Warn about nested roots; attribution prefers deepest/longest matching root.
     if root_info.nested_pairs:
         print("Warning: nested watched roots detected:", flush=True)
         for outer, inner in root_info.nested_pairs:
@@ -166,6 +212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             flush=True,
         )
 
+    # Print per-root gitignore status.
     if cfg.gitignore_filter:
         if not git_status.git_available:
             print("Gitignore filter: enabled, but git not found on PATH (no-op).", flush=True)
@@ -174,6 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 status = "ok" if git_status.root_ok.get(r, False) else "unavailable (not a git worktree)"
                 print(f"Gitignore filter: {root_info.labels[r]} -> {status}", flush=True)
 
+    # Print effective watchfiles filter configuration.
     print("Watchfiles filter:", flush=True)
     if watch_filter is None:
         print("- watch_filter: None (no watchfiles-level filtering)", flush=True)
@@ -192,14 +240,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             flush=True,
         )
 
+    # Main loop: yield batches and print events.
     try:
         for batch in watch_repos(root_info.roots, cfg):
             ts = batch.ts.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             print(f"{ts}  --- batch: raw={batch.raw} filtered={batch.filtered} ---", flush=True)
 
+            # Print any warnings (e.g. gitignore subprocess failures).
             for w in batch.warnings:
                 print(f"{ts}  warning: {w}", flush=True)
 
+            # Sort events for stable, readable output.
             def sort_key(ev):
                 return ev.repo_label, ev.rel_path, int(ev.change)
 
