@@ -111,6 +111,8 @@ class AivoEngine:
     async def _watch_loop(self, roots: Sequence[Path]) -> None:
         """Background loop that routes file changes to LSP servers."""
         cfg = WatchConfig(coalesce_events=True)
+        # Reverse mapping for logging repo names
+        path_to_label = {p: name for name, p in self._label_to_path.items()}
         
         try:
             async for batch in awatch_repos(roots, cfg):
@@ -137,6 +139,13 @@ class AivoEngine:
 
                 # Send notifications to respective clients
                 for root, lsp_events in by_root.items():
+                    repo_label = path_to_label.get(root, str(root))
+                    log.info(
+                        "Routing %d event(s) to repo: %s", 
+                        len(lsp_events), 
+                        repo_label
+                    )
+                    
                     client = self._path_to_client.get(root)
                     if client and client.is_running():
                         await client.notify_did_change_watched_files(lsp_events)
