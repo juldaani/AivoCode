@@ -4,10 +4,12 @@
     "lsp": "allow",
 
     "bash": {
-      // By default all bash commands need approval
-      "*": "ask",
+      // By default allow all bash
+      "*": "allow",
     
-      // Git default is deny
+      // =============================
+      // Git commands
+      // =============================
       "git*": "ask",
       // 🚫 Always block remote interaction
       "git push*": "deny",
@@ -21,26 +23,66 @@
       "git diff*": "allow",
       "git log*": "allow",
       
-      // Conda / Python
-      "conda run -n env-aivocode*": "allow",
+      // =============================
+      // Remote / network execution
+      // =============================
+      "curl * | bash": "deny",
+      "wget * | sh": "deny",
+      "ssh *": "deny",
+      "scp *": "deny",
+      "nc *": "deny",
       
-      // Permission destruction
-      "chmod -R 000 *": "deny",
+      // =============================
+      // 🚫 System destruction
+      // =============================
+      "rm -rf *": "deny",
+      "rm -r /": "deny",
+      "mkfs*": "deny",
+      "dd*": "deny",
+      "wipefs*": "deny",
       
-      // Fork bomb
-      ":(){:|:&};:": "deny",
-      
-      // Shutdown / reboot
+      // =============================
+      // 🚫 Privilege escalation
+      // =============================
+      "sudo *": "deny",
+      "su *": "deny",
+      "chmod 000 *": "deny",
+      "chown root*": "deny",
+
+      // =============================
+      // 🚫 Process abuse
+      // =============================
+      "kill -9 *": "deny",
+      "pkill *": "deny",
+      "killall *": "deny",
+
+      // =============================
+      // 🚫 Environment corruption
+      // =============================
+      "export PATH=*": "deny",
+      "unset PATH": "deny",
+      "history -c": "deny",
+
+      // =============================
+      // 🚫 Hardware / OS control
+      // =============================
       "shutdown*": "deny",
       "reboot*": "deny",
       "halt*": "deny",
-      
+      "poweroff*": "deny",
+
+      // =============================
       // Others
-      "ls*": "allow",
-      "cat*": "allow",
-      "touch*": "allow",
-      "ps*": "allow",
+      // =============================
+      ":(){:|:&};:": "deny"
+      
     },
+    
+    "edit": {
+      ".git/**": "deny",
+      ".env*": "deny",
+      ".opencode*": "ask",
+    }
   },
 
   "agent": {
