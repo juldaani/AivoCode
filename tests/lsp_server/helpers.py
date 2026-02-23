@@ -6,6 +6,7 @@ What this file provides
 - Path helpers for locating mock repos and GT files.
 - LSP helpers for opening files and requesting symbols.
 - Normalization and comparison helpers for deterministic assertions.
+- File event helpers for didChangeWatchedFiles tests.
 
 Why this exists
 - Keeps test logic small and reusable across languages and servers.
@@ -15,9 +16,10 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import shutil
 from typing import Any
 
-from lsp_server.types import JsonDict, JsonValue
+from lsp_server.types import FileChangeType, FileEvent, JsonDict, JsonValue
 
 
 def repo_root() -> Path:
@@ -171,3 +173,48 @@ def dump_debug(tmp_path: Path, label: str, payload: JsonValue) -> None:
     tmp_path.mkdir(parents=True, exist_ok=True)
     out_path = tmp_path / f"{label}.json"
     out_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def copy_mock_repo(tmp_path: Path, language: str) -> Path:
+    """Copy mock repo to tmp_path for isolated testing.
+
+    Returns the path to the copied workspace root.
+    """
+    src = mock_repo_root(language)
+    dst = tmp_path / language
+    shutil.copytree(src, dst)
+    return dst
+
+
+async def did_close(client: Any, file_path: Path) -> None:
+    """Send textDocument/didClose for a file."""
+    await client.notify(
+        "textDocument/didClose",
+        params={"textDocument": {"uri": file_uri(file_path)}},
+    )
+
+
+def make_file_event(path: Path, change_type: FileChangeType) -> FileEvent:
+    """Create a FileEvent for a local path."""
+    return FileEvent(uri=file_uri(path), type=change_type)
+
+
+async def wait_for_server_ready(client: Any, timeout_s: float = 5.0) -> None:
+    """Wait for the LSP server to be ready by pinging with a simple request.
+
+    Some servers need time after initialization before accepting requests.
+    This helper waits until a basic request succeeds.
+    """
+    import asyncio
+
+    start = asyncio.get_event_loop().time()
+    while True:
+        try:
+            await client.request("textDocument/documentSymbol", params={"textDocument": {"uri": "file:///nonexistent.py"}})
+            return
+        except Exception:
+            pass
+        elapsed = asyncio.get_event_loop().time() - start
+        if elapsed > timeout_s:
+            raise TimeoutError(f"LSP server not ready after {timeout_s}s")
+        await asyncio.sleep(0.1)
