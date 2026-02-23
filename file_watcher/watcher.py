@@ -206,11 +206,7 @@ def build_startup_info(roots: Sequence[Path], cfg: WatchConfig) -> tuple[RootInf
     root_info = _normalize_roots(roots)
     watch_filter = build_watchfiles_filter(
         use_defaults_filter=cfg.defaults_filter,
-        repo_roots=root_info.roots,
-        ignore_dirs=cfg.ignore_dirs,
-        ignore_entity_globs=cfg.ignore_entity_globs,
-        ignore_entity_regex=cfg.ignore_entity_regex,
-        ignore_paths=cfg.ignore_paths,
+        repo_custom_ignores=cfg.repo_custom_ignores,
     )
     git_status = build_gitignore_status(roots=root_info.roots, enabled=cfg.gitignore_filter)
     return root_info, watch_filter, git_status

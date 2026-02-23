@@ -38,6 +38,8 @@ class AivoEngine:
 
     async def start(self) -> None:
         """Start all configured LSP servers and the background file watcher."""
+        repo_custom_ignores: dict[Path, Sequence[str]] = {}
+
         for name, repo in self.config.repos.items():
             print("")
             log.info("REPOSITORY: %s, %s", name, repo.path)
@@ -68,6 +70,12 @@ class AivoEngine:
             # Extract config file/root for cleaner logging if available
             cfg_info = ", ".join(f"{k}={v}" for k, v in final_options.items())
             log.info("LSP Server Config: %s", cfg_info)
+
+            # Collect custom ignores from the provider if supported
+            if hasattr(provider, "get_workspace_ignores"):
+                ignores = provider.get_workspace_ignores(repo.path, lsp_config)
+                if ignores:
+                    repo_custom_ignores[repo.path.resolve()] = ignores
             
             # Start/Retrieve the LSP client
             client = await self.lsp_manager.get_or_start(
@@ -84,7 +92,7 @@ class AivoEngine:
         roots = [repo.path for repo in self.config.repos.values()]
         if roots:
             print("")
-            cfg = WatchConfig(coalesce_events=True)
+            cfg = WatchConfig(coalesce_events=True, repo_custom_ignores=repo_custom_ignores)
             log.info("File Watcher Roots: %s", [str(r) for r in roots])
             log.info(
                 "File Watcher Config: debounce=%dms, step=%dms, recursive=%s, defaults_filter=%s, gitignore_filter=%s, coalesce=%s",
@@ -101,12 +109,7 @@ class AivoEngine:
                 log.info("File Watcher Default ignored dirs: %s", DefaultFilter.ignore_dirs)
                 log.info("File Watcher Default ignored patterns: %s", DefaultFilter.ignore_entity_patterns)
 
-            log.info(
-                "File Watcher Custom filters: ignore_dirs=%s, ignore_entity_globs=%s, ignore_paths=%s",
-                cfg.ignore_dirs,
-                cfg.ignore_entity_globs,
-                cfg.ignore_paths,
-            )
+            log.info("File Watcher Custom filters (per-repo): %s", dict(cfg.repo_custom_ignores))
             self._watcher_task = asyncio.create_task(self._watch_loop(roots, cfg))
 
 

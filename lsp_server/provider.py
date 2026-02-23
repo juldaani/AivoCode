@@ -23,3 +23,7 @@ class LspServerProvider(Protocol[ConfigT]):
     def spec(self, workspace_root: Path, config: ConfigT) -> LspServerSpec:
         """Return a launch spec for a server in the given workspace."""
         ...
+
+    def get_workspace_ignores(self, workspace_root: Path, config: ConfigT) -> list[str]:
+        """Optional: return raw paths/globs to ignore from the workspace config."""
+        return []

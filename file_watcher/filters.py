@@ -13,6 +13,7 @@ No user-provided callables are supported here.
 from __future__ import annotations
 
 import fnmatch
+import re
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -30,40 +31,21 @@ def _unique_preserve_order(items: Iterable[str]) -> list[str]:
     return out
 
 
-def _glob_to_regex(glob_pat: str) -> str:
-    # fnmatch.translate returns a regex that matches the whole string and ends with \Z.
-    return fnmatch.translate(glob_pat)
-
-
 def build_watchfiles_filter(
     *,
     use_defaults_filter: bool,
-    repo_roots: Sequence[Path],
-    ignore_dirs: Sequence[str],
-    ignore_entity_globs: Sequence[str],
-    ignore_entity_regex: Sequence[str],
-    ignore_paths: Sequence[str],
+    repo_custom_ignores: dict[Path, Sequence[str]],
 ) -> DefaultFilter | None:
     """Construct the watchfiles filter or return None.
 
     If use_defaults_filter is True, the resulting filter is the union of watchfiles
-    defaults and custom excludes.
+    defaults and custom ignores per repository.
 
     If use_defaults_filter is False, only custom excludes are applied. If there are
     no custom excludes, returns None to disable watchfiles-level filtering.
     """
 
-    custom_ignore_dirs = list(ignore_dirs)
-    custom_ignore_entity_globs = list(ignore_entity_globs)
-    custom_ignore_entity_regex = list(ignore_entity_regex)
-    custom_ignore_paths = list(ignore_paths)
-
-    has_custom = bool(
-        custom_ignore_dirs
-        or custom_ignore_entity_globs
-        or custom_ignore_entity_regex
-        or custom_ignore_paths
-    )
+    has_custom = bool(repo_custom_ignores)
 
     if not use_defaults_filter and not has_custom:
         return None
@@ -79,17 +61,24 @@ def build_watchfiles_filter(
         ignore_dirs_out.extend(DefaultFilter.ignore_dirs)
         ignore_entity_patterns_out.extend(DefaultFilter.ignore_entity_patterns)
 
-    ignore_dirs_out.extend(custom_ignore_dirs)
-    ignore_entity_patterns_out.extend(_glob_to_regex(g) for g in custom_ignore_entity_globs)
-    ignore_entity_patterns_out.extend(custom_ignore_entity_regex)
-
-    # ignore_paths: absolute paths are used as-is; relative paths are expanded per repo root.
-    for p_str in custom_ignore_paths:
-        p = Path(p_str)
-        if p.is_absolute():
-            ignore_paths_out.append(p)
-        else:
-            ignore_paths_out.extend(root / p for root in repo_roots)
+    for root, ignores in repo_custom_ignores.items():
+        for ign in ignores:
+            if "*" in ign or "?" in ign:
+                # Provide a glob translation bound to the repo root.
+                # Since watchfiles applies regex globally, we prefix the regex with the repo root path.
+                pat = fnmatch.translate(ign)
+                # fnmatch in Python 3.11 outputs `(?s:...)`. We inject the repo root prefix inside it.
+                if pat.startswith("(?s:"):
+                    repo_pat = f"(?s:^{re.escape(str(root) + '/')}{pat[4:]}"
+                else:
+                    repo_pat = f"^{re.escape(str(root) + '/')}{pat}"
+                ignore_entity_patterns_out.append(repo_pat)
+            else:
+                p = Path(ign)
+                if p.is_absolute():
+                    ignore_paths_out.append(p)
+                else:
+                    ignore_paths_out.append(root / p)
 
     ignore_dirs_out = _unique_preserve_order(ignore_dirs_out)
     ignore_entity_patterns_out = _unique_preserve_order(ignore_entity_patterns_out)

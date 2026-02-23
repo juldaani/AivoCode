@@ -7,7 +7,7 @@ using gitignore rules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Sequence
@@ -22,7 +22,7 @@ class WatchConfig:
     Filtering
     - defaults_filter: whether to use watchfiles' DefaultFilter defaults.
     - gitignore_filter: whether to filter events using gitignore rules (via git).
-    - custom ignore lists are exclude-only and are merged into watchfiles filtering.
+    - repo_custom_ignores: maps repository absolute path -> sequence of raw exclude strings (globs or relative paths).
     """
 
     # watchfiles watching parameters
@@ -36,11 +36,8 @@ class WatchConfig:
     defaults_filter: bool = True
     gitignore_filter: bool = True
 
-    # custom excludes (in addition to defaults_filter when enabled)
-    ignore_dirs: Sequence[str] = ()
-    ignore_entity_globs: Sequence[str] = ()
-    ignore_entity_regex: Sequence[str] = ()
-    ignore_paths: Sequence[str] = ()
+    # custom excludes mapped per repository root
+    repo_custom_ignores: dict[Path, Sequence[str]] = field(default_factory=dict)
 
     # gitignore filtering parameters
     git_timeout_s: float = 10.0

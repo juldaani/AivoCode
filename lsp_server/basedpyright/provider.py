@@ -45,3 +45,39 @@ class BasedPyrightProvider:
                 }
             },
         )
+
+    def get_workspace_ignores(self, workspace_root: Path, config: BasedPyrightConfig) -> list[str]:
+        import logging
+        log = logging.getLogger(__name__)
+
+        try:
+            cfg_file = resolve_and_validate_config_file(
+                workspace_root=workspace_root,
+                config_file=config.config_file,
+            )
+        except Exception:
+            return []
+
+        excludes = []
+        if cfg_file.suffix == ".toml":
+            try:
+                import tomllib
+                with open(cfg_file, "rb") as f:
+                    data = tomllib.load(f)
+                tool = data.get("tool", {})
+                pyright = tool.get("pyright", tool.get("basedpyright", {}))
+                excludes = pyright.get("exclude", [])
+            except Exception as e:
+                log.warning("Failed to parse basedpyright ignores from %s: %s", cfg_file, e)
+        elif cfg_file.suffix == ".json":
+            try:
+                import json
+                with open(cfg_file, "r") as f:
+                    data = json.load(f)
+                excludes = data.get("exclude", [])
+            except Exception as e:
+                log.warning("Failed to parse basedpyright ignores from %s: %s", cfg_file, e)
+
+        if not isinstance(excludes, list):
+            return []
+        return [str(e) for e in excludes]
