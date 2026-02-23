@@ -4,8 +4,8 @@
 - Runtime: Python 3.11 (see `env-aivocode.yml`).
 - Tools: ruff, pytest, pyright.
 - Ruff and pyright work automatically, out of the box, through OpenCode. Opencode automatically
-  calls ruff/pyright after file changes and notifies the agent of possible problesm (no explicit 
-  calls needed).
+  calls ruff/pyright after file changes and notifies the agent of possible problems (DO NOT 
+  EXPLICITLY CALL ruff/pyright).
   
 ## Environments (Safety Rule)
 - Do not build, edit, update, or remove environments in this repo.
