@@ -45,7 +45,7 @@ async def main() -> None:
                 lsp=LspLaunchConfig(
                     provider_class="lsp_server.basedpyright.BasedPyrightProvider",
                     config_class="lsp_server.basedpyright.BasedPyrightConfig",
-                    options={"config_root": "."}
+                    options={"config_file": "pyproject.toml"}
                 )
             )
         }

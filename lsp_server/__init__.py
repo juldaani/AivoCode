@@ -7,7 +7,7 @@ What this file provides
 from .async_process import AsyncStdioLspProcess, LspMethodNotFound, LspResponseError
 from .basedpyright.provider import BasedPyrightProvider
 from .client import AsyncLspClient
-from .basedpyright.config import BasedPyrightConfig, resolve_and_validate_config_root
+from .basedpyright.config import BasedPyrightConfig, resolve_and_validate_config_file
 from .manager import WorkspaceLspManager
 from .provider import LspServerProvider
 from .spec import LspServerSpec
@@ -27,5 +27,5 @@ __all__ = [
     "LspServerProvider",
     "LspServerSpec",
     "WorkspaceLspManager",
-    "resolve_and_validate_config_root",
+    "resolve_and_validate_config_file",
 ]

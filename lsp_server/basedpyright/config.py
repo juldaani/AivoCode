@@ -18,42 +18,34 @@ log = logging.getLogger(__name__)
 class BasedPyrightConfig:
     """Configuration required to start basedpyright."""
 
-    config_root: Path
+    config_file: Path
 
 
-def resolve_and_validate_config_root(*, workspace_root: Path, config_root: Path) -> Path:
-    """Resolve and validate the config root for basedpyright.
+def resolve_and_validate_config_file(*, workspace_root: Path, config_file: Path) -> Path:
+    """Resolve and validate the config file for basedpyright.
 
     Rules:
     - Accept absolute or workspace-relative paths.
-    - Require the directory to exist and contain pyproject.toml or pyrightconfig.json.
-    - Warn (but do not fail) if the config root is outside the workspace.
+    - Require the file to exist.
+    - Warn (but do not fail) if the config file is outside the workspace.
     """
     workspace_root = workspace_root.resolve()
-    if config_root.is_absolute():
-        resolved = config_root
+    if config_file.is_absolute():
+        resolved = config_file
     else:
-        resolved = workspace_root / config_root
+        resolved = workspace_root / config_file
     resolved = resolved.resolve()
 
     if not resolved.exists():
-        raise FileNotFoundError(f"config_root does not exist: {resolved}")
-    if not resolved.is_dir():
-        raise NotADirectoryError(f"config_root is not a directory: {resolved}")
-
-    has_pyproject = (resolved / "pyproject.toml").is_file()
-    has_pyrightconfig = (resolved / "pyrightconfig.json").is_file()
-    if not (has_pyproject or has_pyrightconfig):
-        raise ValueError(
-            "config_root must contain pyproject.toml or pyrightconfig.json: "
-            f"{resolved}"
-        )
+        raise FileNotFoundError(f"config_file does not exist: {resolved}")
+    if not resolved.is_file():
+        raise ValueError(f"config_file is not a file: {resolved}")
 
     try:
         resolved.relative_to(workspace_root)
     except ValueError:
         log.warning(
-            "config_root is outside workspace_root: %s (workspace=%s)",
+            "config_file is outside workspace_root: %s (workspace=%s)",
             resolved,
             workspace_root,
         )

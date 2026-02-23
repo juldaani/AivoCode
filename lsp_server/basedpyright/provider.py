@@ -9,7 +9,7 @@ Why this exists
 
 from pathlib import Path
 
-from .config import BasedPyrightConfig, resolve_and_validate_config_root
+from .config import BasedPyrightConfig, resolve_and_validate_config_file
 from ..spec import LspServerSpec
 
 
@@ -19,15 +19,15 @@ class BasedPyrightProvider:
     id = "basedpyright"
 
     def spec(self, workspace_root: Path, config: BasedPyrightConfig) -> LspServerSpec:
-        """Return a validated spec configured for the given workspace/config root."""
+        """Return a validated spec configured for the given workspace/config file."""
         workspace_root = workspace_root.resolve()
-        cfg_root = resolve_and_validate_config_root(
+        cfg_file = resolve_and_validate_config_file(
             workspace_root=workspace_root,
-            config_root=config.config_root,
+            config_file=config.config_file,
         )
 
         root_uri = workspace_root.as_uri()
-        instance_id = f"{workspace_root}::{cfg_root}"
+        instance_id = f"{workspace_root}::{cfg_file}"
 
         return LspServerSpec(
             server_id=self.id,
@@ -40,7 +40,7 @@ class BasedPyrightProvider:
                 "basedpyright": {
                     "analysis": {
                         "diagnosticMode": "workspace",
-                        "configFilePath": str(cfg_root),
+                        "configFilePath": str(cfg_file),
                     }
                 }
             },
