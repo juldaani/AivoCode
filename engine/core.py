@@ -83,6 +83,7 @@ class AivoEngine:
         # Start background file watcher
         roots = [repo.path for repo in self.config.repos.values()]
         if roots:
+            print("")
             cfg = WatchConfig(coalesce_events=True)
             log.info("File Watcher Roots: %s", [str(r) for r in roots])
             log.info(
