@@ -39,8 +39,6 @@ class AivoEngine:
     async def start(self) -> None:
         """Start all configured LSP servers and the background file watcher."""
         for name, repo in self.config.repos.items():
-            log.info("Starting LSP for repo: %s (%s)", name, repo.path)
-            
             # Dynamic loading of provider and config classes
             ProviderClass = import_from_string(repo.lsp.provider_class)
             ConfigClass = import_from_string(repo.lsp.config_class)
@@ -53,11 +51,21 @@ class AivoEngine:
             for key, value in repo.lsp.options.items():
                 target_type = type_hints.get(key)
                 if target_type is Path and isinstance(value, str):
-                    final_options[key] = Path(value)
+                    path_obj = Path(value)
+                    if not path_obj.is_absolute():
+                        path_obj = (repo.path / path_obj).resolve()
+                    final_options[key] = path_obj
                 else:
                     final_options[key] = value
 
             lsp_config = ConfigClass(**final_options)
+            
+            # Extract config file/root for cleaner logging if available
+            cfg_info = ", ".join(f"{k}={v}" for k, v in final_options.items())
+            log.info(
+                "Starting LSP for repo: %s (%s) using LSP server config: %s", 
+                name, repo.path, cfg_info
+            )
             
             # Start/Retrieve the LSP client
             client = await self.lsp_manager.get_or_start(
@@ -72,7 +80,30 @@ class AivoEngine:
         # Start background file watcher
         roots = [repo.path for repo in self.config.repos.values()]
         if roots:
-            self._watcher_task = asyncio.create_task(self._watch_loop(roots))
+            cfg = WatchConfig(coalesce_events=True)
+            log.info("Starting file watcher for roots: %s", [str(r) for r in roots])
+            log.info(
+                "File watcher config: debounce=%dms, step=%dms, recursive=%s, defaults_filter=%s, gitignore_filter=%s, coalesce=%s",
+                cfg.debounce_ms,
+                cfg.step_ms,
+                cfg.recursive,
+                cfg.defaults_filter,
+                cfg.gitignore_filter,
+                cfg.coalesce_events,
+            )
+            
+            if cfg.defaults_filter:
+                from watchfiles import DefaultFilter
+                log.info("File watcher default ignored dirs: %s", DefaultFilter.ignore_dirs)
+                log.info("File watcher default ignored patterns: %s", DefaultFilter.ignore_entity_patterns)
+
+            log.info(
+                "File watcher custom filters: ignore_dirs=%s, ignore_entity_globs=%s, ignore_paths=%s",
+                cfg.ignore_dirs,
+                cfg.ignore_entity_globs,
+                cfg.ignore_paths,
+            )
+            self._watcher_task = asyncio.create_task(self._watch_loop(roots, cfg))
 
     async def stop(self) -> None:
         """Gracefully stop the engine and all services."""
@@ -108,9 +139,8 @@ class AivoEngine:
             params={"textDocument": {"uri": uri}}
         )
 
-    async def _watch_loop(self, roots: Sequence[Path]) -> None:
+    async def _watch_loop(self, roots: Sequence[Path], cfg: WatchConfig) -> None:
         """Background loop that routes file changes to LSP servers."""
-        cfg = WatchConfig(coalesce_events=True)
         # Reverse mapping for logging repo names
         path_to_label = {p: name for name, p in self._label_to_path.items()}
         

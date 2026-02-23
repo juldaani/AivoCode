@@ -58,7 +58,7 @@ async def main() -> None:
         # 3. Start the engine (starts LSPs and File Watcher)
         print("\n--- Starting AivoEngine ---")
         await engine.start()
-        print("Engine is running. File watcher is active.\n")
+        print("\nEngine is running. File watcher is active.\n")
         
         # 4. Example: Query symbols for a file
         repo_name = "mock_repo"
