@@ -1,0 +1,36 @@
+# Test configurations for LSP server tests.
+#
+# Each entry defines a test scenario with:
+# - language: Language identifier (used for test naming and fixture selection)
+# - mock_repo: Path to mock repository (relative to repo root)
+# - provider_module: Python module containing provider and config classes
+# - provider_class: Name of the LspServerProvider subclass
+# - config_class: Name of the config dataclass
+# - provider_config: Provider-specific configuration passed to config_class constructor
+#
+# To add a new LSP server:
+# 1. Create provider + config classes implementing LspServerProvider protocol
+# 2. Add a new [[test_config]] entry below with the appropriate values
+
+[[test_config]]
+language = "python"
+mock_repo = "tests/data/mock_repos/python"
+provider_module = "lsp_server.basedpyright"
+provider_class = "BasedPyrightProvider"
+config_class = "BasedPyrightConfig"
+
+[test_config.provider_config]
+# Passed to BasedPyrightConfig constructor
+# config_root is resolved relative to workspace_root by the config class
+config_root = "."
+
+# Smoke test: duplicate config to verify multi-config parametrization works
+[[test_config]]
+language = "python-alt"
+mock_repo = "tests/data/mock_repos/python"
+provider_module = "lsp_server.basedpyright"
+provider_class = "BasedPyrightProvider"
+config_class = "BasedPyrightConfig"
+
+[test_config.provider_config]
+config_root = "."

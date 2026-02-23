@@ -175,12 +175,26 @@ def dump_debug(tmp_path: Path, label: str, payload: JsonValue) -> None:
     out_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def copy_mock_repo(tmp_path: Path, language: str) -> Path:
+def copy_mock_repo(
+    tmp_path: Path, language: str, src_path: Path | None = None
+) -> Path:
     """Copy mock repo to tmp_path for isolated testing.
 
-    Returns the path to the copied workspace root.
+    Parameters
+    ----------
+    tmp_path : Path
+        pytest tmp_path fixture value.
+    language : str
+        Language identifier (used as destination folder name).
+    src_path : Path | None
+        Source path to copy from. If None, uses default mock_repo_root(language).
+
+    Returns
+    -------
+    Path
+        Path to the copied workspace root.
     """
-    src = mock_repo_root(language)
+    src = src_path if src_path is not None else mock_repo_root(language)
     dst = tmp_path / language
     shutil.copytree(src, dst)
     return dst

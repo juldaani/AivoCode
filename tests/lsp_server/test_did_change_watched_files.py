@@ -9,6 +9,11 @@ How verification works
 - Create/modify/delete files in an isolated workspace copy.
 - Send workspace/didChangeWatchedFiles notification.
 - Request textDocument/documentSymbol to verify server state updated.
+
+How tests are configured
+- Test configuration is loaded from config.toml (language, provider, mock_repo).
+- Tests automatically run for ALL configs defined in config.toml.
+- Adding a new LSP server only requires adding an entry to config.toml.
 """
 
 from __future__ import annotations
@@ -16,19 +21,17 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from lsp_server import AsyncLspClient, FileChangeType
-from lsp_server.basedpyright.config import BasedPyrightConfig
-from lsp_server.basedpyright.provider import BasedPyrightProvider
-from lsp_server.manager import WorkspaceLspManager
+from lsp_server import FileChangeType
 
+from .conftest import start_lsp_client
 from .helpers import (
-    copy_mock_repo,
     did_close,
     did_open,
     document_symbols,
     make_file_event,
     normalize_document_symbols,
 )
+from .config import LspTestConfig
 
 
 def _symbol_names(symbols: list) -> list[str]:
@@ -36,28 +39,24 @@ def _symbol_names(symbols: list) -> list[str]:
     return sorted(s.get("name") for s in symbols)
 
 
-async def _start_client(workspace_root: Path) -> AsyncLspClient:
-    """Start a basedpyright client for the given workspace."""
-    manager = WorkspaceLspManager()
-    provider = BasedPyrightProvider()
-    config = BasedPyrightConfig(config_root=workspace_root)
-    return await manager.get_or_start(
-        provider=provider, workspace_root=workspace_root, config=config
+def test_notify_file_created(
+    lsp_test_config: LspTestConfig, lsp_test_workspace: Path
+) -> None:
+    """Create a new file, notify server, verify symbols are recognized."""
+    asyncio.run(
+        _test_notify_file_created_impl(lsp_test_config, lsp_test_workspace)
     )
 
 
-def test_notify_file_created(tmp_path: Path) -> None:
-    """Create a new file, notify server, verify symbols are recognized."""
-    asyncio.run(_test_notify_file_created(tmp_path))
+async def _test_notify_file_created_impl(
+    lsp_test_config: LspTestConfig, workspace: Path
+) -> None:
+    client = await start_lsp_client(lsp_test_config, workspace)
 
-
-async def _test_notify_file_created(tmp_path: Path) -> None:
-    workspace = copy_mock_repo(tmp_path, "python")
-    client = await _start_client(workspace)
-
-    new_file = workspace / "mock_pkg" / "new_module.py"
-    new_file.write_text(
-        """
+    try:
+        new_file = workspace / "mock_pkg" / "new_module.py"
+        new_file.write_text(
+            """
 def new_function(x: int) -> int:
     return x * 2
 
@@ -65,10 +64,9 @@ class NewClass:
     def method(self) -> str:
         return "hello"
 """,
-        encoding="utf-8",
-    )
+            encoding="utf-8",
+        )
 
-    try:
         await client.notify_did_change_watched_files(
             [make_file_event(new_file, FileChangeType.created)]
         )
@@ -85,15 +83,19 @@ class NewClass:
         await client.shutdown()
 
 
-def test_notify_file_changed(tmp_path: Path) -> None:
+def test_notify_file_changed(
+    lsp_test_config: LspTestConfig, lsp_test_workspace: Path
+) -> None:
     """Modify an existing file, notify server, verify updated symbols."""
-    asyncio.run(_test_notify_file_changed(tmp_path))
+    asyncio.run(
+        _test_notify_file_changed_impl(lsp_test_config, lsp_test_workspace)
+    )
 
 
-async def _test_notify_file_changed(tmp_path: Path) -> None:
-    workspace = copy_mock_repo(tmp_path, "python")
-    client = await _start_client(workspace)
-
+async def _test_notify_file_changed_impl(
+    lsp_test_config: LspTestConfig, workspace: Path
+) -> None:
+    client = await start_lsp_client(lsp_test_config, workspace)
     utils_file = workspace / "mock_pkg" / "utils.py"
 
     try:
@@ -107,7 +109,9 @@ async def _test_notify_file_changed(tmp_path: Path) -> None:
         await did_close(client, utils_file)
 
         original_content = utils_file.read_text(encoding="utf-8")
-        modified_content = original_content + "\n\ndef brand_new_func() -> int:\n    return 42\n"
+        modified_content = (
+            original_content + "\n\ndef brand_new_func() -> int:\n    return 42\n"
+        )
         utils_file.write_text(modified_content, encoding="utf-8")
 
         await client.notify_did_change_watched_files(
@@ -119,7 +123,9 @@ async def _test_notify_file_changed(tmp_path: Path) -> None:
         symbols_after = normalize_document_symbols(raw_after)
         names_after = _symbol_names(symbols_after)
 
-        assert "brand_new_func" in names_after, f"brand_new_func not found after change: {names_after}"
+        assert (
+            "brand_new_func" in names_after
+        ), f"brand_new_func not found after change: {names_after}"
 
         for name in names_before:
             assert name in names_after, f"Lost symbol {name} after change"
@@ -128,19 +134,24 @@ async def _test_notify_file_changed(tmp_path: Path) -> None:
         await client.shutdown()
 
 
-def test_notify_file_deleted(tmp_path: Path) -> None:
+def test_notify_file_deleted(
+    lsp_test_config: LspTestConfig, lsp_test_workspace: Path
+) -> None:
     """Create a file, notify server, then delete it and verify no errors."""
-    asyncio.run(_test_notify_file_deleted(tmp_path))
+    asyncio.run(
+        _test_notify_file_deleted_impl(lsp_test_config, lsp_test_workspace)
+    )
 
 
-async def _test_notify_file_deleted(tmp_path: Path) -> None:
-    workspace = copy_mock_repo(tmp_path, "python")
-    client = await _start_client(workspace)
-
-    new_file = workspace / "mock_pkg" / "to_delete.py"
-    new_file.write_text("def deleted_func() -> None:\n    pass\n", encoding="utf-8")
+async def _test_notify_file_deleted_impl(
+    lsp_test_config: LspTestConfig, workspace: Path
+) -> None:
+    client = await start_lsp_client(lsp_test_config, workspace)
 
     try:
+        new_file = workspace / "mock_pkg" / "to_delete.py"
+        new_file.write_text("def deleted_func() -> None:\n    pass\n", encoding="utf-8")
+
         await client.notify_did_change_watched_files(
             [make_file_event(new_file, FileChangeType.created)]
         )
@@ -169,29 +180,34 @@ async def _test_notify_file_deleted(tmp_path: Path) -> None:
         await client.shutdown()
 
 
-def test_notify_multiple_files(tmp_path: Path) -> None:
+def test_notify_multiple_files(
+    lsp_test_config: LspTestConfig, lsp_test_workspace: Path
+) -> None:
     """Batch notification with multiple file events (create + change)."""
-    asyncio.run(_test_notify_multiple_files(tmp_path))
-
-
-async def _test_notify_multiple_files(tmp_path: Path) -> None:
-    workspace = copy_mock_repo(tmp_path, "python")
-    client = await _start_client(workspace)
-
-    file_a = workspace / "mock_pkg" / "file_a.py"
-    file_b = workspace / "mock_pkg" / "file_b.py"
-    utils_file = workspace / "mock_pkg" / "utils.py"
-
-    file_a.write_text("def func_a() -> str:\n    return 'a'\n", encoding="utf-8")
-    file_b.write_text("def func_b() -> int:\n    return 1\n", encoding="utf-8")
-
-    original_utils = utils_file.read_text(encoding="utf-8")
-    utils_file.write_text(
-        original_utils + "\ndef batch_added() -> None:\n    pass\n",
-        encoding="utf-8",
+    asyncio.run(
+        _test_notify_multiple_files_impl(lsp_test_config, lsp_test_workspace)
     )
 
+
+async def _test_notify_multiple_files_impl(
+    lsp_test_config: LspTestConfig, workspace: Path
+) -> None:
+    client = await start_lsp_client(lsp_test_config, workspace)
+
     try:
+        file_a = workspace / "mock_pkg" / "file_a.py"
+        file_b = workspace / "mock_pkg" / "file_b.py"
+        utils_file = workspace / "mock_pkg" / "utils.py"
+
+        file_a.write_text("def func_a() -> str:\n    return 'a'\n", encoding="utf-8")
+        file_b.write_text("def func_b() -> int:\n    return 1\n", encoding="utf-8")
+
+        original_utils = utils_file.read_text(encoding="utf-8")
+        utils_file.write_text(
+            original_utils + "\ndef batch_added() -> None:\n    pass\n",
+            encoding="utf-8",
+        )
+
         await client.notify_did_change_watched_files(
             [
                 make_file_event(file_a, FileChangeType.created),
@@ -219,21 +235,26 @@ async def _test_notify_multiple_files(tmp_path: Path) -> None:
         await client.shutdown()
 
 
-def test_notify_file_renamed(tmp_path: Path) -> None:
+def test_notify_file_renamed(
+    lsp_test_config: LspTestConfig, lsp_test_workspace: Path
+) -> None:
     """Rename a file (delete old + create new), verify server tracks new name."""
-    asyncio.run(_test_notify_file_renamed(tmp_path))
-
-
-async def _test_notify_file_renamed(tmp_path: Path) -> None:
-    workspace = copy_mock_repo(tmp_path, "python")
-    client = await _start_client(workspace)
-
-    old_file = workspace / "mock_pkg" / "old_name.py"
-    old_file.write_text(
-        "def renamed_func() -> str:\n    return 'renamed'\n", encoding="utf-8"
+    asyncio.run(
+        _test_notify_file_renamed_impl(lsp_test_config, lsp_test_workspace)
     )
 
+
+async def _test_notify_file_renamed_impl(
+    lsp_test_config: LspTestConfig, workspace: Path
+) -> None:
+    client = await start_lsp_client(lsp_test_config, workspace)
+
     try:
+        old_file = workspace / "mock_pkg" / "old_name.py"
+        old_file.write_text(
+            "def renamed_func() -> str:\n    return 'renamed'\n", encoding="utf-8"
+        )
+
         await client.notify_did_change_watched_files(
             [make_file_event(old_file, FileChangeType.created)]
         )
