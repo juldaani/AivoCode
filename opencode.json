@@ -8,7 +8,7 @@
       "*": "ask",
     
       // Git default is deny
-      "git *": "ask",
+      "git*": "ask",
       // 🚫 Always block remote interaction
       "git push*": "deny",
       "git pull*": "deny",
@@ -21,6 +21,9 @@
       "git diff*": "allow",
       "git log*": "allow",
       
+      // Conda / Python
+      "conda run -n env-aivocode*": "allow",
+      
       // Permission destruction
       "chmod -R 000 *": "deny",
       
@@ -31,6 +34,12 @@
       "shutdown*": "deny",
       "reboot*": "deny",
       "halt*": "deny",
+      
+      // Others
+      "ls*": "allow",
+      "cat*": "allow",
+      "touch*": "allow",
+      "ps*": "allow",
     },
   },
 
