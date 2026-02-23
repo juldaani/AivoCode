@@ -1,0 +1,15 @@
+[repos.aivocode]
+path = "/home/juho/dev_folder/AivoCode"
+
+[repos.aivocode.lsp]
+provider_class = "lsp_server.basedpyright.BasedPyrightProvider"
+config_class = "lsp_server.basedpyright.BasedPyrightConfig"
+config_root = "."
+
+[repos.tiliote_analyzer]
+path = "/home/juho/dev_folder/trading-system"
+
+[repos.tiliote_analyzer.lsp]
+provider_class = "lsp_server.basedpyright.BasedPyrightProvider"
+config_class = "lsp_server.basedpyright.BasedPyrightConfig"
+config_root = "."
