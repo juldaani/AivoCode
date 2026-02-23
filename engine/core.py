@@ -108,15 +108,18 @@ class AivoEngine:
     async def stop(self) -> None:
         """Gracefully stop the engine and all services."""
         if self._watcher_task:
+            log.info("Stopping file watcher...")
             self._watcher_task.cancel()
             try:
                 await self._watcher_task
             except asyncio.CancelledError:
                 pass
         
+        log.info("Shutting down all LSP servers...")
         await self.lsp_manager.shutdown_all()
         self._path_to_client.clear()
         self._label_to_path.clear()
+        log.info("Engine stopped.")
 
     async def query_symbols(self, repo_name: str, file_rel_path: str) -> Any:
         """Query symbols for a file in a specific repository.

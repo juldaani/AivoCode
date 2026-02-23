@@ -93,11 +93,13 @@ async def main() -> None:
             
     except asyncio.CancelledError:
         pass
+    except Exception:
+        logging.exception("Unexpected error in main")
     finally:
         # 7. Always stop the engine to cleanup LSP processes
-        print("\n--- Stopping Engine ---")
+        print("\n--- Stopping Engine ---", flush=True)
         await engine.stop()
-        print("Done.")
+        print("Done.", flush=True)
 
 if __name__ == "__main__":
     try:
