@@ -1,23 +1,53 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
-    "lsp": "allow"
+    "lsp": "allow",
+
+    "bash": {
+      // By default all bash commands need approval
+      "*": "ask",
+    
+      // Git default is deny
+      "git *": "ask",
+      // 🚫 Always block remote interaction
+      "git push*": "deny",
+      "git pull*": "deny",
+      "git fetch*": "deny",
+      "git remote*": "deny",
+      // ✅ Allow safe local commits
+      "git commit*": "allow",
+      "git add*": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      
+      // Permission destruction
+      "chmod -R 000 *": "deny",
+      
+      // Fork bomb
+      ":(){:|:&};:": "deny",
+      
+      // Shutdown / reboot
+      "shutdown*": "deny",
+      "reboot*": "deny",
+      "halt*": "deny",
+    },
   },
 
   "agent": {
     "plan": {
       "mode": "primary",
-      "model": "openrouter/openai/gpt-5.2",
+      "model": "openrouter/google/gemini-3.1-pro-preview",
       "options":{
-        "reasoningEffort": "medium"
+        "reasoningEffort": "high"
       },
     },
     
     "build": {
       "mode": "primary",
-      "model": "openrouter/openai/gpt-5.2-codex",
+      "model": "openrouter/google/gemini-3.1-pro-preview",
       "options":{
-        "reasoningEffort": "medium"
+        "reasoningEffort": "high"
       },
     }
   }
