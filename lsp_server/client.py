@@ -4,18 +4,18 @@ from __future__ import annotations
 
 What this file provides
 - A high-level client API that handles initialize/initialized and settings.
+- Methods for sending LSP notifications including workspace/didChangeWatchedFiles.
 
 Why this exists
 - Separates protocol bootstrapping from the low-level stdio transport.
 """
 
-import asyncio
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 from .async_process import AsyncStdioLspProcess, LspMethodNotFound, LspResponseError
 from .spec import LspServerSpec
-from .types import JsonDict, JsonValue
+from .types import FileEvent, JsonDict, JsonValue
 
 
 @dataclass
@@ -54,6 +54,30 @@ class AsyncLspClient:
         """Send a notification without expecting a response."""
         await self._process.notify(method, params=params)
 
+    async def notify_did_change_watched_files(
+        self, changes: Sequence[FileEvent]
+    ) -> None:
+        """Send workspace/didChangeWatchedFiles notification.
+
+        Parameters
+        ----------
+        changes : Sequence[FileEvent]
+            List of file events to notify the server about.
+
+        Notes
+        -----
+        The LSP spec requires file URIs (e.g., "file:///path/to/file.py").
+        Callers must ensure URIs are properly formatted.
+        """
+        await self._process.notify(
+            "workspace/didChangeWatchedFiles",
+            params={
+                "changes": [
+                    {"uri": ev.uri, "type": int(ev.type)} for ev in changes
+                ]
+            },
+        )
+
     async def shutdown(self) -> None:
         """Gracefully shutdown the server and terminate the subprocess."""
         if self._process.is_running():
@@ -77,7 +101,10 @@ class AsyncLspClient:
                         "hierarchicalDocumentSymbolSupport": True
                     }
                 },
-                "workspace": {"symbol": {}},
+                "workspace": {
+                    "symbol": {},
+                    "didChangeWatchedFiles": {"dynamicRegistration": False},
+                },
             },
             "initializationOptions": self._spec.initialization_options,
         }

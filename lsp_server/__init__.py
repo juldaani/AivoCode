@@ -11,13 +11,15 @@ from .basedpyright.config import BasedPyrightConfig, resolve_and_validate_config
 from .manager import WorkspaceLspManager
 from .provider import LspServerProvider
 from .spec import LspServerSpec
-from .types import JsonDict, JsonValue
+from .types import FileChangeType, FileEvent, JsonDict, JsonValue
 
 __all__ = [
     "AsyncLspClient",
     "AsyncStdioLspProcess",
     "BasedPyrightConfig",
     "BasedPyrightProvider",
+    "FileChangeType",
+    "FileEvent",
     "JsonDict",
     "JsonValue",
     "LspMethodNotFound",
