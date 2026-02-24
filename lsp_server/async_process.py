@@ -91,6 +91,11 @@ class AsyncStdioLspProcess:
         """Start a subprocess using the spec and return a ready wrapper."""
         # Merge process environment with spec overrides.
         env = {**os.environ, **dict(spec.env)} if spec.env else None
+        
+        # We use start_new_session=True to ensure the child process does not
+        # receive signals (like SIGINT from Ctrl+C) sent to the parent's
+        # terminal process group. This allows the parent to manage the
+        # child's lifecycle gracefully.
         process = await asyncio.create_subprocess_exec(
             *spec.argv,
             cwd=str(spec.cwd),
@@ -98,6 +103,7 @@ class AsyncStdioLspProcess:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
         return cls(spec=spec, process=process)
 
