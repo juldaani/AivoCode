@@ -150,6 +150,9 @@ class AsyncStdioLspProcess:
 
     async def _send_message(self, payload: JsonDict) -> None:
         """Write a JSON-RPC message to stdin with proper framing."""
+        # Log outgoing message at DEBUG level
+        log.debug("LSP -> %s", json.dumps(payload, ensure_ascii=True))
+
         # JSON-RPC message framing: Content-Length header + JSON body.
         stdin = self._process.stdin
         if stdin is None:
@@ -216,7 +219,7 @@ class AsyncStdioLspProcess:
                 if not line:
                     return
                 text = line.decode("utf-8", errors="replace").rstrip()
-                log.debug("LSP stderr: %s", text)
+                log.info("LSP stderr: %s", text)
         except asyncio.CancelledError:
             return
 
@@ -239,7 +242,12 @@ class AsyncStdioLspProcess:
         header_text = header_bytes.decode("ascii", errors="replace")
         content_length = self._parse_content_length(header_text)
         body = await stdout.readexactly(content_length)
-        return json.loads(body.decode("utf-8"))
+        parsed = json.loads(body.decode("utf-8"))
+
+        # Log incoming message at DEBUG level
+        log.debug("LSP <- %s", json.dumps(parsed, ensure_ascii=True))
+
+        return parsed
 
     @staticmethod
     def _parse_content_length(header_text: str) -> int:
@@ -301,6 +309,26 @@ class AsyncStdioLspProcess:
         # Notifications do not expect a response.
         method = str(msg.get("method"))
         params = msg.get("params")
+
+        # Selective INFO-level logging for useful notifications
+        if method == "window/logMessage" and isinstance(params, dict):
+            msg_type = params.get("type", 3)
+            msg_text = params.get("message", "")
+            if msg_type == 1:
+                log.error("LSP: %s", msg_text)
+            elif msg_type == 2:
+                log.warning("LSP: %s", msg_text)
+            elif msg_type == 3:
+                log.info("LSP: %s", msg_text)
+            else:  # type 4 = Log
+                log.debug("LSP: %s", msg_text)
+        elif method == "window/showMessage" and isinstance(params, dict):
+            msg_text = params.get("message", "")
+            log.info("LSP message: %s", msg_text)
+        elif method in ("$/progress", "pyright/beginProgress", "pyright/reportProgress"):
+            # Progress messages at DEBUG level
+            log.debug("LSP progress (%s): %s", method, params)
+
         handlers = self._notification_handlers.get(method, [])
         for handler in handlers:
             try:
