@@ -13,3 +13,7 @@ path = "/home/juho/dev_folder/tiliote-analyzer"
 provider_class = "lsp_server.basedpyright.BasedPyrightProvider"
 config_class = "lsp_server.basedpyright.BasedPyrightConfig"
 config_file = ""
+
+[logging]
+level = "INFO"
+file = "logs/aivocode.log"

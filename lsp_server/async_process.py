@@ -318,9 +318,7 @@ class AsyncStdioLspProcess:
                 log.error("LSP: %s", msg_text)
             elif msg_type == 2:
                 log.warning("LSP: %s", msg_text)
-            elif msg_type == 3:
-                log.info("LSP: %s", msg_text)
-            else:  # type 4 = Log
+            else:  # type 3 = Info, type 4 = Log
                 log.debug("LSP: %s", msg_text)
         elif method == "window/showMessage" and isinstance(params, dict):
             msg_text = params.get("message", "")

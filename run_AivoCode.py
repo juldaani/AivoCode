@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import tomllib
 from pathlib import Path
 
 # Add project root to sys.path if running as a script
@@ -11,14 +12,47 @@ if str(project_root) not in sys.path:
 from engine import AivoEngine
 from engine.config import load_config
 
-# Configure logging to see engine startup and file events
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+def setup_logging(config_path: Path) -> None:
+    """Read logging configuration from TOML and apply it."""
+    # Default values
+    level = logging.INFO
+    log_file = None
+
+    if config_path.exists():
+        try:
+            with open(config_path, "rb") as f:
+                data = tomllib.load(f)
+            log_cfg = data.get("logging", {})
+            
+            # Level
+            level_str = log_cfg.get("level", "INFO").upper()
+            level = getattr(logging, level_str, logging.INFO)
+            
+            # File
+            file_val = log_cfg.get("file", "")
+            if file_val:
+                log_file = project_root / file_val
+        except Exception as e:
+            print(f"Warning: Could not parse logging config: {e}")
+
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    if log_file:
+        # Ensure directory exists
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(log_file))
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=handlers,
+        force=True # Override any previous configuration
+    )
 
 async def main() -> None:
     config_path = project_root / "config_aivocode.toml"
+    
+    setup_logging(config_path)
+    
     if not config_path.exists():
         print(f"Error: Configuration file not found at {config_path}")
         return
