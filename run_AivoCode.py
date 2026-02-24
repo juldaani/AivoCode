@@ -63,17 +63,19 @@ async def main() -> None:
     config_path = project_root / "config_aivocode.toml"
     
     setup_logging(config_path)
+    logger = logging.getLogger(__name__)
     
     if not config_path.exists():
-        print(f"Error: Configuration file not found at {config_path}")
+        logger.error("Configuration file not found at %s", config_path)
         return
 
-    print(f"\n--- Loading configuration from {config_path} ---")
+    logger.info("")
+    logger.info("--- Loading configuration from %s ---", config_path)
     
     try:
         engine_config = load_config(config_path)
     except Exception as e:
-        print(f"Failed to load configuration: {e}")
+        logger.error("Failed to load configuration: %s", e)
         return
     
     # Initialize the Engine
@@ -81,9 +83,12 @@ async def main() -> None:
     
     try:
         # Start the engine (starts LSPs and File Watcher)
-        print("\n--- Starting AivoEngine ---")
+        logger.info("")
+        logger.info("--- Starting AivoEngine ---")
         await engine.start()
-        print("\nEngine is running. File watcher is active.\n")
+        logger.info("")
+        logger.info("Engine is running. File watcher is active.")
+        logger.info("")
         
         # Example: Query symbols for a file
         repo_name = "aivocode"
@@ -110,9 +115,10 @@ async def main() -> None:
             print("No symbols returned. (Is the LSP still indexing?)")
 
         # Keep the engine running to demonstrate file watching
-        print("\n--- Engine is now monitoring for file changes ---")
-        print("Try modifying a file in one of the repos to see events in the log.")
-        print("Press Ctrl+C to stop.")
+        logger.info("")
+        logger.info("--- Engine is now monitoring for file changes ---")
+        logger.info("Try modifying a file in one of the repos to see events in the log.")
+        logger.info("Press Ctrl+C to stop.")
         
         while True:
             await asyncio.sleep(1)
@@ -123,9 +129,10 @@ async def main() -> None:
         logging.exception("Unexpected error in main")
     finally:
         # Always stop the engine to cleanup LSP processes
-        print("\n--- Stopping Engine ---", flush=True)
+        logger.info("")
+        logger.info("--- Stopping Engine ---")
         await engine.stop()
-        print("Done.", flush=True)
+        logger.info("Done.")
 
 if __name__ == "__main__":
     try:

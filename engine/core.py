@@ -41,7 +41,7 @@ class AivoEngine:
         repo_custom_ignores: dict[Path, Sequence[str]] = {}
 
         for name, repo in self.config.repos.items():
-            print("")
+            log.info("")
             log.info("REPOSITORY: %s, %s", name, repo.path)
             
             # Dynamic loading of provider and config classes
@@ -98,7 +98,7 @@ class AivoEngine:
         # Start background file watcher
         roots = [repo.path for repo in self.config.repos.values()]
         if roots:
-            print("")
+            log.info("")
             cfg = WatchConfig(coalesce_events=True, repo_custom_ignores=repo_custom_ignores)
             log.info("File Watcher Roots: %s", [str(r) for r in roots])
             log.info(
