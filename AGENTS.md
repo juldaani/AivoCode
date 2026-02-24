@@ -27,6 +27,10 @@
 - Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
   `conda run -n env-aivocode python path/to/script.py`
 
+### Tmp files
+ - Allowed location of temporary files (test/debug/etc logs, scripts, dumps) is at repo root in
+   "tmp" folder.
+
 ## Code Standards (Explicit)
 - Line length: max 100 characters.
 - Typing: follow PEP 484+; prefer explicit types for public functions/methods.
