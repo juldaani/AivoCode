@@ -73,4 +73,3 @@
 ## Workflow
 1. Make focused changes (avoid unrelated diffs).
 2. Run `pytest` (targeted is fine during development).
-3. Run `ruff check .` and `pyright` when appropriate.
