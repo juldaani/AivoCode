@@ -18,14 +18,9 @@ class TestBuildWatchfilesFilter:
 
     def test_build_filter_defaults_only(self) -> None:
         """defaults_filter=True with no custom excludes returns DefaultFilter()."""
-        repo_root = Path("/tmp/repo")
         result = build_watchfiles_filter(
             use_defaults_filter=True,
-            repo_roots=[repo_root],
-            ignore_dirs=(),
-            ignore_entity_globs=(),
-            ignore_entity_regex=(),
-            ignore_paths=(),
+            repo_custom_ignores={},
         )
 
         assert result is not None
@@ -38,14 +33,9 @@ class TestBuildWatchfilesFilter:
 
     def test_build_filter_custom_only_returns_none(self) -> None:
         """defaults_filter=False with no custom excludes returns None."""
-        repo_root = Path("/tmp/repo")
         result = build_watchfiles_filter(
             use_defaults_filter=False,
-            repo_roots=[repo_root],
-            ignore_dirs=(),
-            ignore_entity_globs=(),
-            ignore_entity_regex=(),
-            ignore_paths=(),
+            repo_custom_ignores={},
         )
 
         assert result is None
@@ -55,17 +45,16 @@ class TestBuildWatchfilesFilter:
         repo_root = Path("/tmp/repo")
         result = build_watchfiles_filter(
             use_defaults_filter=False,
-            repo_roots=[repo_root],
-            ignore_dirs=("node_modules", ".cache"),
-            ignore_entity_globs=("*.log",),
-            ignore_entity_regex=(),
-            ignore_paths=(),
+            repo_custom_ignores={
+                repo_root: ["node_modules", ".cache", "*.log"]
+            },
         )
 
         assert result is not None
-        assert "node_modules" in result.ignore_dirs
-        assert ".cache" in result.ignore_dirs
-        assert len(result.ignore_dirs) == 2
+        # In the new implementation, everything goes into ignore_paths or ignore_entity_patterns
+        ignore_paths_str = [str(p) for p in result.ignore_paths]
+        assert str(repo_root / "node_modules") in ignore_paths_str
+        assert str(repo_root / ".cache") in ignore_paths_str
         assert len(result.ignore_entity_patterns) == 1
 
     def test_build_filter_combined(self) -> None:
@@ -74,17 +63,15 @@ class TestBuildWatchfilesFilter:
         custom_dir = "my_custom_build_dir"
         result = build_watchfiles_filter(
             use_defaults_filter=True,
-            repo_roots=[repo_root],
-            ignore_dirs=(custom_dir,),
-            ignore_entity_globs=("*.log",),
-            ignore_entity_regex=(),
-            ignore_paths=(),
+            repo_custom_ignores={
+                repo_root: [custom_dir, "*.log"]
+            },
         )
 
         assert result is not None
-        assert custom_dir in result.ignore_dirs
-        assert ".git" in result.ignore_dirs
-        assert len(result.ignore_dirs) == len(DefaultFilter().ignore_dirs) + 1
+        ignore_paths_str = [str(p) for p in result.ignore_paths]
+        assert str(repo_root / custom_dir) in ignore_paths_str
+        assert ".git" in result.ignore_dirs # from DefaultFilter
 
     def test_build_filter_relative_ignore_paths(self, tmp_path: Path) -> None:
         """Relative ignore_paths are expanded per repo root."""
@@ -95,11 +82,10 @@ class TestBuildWatchfilesFilter:
 
         result = build_watchfiles_filter(
             use_defaults_filter=False,
-            repo_roots=[repo1, repo2],
-            ignore_dirs=(),
-            ignore_entity_globs=(),
-            ignore_entity_regex=(),
-            ignore_paths=("secrets.txt",),
+            repo_custom_ignores={
+                repo1: ["secrets.txt"],
+                repo2: ["secrets.txt"]
+            },
         )
 
         assert result is not None
@@ -114,11 +100,9 @@ class TestBuildWatchfilesFilter:
 
         result = build_watchfiles_filter(
             use_defaults_filter=False,
-            repo_roots=[repo_root],
-            ignore_dirs=(),
-            ignore_entity_globs=(),
-            ignore_entity_regex=(),
-            ignore_paths=(str(abs_path),),
+            repo_custom_ignores={
+                repo_root: [str(abs_path)]
+            },
         )
 
         assert result is not None

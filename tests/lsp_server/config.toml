@@ -21,8 +21,7 @@ config_class = "BasedPyrightConfig"
 
 [test_config.provider_config]
 # Passed to BasedPyrightConfig constructor
-# config_root is resolved relative to workspace_root by the config class
-config_root = "."
+config_file = "pyproject.toml"
 
 # Smoke test: duplicate config to verify multi-config parametrization works
 [[test_config]]
@@ -33,4 +32,4 @@ provider_class = "BasedPyrightProvider"
 config_class = "BasedPyrightConfig"
 
 [test_config.provider_config]
-config_root = "."
+config_file = "pyproject.toml"

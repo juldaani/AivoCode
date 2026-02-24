@@ -123,7 +123,7 @@ def _prepare_config_kwargs(
     """
     result = {}
     for key, value in provider_config.items():
-        if key in ("config_root", "root", "workspace_root", "cwd") and isinstance(
+        if key in ("config_root", "root", "workspace_root", "cwd", "config_file") and isinstance(
             value, str
         ):
             path = Path(value)

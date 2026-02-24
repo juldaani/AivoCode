@@ -7,6 +7,7 @@ What this file provides
 """
 
 import asyncio
+from pathlib import Path
 
 from lsp_server.basedpyright.provider import BasedPyrightProvider
 from lsp_server.basedpyright.config import BasedPyrightConfig
@@ -35,7 +36,7 @@ async def _run_document_symbols_test(tmp_path) -> None:
 
     manager = WorkspaceLspManager()
     provider = BasedPyrightProvider()
-    config = BasedPyrightConfig(config_root=mock_root)
+    config = BasedPyrightConfig(config_file=Path("pyproject.toml"))
 
     client = await manager.get_or_start(
         provider=provider, workspace_root=mock_root, config=config
