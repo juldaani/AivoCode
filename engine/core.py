@@ -189,9 +189,9 @@ class AivoEngine:
                 for root, lsp_events in by_root.items():
                     repo_label = path_to_label.get(root, str(root))
                     log.info(
-                        "Routing %d event(s) to repo: %s", 
-                        len(lsp_events), 
-                        repo_label
+                        "(REPO %s): Notifying LSP server: routing %d file change(s)",
+                        repo_label,
+                        len(lsp_events),
                     )
                     for lsp_ev in lsp_events:
                         # Extract full path from URI (strip file://)

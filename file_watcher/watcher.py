@@ -14,6 +14,7 @@ from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+import logging
 import subprocess
 from typing import DefaultDict
 from typing import AsyncIterator, Iterator, Sequence
@@ -23,6 +24,8 @@ from watchfiles import Change, DefaultFilter, awatch, watch
 from file_watcher.filters import build_watchfiles_filter
 from file_watcher.gitignore import GitignoreStatus, build_gitignore_status, git_check_ignore
 from file_watcher.types import RootInfo, WatchBatch, WatchConfig, WatchEvent
+
+log = logging.getLogger(__name__)
 
 
 def _normalize_roots(roots: Sequence[Path]) -> RootInfo:
@@ -229,6 +232,7 @@ def watch_repos(roots: Sequence[Path], cfg: WatchConfig) -> Iterator[WatchBatch]
         events = [_event_for(change, raw_path, roots=root_info.roots, labels=root_info.labels) for change, raw_path in changes]
         filtered_events, warnings = _apply_gitignore_filter(events, status=git_status, cfg=cfg)
         final_events = _coalesce_events(filtered_events) if cfg.coalesce_events else filtered_events
+        log.debug("File watcher: %d raw events, %d after filtering", raw_n, len(final_events))
         yield WatchBatch(
             ts=ts,
             raw=raw_n,
@@ -255,6 +259,7 @@ async def awatch_repos(roots: Sequence[Path], cfg: WatchConfig) -> AsyncIterator
         events = [_event_for(change, raw_path, roots=root_info.roots, labels=root_info.labels) for change, raw_path in changes]
         filtered_events, warnings = _apply_gitignore_filter(events, status=git_status, cfg=cfg)
         final_events = _coalesce_events(filtered_events) if cfg.coalesce_events else filtered_events
+        log.debug("File watcher: %d raw events, %d after filtering", raw_n, len(final_events))
         yield WatchBatch(
             ts=ts,
             raw=raw_n,

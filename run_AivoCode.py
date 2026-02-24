@@ -58,6 +58,8 @@ def setup_logging(config_path: Path) -> None:
         handlers=handlers,
         force=True # Override any previous configuration
     )
+    # Silence watchfiles internal log spam; we log after filtering.
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
 
 async def main() -> None:
     config_path = project_root / "config_aivocode.toml"
