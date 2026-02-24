@@ -18,17 +18,21 @@ log = logging.getLogger(__name__)
 class BasedPyrightConfig:
     """Configuration required to start basedpyright."""
 
-    config_file: Path
+    config_file: Path | None = None
 
 
-def resolve_and_validate_config_file(*, workspace_root: Path, config_file: Path) -> Path:
+def resolve_and_validate_config_file(*, workspace_root: Path, config_file: Path | None) -> Path | None:
     """Resolve and validate the config file for basedpyright.
 
     Rules:
+    - If None, return None (skip config).
     - Accept absolute or workspace-relative paths.
     - Require the file to exist.
     - Warn (but do not fail) if the config file is outside the workspace.
     """
+    if config_file is None:
+        return None
+
     workspace_root = workspace_root.resolve()
     if config_file.is_absolute():
         resolved = config_file

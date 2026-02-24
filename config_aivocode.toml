@@ -12,4 +12,4 @@ path = "/home/juho/dev_folder/tiliote-analyzer"
 [repos.tiliote_analyzer.lsp]
 provider_class = "lsp_server.basedpyright.BasedPyrightProvider"
 config_class = "lsp_server.basedpyright.BasedPyrightConfig"
-config_file = "pyproject.toml"
+config_file = ""

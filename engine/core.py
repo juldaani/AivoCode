@@ -57,7 +57,14 @@ class AivoEngine:
             final_options = {}
             for key, value in repo.lsp.options.items():
                 target_type = type_hints.get(key)
-                if target_type is Path and isinstance(value, str):
+                
+                # Check if target_type is Path (handling optional types)
+                is_path_type = target_type is Path or "Path" in str(target_type)
+
+                # If target is Path but value is empty string, set to None
+                if is_path_type and value == "":
+                    final_options[key] = None
+                elif is_path_type and isinstance(value, str):
                     path_obj = Path(value)
                     if not path_obj.is_absolute():
                         path_obj = (repo.path / path_obj).resolve()

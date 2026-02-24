@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Basedpyright provider that builds a server launch spec.
 
 What this file provides
@@ -27,7 +29,17 @@ class BasedPyrightProvider:
         )
 
         root_uri = workspace_root.as_uri()
-        instance_id = f"{workspace_root}::{cfg_file}"
+        instance_id = f"{workspace_root}::{cfg_file}" if cfg_file else str(workspace_root)
+
+        settings = {
+            "basedpyright": {
+                "analysis": {
+                    "diagnosticMode": "workspace",
+                }
+            }
+        }
+        if cfg_file:
+            settings["basedpyright"]["analysis"]["configFilePath"] = str(cfg_file)
 
         return LspServerSpec(
             server_id=self.id,
@@ -36,19 +48,15 @@ class BasedPyrightProvider:
             cwd=workspace_root,
             root_uri=root_uri,
             workspace_folders=[{"uri": root_uri, "name": workspace_root.name}],
-            settings={
-                "basedpyright": {
-                    "analysis": {
-                        "diagnosticMode": "workspace",
-                        "configFilePath": str(cfg_file),
-                    }
-                }
-            },
+            settings=settings,
         )
 
     def get_workspace_ignores(self, workspace_root: Path, config: BasedPyrightConfig) -> list[str]:
         import logging
         log = logging.getLogger(__name__)
+
+        if config.config_file is None:
+            return []
 
         try:
             cfg_file = resolve_and_validate_config_file(
@@ -56,17 +64,27 @@ class BasedPyrightProvider:
                 config_file=config.config_file,
             )
         except Exception:
+            # Desired: Crash if file specified but doesn't exist
+            raise
+
+        if cfg_file is None:
             return []
 
         excludes = []
+        section_found = False
         if cfg_file.suffix == ".toml":
             try:
                 import tomllib
                 with open(cfg_file, "rb") as f:
                     data = tomllib.load(f)
                 tool = data.get("tool", {})
-                pyright = tool.get("pyright", tool.get("basedpyright", {}))
-                excludes = pyright.get("exclude", [])
+                pyright = tool.get("pyright")
+                if pyright is None:
+                    pyright = tool.get("basedpyright")
+                
+                if pyright is not None:
+                    section_found = True
+                    excludes = pyright.get("exclude", [])
             except Exception as e:
                 log.warning("Failed to parse basedpyright ignores from %s: %s", cfg_file, e)
         elif cfg_file.suffix == ".json":
@@ -74,9 +92,18 @@ class BasedPyrightProvider:
                 import json
                 with open(cfg_file, "r") as f:
                     data = json.load(f)
+                # For JSON, any root-level key or even empty is technically valid,
+                # but we usually expect 'exclude'.
+                section_found = True 
                 excludes = data.get("exclude", [])
             except Exception as e:
                 log.warning("Failed to parse basedpyright ignores from %s: %s", cfg_file, e)
+
+        if cfg_file.suffix == ".toml" and not section_found:
+            log.warning(
+                "Config file '%s' has no [tool.pyright] or [tool.basedpyright] section. LSP will use defaults.",
+                cfg_file
+            )
 
         if not isinstance(excludes, list):
             return []
