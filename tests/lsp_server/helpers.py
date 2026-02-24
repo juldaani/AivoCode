@@ -6,6 +6,7 @@ What this file provides
 - Path helpers for locating mock repos and GT files.
 - LSP helpers for opening files and requesting symbols.
 - Normalization and comparison helpers for deterministic assertions.
+- Generic, category-based symbol checks for cross-server tests.
 - File event helpers for didChangeWatchedFiles tests.
 
 Why this exists
@@ -86,6 +87,132 @@ def normalize_document_symbols(result: JsonValue) -> list[JsonDict]:
     raise TypeError(f"Unexpected documentSymbol result shape: {type(result)}")
 
 
+def normalize_to_kind_category(
+    symbols: list[JsonDict], kind_legend: dict[str, list[int]]
+) -> list[JsonDict]:
+    """Map numeric kind values to semantic kind categories.
+
+    Parameters
+    ----------
+    symbols : list[JsonDict]
+        Normalized symbols containing "name", "kind", and "children".
+    kind_legend : dict[str, list[int]]
+        Mapping from category name to allowed kind numbers.
+    """
+    kind_map = _build_kind_category_map(kind_legend)
+    return _normalize_category_list(symbols, kind_map)
+
+
+def strip_local_symbol_children(
+    symbols: list[JsonDict], local_parent_categories: set[str] | None = None
+) -> list[JsonDict]:
+    """Remove children entries for symbol categories that represent locals.
+
+    This drops function/method local variables and parameters from symbol output
+    to make cross-server comparisons more stable.
+    """
+    if local_parent_categories is None:
+        local_parent_categories = {"Function", "Method"}
+
+    stripped: list[JsonDict] = []
+    for symbol in symbols:
+        category = symbol.get("kind_category")
+        children = symbol.get("children") or []
+        if category in local_parent_categories:
+            stripped.append(
+                {"name": symbol.get("name"), "kind_category": category, "children": []}
+            )
+            continue
+        stripped.append(
+            {
+                "name": symbol.get("name"),
+                "kind_category": category,
+                "children": strip_local_symbol_children(
+                    children, local_parent_categories
+                ),
+            }
+        )
+    return _sort_symbols_by_category(stripped)
+
+
+def strip_local_symbol_children_by_kind(
+    symbols: list[JsonDict], local_parent_kinds: set[int]
+) -> list[JsonDict]:
+    """Remove children entries for symbol kinds that represent locals.
+
+    This runs before category mapping so kinds that are not in the legend
+    (such as local variables) do not cause mapping failures.
+    """
+    stripped: list[JsonDict] = []
+    for symbol in symbols:
+        kind_value = symbol.get("kind")
+        kind_key = _kind_sort_key(kind_value)
+        children = symbol.get("children") or []
+        if kind_key in local_parent_kinds:
+            stripped.append(
+                {"name": symbol.get("name"), "kind": kind_value, "children": []}
+            )
+            continue
+        stripped.append(
+            {
+                "name": symbol.get("name"),
+                "kind": kind_value,
+                "children": strip_local_symbol_children_by_kind(
+                    children, local_parent_kinds
+                ),
+            }
+        )
+    return _sort_symbols(stripped)
+
+
+def assert_symbols_match_category(got: list[JsonDict], expected: list[JsonDict]) -> None:
+    """Assert that category-based symbols match expected GT rules."""
+    got_sorted = _sort_symbols_by_category(got)
+    expected_sorted = _sort_symbols_by_category(expected)
+
+    if len(got_sorted) != len(expected_sorted):
+        raise AssertionError(
+            f"Symbol count mismatch: {len(got_sorted)} != {len(expected_sorted)}"
+        )
+
+    for got_item, expected_item in zip(got_sorted, expected_sorted):
+        _assert_symbol_entry_category(got_item, expected_item)
+
+
+async def assert_document_symbols_generic(
+    tmp_path: Path,
+    client: Any,
+    file_path: Path,
+    gt_path: Path,
+    *,
+    language_id: str,
+) -> None:
+    """Compare documentSymbol output against category-based GT."""
+    await did_open(client, file_path, language_id=language_id)
+    raw = await document_symbols(client, file_path)
+    got = normalize_document_symbols(raw)
+    expected = load_tests_gt(gt_path)
+    schema_version = expected.get("schema_version")
+    if schema_version != 2:
+        raise AssertionError(f"Unsupported schema_version: {schema_version}")
+    kind_legend = expected.get("kind_legend")
+    if not isinstance(kind_legend, dict):
+        raise AssertionError("Expected kind_legend mapping in GT")
+    local_parent_kinds = _extract_local_parent_kinds(kind_legend)
+    filtered_numeric = strip_local_symbol_children_by_kind(got, local_parent_kinds)
+    categorized = normalize_to_kind_category(filtered_numeric, kind_legend)
+    filtered = strip_local_symbol_children(categorized)
+
+    dump_debug(tmp_path, "document_symbols_raw", raw)
+    dump_debug(tmp_path, "document_symbols_normalized", got)
+    dump_debug(tmp_path, "document_symbols_filtered_numeric", filtered_numeric)
+    dump_debug(tmp_path, "document_symbols_categorized", categorized)
+    dump_debug(tmp_path, "document_symbols_filtered", filtered)
+    dump_debug(tmp_path, "document_symbols_expected", expected.get("symbols"))
+
+    assert_symbols_match_category(filtered, expected["symbols"])
+
+
 def _normalize_document_symbol_list(items: list[dict[str, Any]]) -> list[JsonDict]:
     """Normalize nested DocumentSymbol entries."""
     normalized = [_normalize_document_symbol(item) for item in items]
@@ -125,6 +252,62 @@ def _kind_sort_key(kind: JsonValue) -> int:
     return -1
 
 
+def _build_kind_category_map(kind_legend: dict[str, list[int]]) -> dict[int, str]:
+    """Build a reverse lookup from kind number to category label."""
+    kind_map: dict[int, str] = {}
+    for category, kinds in kind_legend.items():
+        if not isinstance(kinds, list):
+            continue
+        for kind in kinds:
+            if isinstance(kind, int):
+                kind_map[kind] = category
+    return kind_map
+
+
+def _extract_local_parent_kinds(kind_legend: dict[str, list[int]]) -> set[int]:
+    """Return the kind numbers for function/method categories."""
+    local_parent_kinds: set[int] = set()
+    for category in ("Function", "Method"):
+        kinds = kind_legend.get(category)
+        if not isinstance(kinds, list):
+            continue
+        for kind in kinds:
+            if isinstance(kind, int):
+                local_parent_kinds.add(kind)
+    return local_parent_kinds
+
+
+def _normalize_category_list(
+    items: list[JsonDict], kind_map: dict[int, str]
+) -> list[JsonDict]:
+    """Normalize symbol list to name/kind_category/children only."""
+    normalized = [_normalize_category_symbol(item, kind_map) for item in items]
+    return _sort_symbols_by_category(normalized)
+
+
+def _normalize_category_symbol(item: JsonDict, kind_map: dict[int, str]) -> JsonDict:
+    """Normalize a single symbol entry to kind_category."""
+    kind_value = item.get("kind")
+    kind_key = _kind_sort_key(kind_value)
+    category = kind_map.get(kind_key)
+    if category is None:
+        raise AssertionError(f"Unknown symbol kind: {kind_value}")
+    children = item.get("children") or []
+    return {
+        "name": item.get("name"),
+        "kind_category": category,
+        "children": _normalize_category_list(children, kind_map) if children else [],
+    }
+
+
+def _sort_symbols_by_category(symbols: list[JsonDict]) -> list[JsonDict]:
+    """Sort symbols deterministically by category then name."""
+    return sorted(
+        symbols,
+        key=lambda s: ((s.get("kind_category") or ""), s.get("name")),
+    )
+
+
 def assert_symbols_match(got: list[JsonDict], expected: list[JsonDict]) -> None:
     """Assert that normalized symbols match expected GT rules."""
     got_sorted = _sort_symbols(got)
@@ -147,6 +330,26 @@ def _assert_symbol_entry(got: JsonDict, expected: JsonDict) -> None:
     got_children = got.get("children") or []
     expected_children = expected.get("children") or []
     assert_symbols_match(got_children, expected_children)
+
+
+def _assert_symbol_entry_category(got: JsonDict, expected: JsonDict) -> None:
+    """Compare a single symbol entry by kind_category."""
+    if got.get("name") != expected.get("name"):
+        raise AssertionError(
+            f"Symbol name mismatch: {got.get('name')} != {expected.get('name')}"
+        )
+
+    got_category = got.get("kind_category")
+    expected_category = expected.get("kind_category")
+    if got_category != expected_category:
+        raise AssertionError(
+            f"Symbol category mismatch for {got.get('name')}: {got_category} != "
+            f"{expected_category}"
+        )
+
+    got_children = got.get("children") or []
+    expected_children = expected.get("children") or []
+    assert_symbols_match_category(got_children, expected_children)
 
 
 def _assert_kind_match(got: JsonValue, expected: JsonValue, name: str | None) -> None:

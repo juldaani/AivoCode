@@ -1,190 +1,118 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": "mock_pkg/utils.py",
-  "lsp_server": "basedpyright",
-  "_symbol_kind_legend": {
-    "5": "Class",
-    "6": "Method",
-    "12": "Function",
-    "13": "Variable",
-    "14": "Constant"
+  "kind_legend": {
+    "Class": [
+      5
+    ],
+    "Method": [
+      6
+    ],
+    "Function": [
+      12
+    ],
+    "Constant": [
+      14
+    ]
   },
   "symbols": [
     {
       "name": "Greeter",
-      "kind": 5,
+      "kind_category": "Class",
       "children": [
         {
           "name": "greet",
-          "kind": 6,
-          "children": [
-            {
-              "name": "name",
-              "kind": 13,
-              "children": []
-            }
-          ]
+          "kind_category": "Method",
+          "children": []
         }
       ]
     },
     {
       "name": "GreeterFactory",
-      "kind": 5,
+      "kind_category": "Class",
       "children": [
         {
           "name": "make",
-          "kind": 6,
-          "children": [
-            {
-              "name": "greeter",
-              "kind": 13,
-              "children": []
-            },
-            {
-              "name": "prefix",
-              "kind": 13,
-              "children": []
-            }
-          ]
+          "kind_category": "Method",
+          "children": []
         }
       ]
     },
     {
       "name": "GreetingStyle",
-      "kind": 5,
+      "kind_category": "Class",
       "children": [
         {
           "name": "FORMAL",
-          "kind": 14,
+          "kind_category": "Constant",
           "children": []
         },
         {
           "name": "FRIENDLY",
-          "kind": 14,
+          "kind_category": "Constant",
           "children": []
         }
       ]
     },
     {
       "name": "LoudGreeter",
-      "kind": 5,
+      "kind_category": "Class",
       "children": [
         {
           "name": "greet",
-          "kind": 6,
-          "children": [
-            {
-              "name": "name",
-              "kind": 13,
-              "children": []
-            }
-          ]
+          "kind_category": "Method",
+          "children": []
         }
       ]
     },
     {
       "name": "build_payload",
-      "kind": 12,
-      "children": [
-        {
-          "name": "message",
-          "kind": 13,
-          "children": []
-        },
-        {
-          "name": "name",
-          "kind": 13,
-          "children": []
-        },
-        {
-          "name": "var1",
-          "kind": 13,
-          "children": []
-        },
-        {
-          "name": "var2",
-          "kind": 13,
-          "children": []
-        },
-        {
-          "name": "var3",
-          "kind": 13,
-          "children": []
-        }
-      ]
+      "kind_category": "Function",
+      "children": []
     },
     {
       "name": "format_message",
-      "kind": 12,
-      "children": [
-        {
-          "name": "message",
-          "kind": 13,
-          "children": []
-        },
-        {
-          "name": "sep",
-          "kind": 13,
-          "children": []
-        }
-      ]
+      "kind_category": "Function",
+      "children": []
     },
     {
       "name": "goodbye",
-      "kind": 12,
-      "children": [
-        {
-          "name": "name",
-          "kind": 13,
-          "children": []
-        }
-      ]
+      "kind_category": "Function",
+      "children": []
     },
     {
       "name": "hello",
-      "kind": 12,
-      "children": [
-        {
-          "name": "name",
-          "kind": 13,
-          "children": []
-        }
-      ]
+      "kind_category": "Function",
+      "children": []
     },
     {
       "name": "hello_default",
-      "kind": 12,
+      "kind_category": "Function",
       "children": []
     },
     {
       "name": "hello_many",
-      "kind": 12,
-      "children": [
-        {
-          "name": "names",
-          "kind": 13,
-          "children": []
-        }
-      ]
+      "kind_category": "Function",
+      "children": []
     },
     {
       "name": "DEFAULT_NAME",
-      "kind": 14,
+      "kind_category": "Constant",
       "children": []
     },
     {
       "name": "DEFAULT_SEPARATOR",
-      "kind": 14,
+      "kind_category": "Constant",
       "children": []
     },
     {
       "name": "MAX_RETRIES",
-      "kind": 14,
+      "kind_category": "Constant",
       "children": []
     },
     {
       "name": "WELCOME_MESSAGE",
-      "kind": 14,
+      "kind_category": "Constant",
       "children": []
     }
   ]

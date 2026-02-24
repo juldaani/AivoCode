@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-"""Python LSP integration tests using the mock repo.
+"""Basedpyright-specific LSP integration tests using the mock repo.
 
 What this file provides
-- A minimal basedpyright documentSymbol test against the mock Python repo.
+- A server-specific documentSymbol test with exact kind numbers and locals.
 """
 
 import asyncio
@@ -32,7 +32,7 @@ def test_basedpyright_document_symbols(tmp_path) -> None:
 async def _run_document_symbols_test(tmp_path) -> None:
     mock_root = mock_repo_root("python")
     file_path = mock_root / "mock_pkg" / "utils.py"
-    gt_path = mock_root / "mock_pkg" / "utils_tests_gt.json"
+    gt_path = mock_root / "mock_pkg" / "utils_tests_gt_basedpyright.json"
 
     manager = WorkspaceLspManager()
     provider = BasedPyrightProvider()
