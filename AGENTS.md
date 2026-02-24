@@ -26,6 +26,8 @@
 ### Executing code
 - Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
   `conda run -n env-aivocode python path/to/script.py`
+- When executing long-running code (like servers, infinite loops, ...), use timeouts/kill/etc 
+  to end the process. Otherwise we block the development.
 
 ### Tmp files
  - Allowed location of temporary files (test/debug/etc logs, scripts, dumps) is at repo root in
