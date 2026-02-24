@@ -13,7 +13,7 @@ from engine.config import load_config
 
 # Configure logging to see engine startup and file events
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 
