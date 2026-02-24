@@ -16,4 +16,5 @@ config_file = ""
 
 [logging]
 level = "INFO"
-file = "logs/aivocode.log"
+logs_dir = "logs"
+file = "aivocode.log"   # empty "" no log dump

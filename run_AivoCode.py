@@ -14,6 +14,7 @@ from engine.config import load_config
 
 def setup_logging(config_path: Path) -> None:
     """Read logging configuration from TOML and apply it."""
+    import datetime
     # Default values
     level = logging.INFO
     log_file = None
@@ -28,10 +29,20 @@ def setup_logging(config_path: Path) -> None:
             level_str = log_cfg.get("level", "INFO").upper()
             level = getattr(logging, level_str, logging.INFO)
             
-            # File
+            # File and Directory
+            logs_dir_val = log_cfg.get("logs_dir", "")
             file_val = log_cfg.get("file", "")
+            
             if file_val:
-                log_file = project_root / file_val
+                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                timestamped_file = f"{ts}_{file_val}"
+                
+                if logs_dir_val:
+                    # Treat as relative to project_root, stripping leading slash to stay within repo
+                    logs_dir = project_root / logs_dir_val.lstrip("/")
+                    log_file = logs_dir / timestamped_file
+                else:
+                    log_file = project_root / timestamped_file
         except Exception as e:
             print(f"Warning: Could not parse logging config: {e}")
 
