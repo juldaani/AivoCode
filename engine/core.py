@@ -193,6 +193,10 @@ class AivoEngine:
                         len(lsp_events), 
                         repo_label
                     )
+                    for lsp_ev in lsp_events:
+                        # Extract full path from URI (strip file://)
+                        full_path = lsp_ev.uri.replace("file://", "")
+                        log.debug("  %s: %s", lsp_ev.type.name, full_path)
                     
                     client = self._path_to_client.get(root)
                     if client and client.is_running():

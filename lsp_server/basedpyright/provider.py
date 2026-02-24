@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Basedpyright provider that builds a server launch spec.
 
 What this file provides
