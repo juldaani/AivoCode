@@ -84,11 +84,34 @@
       ".opencode*": "ask",
     }
   },
+  
+  "provider": {
+    "openrouter": {
+      "models": {
+        "z-ai/glm-5:nitro": {
+          "name": "GLM-5 Nitro"
+        }
+      }
+    }
+  },
 
+  // ----------------------------------------
+  // openrouter/google/gemini-3.1-pro-preview
+  // openrouter/google/gemini-3-flash-preview
+  // ----------------------------------------
+  // openrouter/openai/gpt-5.2
+  // openrouter/openai/gpt-5.2-codex
+  // ----------------------------------------
+  // openrouter/z-ai/glm-5
+  // ----------------------------------------
+  // openrouter/moonshotai/kimi-k2.5
+  // ----------------------------------------
+  // openrouter/minimax/minimax-m2.5
+  // ----------------------------------------
   "agent": {
     "plan": {
       "mode": "primary",
-      "model": "openrouter/google/gemini-3.1-pro-preview",
+      "model": "openrouter/z-ai/glm-5",
       "options":{
         "reasoningEffort": "high"
       },
@@ -96,7 +119,7 @@
     
     "build": {
       "mode": "primary",
-      "model": "openrouter/google/gemini-3.1-pro-preview",
+      "model": "openrouter/google/gemini-3-flash-preview",
       "options":{
         "reasoningEffort": "high"
       },
