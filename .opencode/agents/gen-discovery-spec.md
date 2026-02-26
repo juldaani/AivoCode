@@ -33,7 +33,7 @@ Distill all relevant knowledge from the provided conversation context into a sin
 
 ## Guardrails
 
-- Do not modify files outside `specs/`
+- You are only allowed to create/modify 'discovery.md' file inside the target 
+  path `specs/<feature-name>/`
 - Do not implement code changes
 - Do not add assumptions not grounded in the provided context
-- If context is unclear, note it as an open question
