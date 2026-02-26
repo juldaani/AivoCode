@@ -1,5 +1,4 @@
 import path from "path"
-import { unlink } from "node:fs/promises"
 import { tool } from "@opencode-ai/plugin"
 import { $ } from "bun"
 
@@ -14,22 +13,13 @@ export default tool({
     const outputPath = path.isAbsolute(args.outputPath)
       ? args.outputPath
       : path.join(baseDir, args.outputPath)
-    const rawPath = `${outputPath}.raw.tmp`
+    const rawPath = `${outputPath}.raw.json`
 
     await $`sh -c ${`opencode export ${sessionID} > ${rawPath}`}`
-    const exportResult = await Bun.file(rawPath).text()
-    const exportLines = exportResult.split("\n")
-    const jsonStart = exportLines.findIndex((line) => line.trim().startsWith("{"))
-    if (jsonStart < 0) {
-      throw new Error("Failed to locate JSON in opencode export output")
-    }
-    const jsonPayload = exportLines.slice(jsonStart).join("\n")
-    await Bun.write(rawPath, jsonPayload)
 
     const rawJson = JSON.parse(await Bun.file(rawPath).text())
     const filtered = filterSession(rawJson)
     await Bun.write(outputPath, JSON.stringify(filtered, null, 2))
-    await unlink(rawPath)
 
     return `Exported session ${sessionID} to ${outputPath}`
   },
@@ -37,10 +27,19 @@ export default tool({
 
 type ToolInput = Record<string, unknown> | string | number | boolean | null
 
+const SKIP_OUTPUT_TOOLS = ["webfetch", "read", "grep"]
+const BASH_OUTPUT_MAX_CHARS = 1000
+
 type FilteredMessage = {
   role?: string
   content?: string
-  tools_used?: Array<{ tool?: string; input?: ToolInput }>
+  tools_used?: Array<{
+    tool?: string
+    input?: ToolInput
+    output?: string
+    status?: string
+    sessionId?: string
+  }>
 }
 
 function filterSession(raw: unknown): { sessionID?: string; messages: FilteredMessage[] } {
@@ -127,9 +126,25 @@ function isToolPart(part: unknown): part is Record<string, unknown> {
 function normalizeToolPart(part: Record<string, unknown>): {
   tool?: string
   input?: ToolInput
+  output?: string
+  status?: string
+  sessionId?: string
 } {
   const tool = (part.tool ?? part.name) as string | undefined
   const state = (part.state ?? {}) as Record<string, unknown>
   const input = (state.input ?? part.input ?? part.args) as ToolInput
-  return { tool, input }
+  let output: string | undefined
+  if (tool && !SKIP_OUTPUT_TOOLS.includes(tool)) {
+    const rawOutput = typeof state.output === "string" ? state.output : undefined
+    if (rawOutput) {
+      output =
+        tool === "bash" && rawOutput.length > BASH_OUTPUT_MAX_CHARS
+          ? `${rawOutput.slice(0, BASH_OUTPUT_MAX_CHARS)}... (truncated)`
+          : rawOutput
+    }
+  }
+  const status = typeof state.status === "string" ? state.status : undefined
+  const metadata = (state.metadata ?? {}) as Record<string, unknown>
+  const sessionId = typeof metadata.sessionId === "string" ? metadata.sessionId : undefined
+  return { tool, input, output, status, sessionId }
 }
