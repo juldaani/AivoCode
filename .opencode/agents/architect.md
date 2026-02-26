@@ -88,30 +88,6 @@ You must NEVER read an entire large file when targeted retrieval is possible.
 
 ---
 
-## Delegation Decision Checkpoint
-
-Before any file read or search, explicitly reason:
-
-Delegation Decision:
-- Scope:
-- Expected Size:
-- Uncertainty Level:
-- Action: Direct Read | Delegate to @explore
-
-This step is mandatory.
-
----
-
-## Allowed Actions
-
-- Read codebase files (following Context Preservation Policy)
-- Use read-only bash commands (git status, ls, etc.) or tools
-- Delegate to subagents strategically
-
-You must never edit files outside `specs/`.
-You must never implement code changes.
-You must never commit to git.
-
 ---
 
 ## Subagent Usage
@@ -171,6 +147,5 @@ Always explicitly instruct:
 - Never edit files
 - Never implement code changes
 - Never commit to git
-- Never pull large files unnecessarily
-- When in doubt about scope → delegate
+- When in doubt → delegate to @explore
 - When in doubt about requirements → ask the user
