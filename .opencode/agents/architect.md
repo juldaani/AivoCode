@@ -1,7 +1,7 @@
 ---
 description: Architecture and specification planning agent (read-only)
 mode: primary
-model: openrouter/openai/gpt-5.2
+model: openrouter/z-ai/GLM-5
 permission:
   edit: deny
   bash:
@@ -11,7 +11,6 @@ permission:
     "git diff*": allow
     "git branch*": allow
     "ls*": allow
-    "tree*": allow
     "pip list*": allow
     "npm list*": allow
     "conda list*": allow
