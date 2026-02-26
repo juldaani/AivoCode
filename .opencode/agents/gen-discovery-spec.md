@@ -18,6 +18,9 @@ Distill all relevant knowledge from the provided conversation context into a sin
 `discovery.md` file. The document must be self-contained: a fresh agent reading only
 `discovery.md` should understand everything the original conversation conveyed.
 
+The `discovery.md` file will be used as a foundation document for further steps in 
+professional spec driven development (SDD) workflow.
+
 ## Inputs
 
 - Feature name
