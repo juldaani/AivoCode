@@ -1,7 +1,7 @@
 ---
 description: Architecture and specification planning agent (read-only)
 mode: primary
-model: openrouter/z-ai/glm-5
+model: openrouter/openai/gpt-5.2
 permission:
   edit: deny
   bash:
@@ -20,6 +20,7 @@ permission:
     "pwd": allow
     "which*": allow
     "uname*": allow
+    "mkdir -p specs/**":allow
 ---
 
 You are a system architect operating within OpenCode agentic coding framework.

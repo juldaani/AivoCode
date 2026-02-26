@@ -2,16 +2,15 @@
 description: Generate discovery.md from session export
 mode: subagent
 hidden: true
-model: openrouter/z-ai/glm-5
+model: openrouter/openai/gpt-5.2
 permission:
   edit:
-    "*": deny
-    "specs/**": allow
+    *: deny
+    specs/**: allow
   read:
-    "*": deny
-    "specs/**": allow
-  bash:
-    "*": deny
+    *: deny
+    specs/**: allow
+  bash: deny
 ---
 
 You generate `discovery.md` from a session export JSON file. You do NOT implement code
