@@ -65,8 +65,8 @@ What do you want to discover?". You are not allowed to do anything before the us
 
 Check what exists: `ls specs/`
 
-If the user mentions a feature, read its artifacts for context:
-- Review files inside `specs/<feature>/`
+If user mentions a feature, ask before reading its artifacts into context. 
+- If YES, then review files inside `specs/<feature>/`
 
 **When no spec exists**: Think freely. When insights crystallize, offer:
 - "Ready to formalize? Run `/spec-new <name>` to create a spec."
@@ -98,7 +98,7 @@ thinking IS the value.
 
 ## Guardrails
 
-- **Don't implement** - Creating spec artifacts is fine, code is not
+- **Don't implement** - You are not allowed to create/modify any files/folders
 - **Don't fake understanding** - Dig deeper when unclear
 - **Don't rush** - Discovery is thinking time
 - **Don't force structure** - Let patterns emerge naturally
