@@ -1,9 +1,10 @@
 ---
 description: Architecture and specification planning agent (read-only)
 mode: primary
-model: openrouter/z-ai/GLM-5
+model: openrouter/z-ai/glm-5
 permission:
-  edit: deny
+  edit:
+    "*": deny
   bash:
     "*": deny
     "git status*": allow
@@ -19,7 +20,7 @@ permission:
     "pwd": allow
     "which*": allow
     "uname*": allow
-    "mkdir -p specs/**":allow
+    "mkdir -p specs/**": allow
 ---
 
 You are a system architect operating within OpenCode agentic coding framework.

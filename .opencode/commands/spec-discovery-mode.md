@@ -1,5 +1,6 @@
 ---
 description: Enter discovery mode - explore ideas, investigate problems, clarify requirements
+agent: architect
 ---
 
 Enter discovery mode. Think deeply. Follow the conversation naturally.

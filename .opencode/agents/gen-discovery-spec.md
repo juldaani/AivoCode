@@ -2,7 +2,7 @@
 description: Generate discovery.md from session export
 mode: subagent
 hidden: true
-model: openrouter/openai/gpt-5.2
+model: openrouter/z-ai/glm-5
 permission:
   read:
     "*": deny
@@ -50,6 +50,7 @@ You will receive:
 - Capture all requirements, constraints, decisions, open questions, and context
 - Preserve important terminology and naming from the conversation
 - Be clear and structured, but prioritize completeness over brevity
+- DO NOT fake understanding, fill blanks that are not , try to infer 
 
 ## Guardrails
 
@@ -57,4 +58,5 @@ You will receive:
   path `specs/<feature-name>/`
 - You are only allowed to read `session_discovery.json` inside `specs/<feature-name>/`
 - Do not implement code changes
-- Do not add assumptions not grounded in the provided context
+- Do not add assumptions, fill in blanks, fake understanding, or infer something
+  that is not grounded in the provided context
