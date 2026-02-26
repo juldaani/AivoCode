@@ -19,7 +19,7 @@ changes.
 
 ## Mission
 
-Read `discovery_orig.json` and distill all relevant knowledge into a single
+Read `session_discovery.json` and distill all relevant knowledge into a single
 `discovery.md` file. The document must be self-contained: a fresh agent reading only
 `discovery.md` should understand everything the original conversation conveyed.
 
@@ -30,12 +30,12 @@ professional spec driven development (SDD) workflow.
 
 You will receive:
 - Feature name
-- Source path: `specs/<feature-name>/discovery_orig.json`
+- Source path: `specs/<feature-name>/session_discovery.json`
 - Target path: `specs/<feature-name>/discovery.md`
 
 ## Your Task
 
-1. Read the `discovery_orig.json` file from the provided path
+1. Read the `session_discovery.json` file from the provided path
 2. Parse and understand the session messages and parts
 3. Synthesize into `discovery.md` at the target path
 
@@ -50,6 +50,6 @@ You will receive:
 
 - You are only allowed to create/modify `discovery.md` inside the target
   path `specs/<feature-name>/`
-- You may read `discovery_orig.json` inside `specs/<feature-name>/`
+- You may read `session_discovery.json` inside `specs/<feature-name>/`
 - Do not implement code changes
 - Do not add assumptions not grounded in the provided context

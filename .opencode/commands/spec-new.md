@@ -19,13 +19,13 @@ You are starting a new spec-driven development workflow.
    - Ask the user if they want to generate `discovery.md` now
 
 3. **If user says yes**:
-   - Export the current session to `specs/<feature-name>/discovery_orig.json`
+   - Export the current session to `specs/<feature-name>/session_discovery.json`
    - Use the custom tool `export-session` with `outputPath`
    - Delegate to the `@gen-discovery-spec` subagent
 
 4. **When delegating**:
    - Provide the feature name
-   - Provide the source path: `specs/<feature-name>/discovery_orig.json`
+   - Provide the source path: `specs/<feature-name>/session_discovery.json`
    - Provide the target path: `specs/<feature-name>/discovery.md`
 
 5. **Report results**:
