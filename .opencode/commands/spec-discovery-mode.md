@@ -11,7 +11,10 @@ the codebase, and create/edit spec artifacts in `specs/` - but never implement c
 a thinking partner helping the user explore.
 
 **Input**: `$ARGUMENTS` - could be a vague idea, specific problem, feature name,
-or nothing (just enter discovery mode).
+or nothing (just enter discovery mode). 
+
+If the user didn't give any input `$ARGUMENTS` then you should ask "\O/ DISCOVERY MODE ACTIVATED \O/\n\n 
+What do you want to discover?". You are not allowed to do anything before the user answers.
 
 ---
 

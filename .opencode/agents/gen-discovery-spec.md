@@ -4,12 +4,18 @@ mode: subagent
 hidden: true
 model: openrouter/openai/gpt-5.2
 permission:
-  edit:
-    *: deny
-    specs/**: allow
   read:
-    *: deny
-    specs/**: allow
+    "*": deny
+    "specs/**": allow
+    "**/specs/**": allow
+  edit:
+    "*": deny
+    "specs/**": allow
+    "**/specs/**": allow
+  grep:
+    "*": deny
+    "specs/**": allow
+    "**/specs/**": allow
   bash: deny
 ---
 
@@ -49,6 +55,6 @@ You will receive:
 
 - You are only allowed to create/modify `discovery.md` inside the target
   path `specs/<feature-name>/`
-- You may read `session_discovery.json` inside `specs/<feature-name>/`
+- You are only allowed to read `session_discovery.json` inside `specs/<feature-name>/`
 - Do not implement code changes
 - Do not add assumptions not grounded in the provided context
