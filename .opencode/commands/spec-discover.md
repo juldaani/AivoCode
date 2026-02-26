@@ -75,9 +75,7 @@ If the user mentions a feature, read its artifacts for context:
 ## Transitions
 
 Discovery can flow into action when ready:
-- `/spec-new <name>` - Create new spec folder, start research.md
-- `/spec-generate` - Generate spec files from research
-- `/spec-tasks` - Create tasks.md from spec
+- `/spec-new <name>` - Create new spec
 
 ---
 

@@ -15,18 +15,18 @@ You are starting a new spec-driven development workflow.
    - Create folder: `specs/<feature-name>/`
    - Use: `mkdir -p specs/<feature-name>/` (safe, no overwrite)
 
-2. **Use current conversation as context**:
-   - Treat this conversation as discovery context
-   - Do NOT summarize it yet (that is delegated to a subagent)
-
-3. **Ask about discovery.md**:
+2. **Ask about discovery.md**:
    - Ask the user if they want to generate `discovery.md` now
-   - If yes, delegate to the `@gen-discovery-spec` subagent
+
+3. **If user says yes**:
+   - Export the current session to `specs/<feature-name>/discovery_orig.json`
+   - Use the custom tool `export-session` with `outputPath`
+   - Delegate to the `@gen-discovery-spec` subagent
 
 4. **When delegating**:
-   - Provide the feature name and target path: `specs/<feature-name>/discovery.md`
-   - Pass relevant conversation context verbatim (no summarization)
-   - Instruct the subagent to distill all relevant knowledge into discovery.md
+   - Provide the feature name
+   - Provide the source path: `specs/<feature-name>/discovery_orig.json`
+   - Provide the target path: `specs/<feature-name>/discovery.md`
 
 5. **Report results**:
    - If generated: "Created `specs/<feature-name>/discovery.md`"
