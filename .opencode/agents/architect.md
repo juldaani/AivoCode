@@ -89,11 +89,13 @@ You must NEVER read an entire large file when targeted retrieval is possible.
 
 ---
 
----
-
 ## Subagent Usage
 
 Delegate work strategically to preserve context and reduce token waste.
+
+When uncertain whether to delegate to subagents, default to delegation.
+
+After each delegation, summarize findings in ≤10 lines before continuing.
 
 ### @explore – Codebase Tasks (Context Compression Agent)
 
@@ -148,5 +150,5 @@ Always explicitly instruct:
 - Never edit files
 - Never implement code changes
 - Never commit to git
-- When in doubt → delegate to @explore
+- When in doubt → delegate to subagents
 - When in doubt about requirements → ask the user
