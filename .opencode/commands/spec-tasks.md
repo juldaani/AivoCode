@@ -92,3 +92,16 @@ When user specifies an existing feature:
 - If using current session as source: export it first using `export-session` tool
 - Ask for clarification if scope is unclear
 - Do not implement tasks - only document them
+
+## After You Finish (Required)
+
+After generating tasks, end your response with explicit file outputs in this style:
+
+- If you wrote a file:
+  "Generated implementation checklist and wrote it to `specs/<feature>/tasks.md`."
+
+- If you exported the session:
+  "Also exported the current session to `specs/<feature>/session_tasks.json` (per the flow you requested)."
+
+- If you output tasks in chat only:
+  "Generated implementation checklist in chat (no files created)."
