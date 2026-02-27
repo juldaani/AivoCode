@@ -27,8 +27,12 @@ export default tool({
 
 type ToolInput = Record<string, unknown> | string | number | boolean | null
 
-const SKIP_OUTPUT_TOOLS = ["webfetch", "read", "grep"]
-const BASH_OUTPUT_MAX_CHARS = 1000
+const SKIP_OUTPUT_TOOLS = ["webfetch"]
+const DEFAULT_OUTPUT_MAX_CHARS = 10000
+const OUTPUT_MAX_CHARS: Record<string, number> = {
+  bash: 1000,
+  grep: 4000,
+}
 
 type FilteredMessage = {
   role?: string
@@ -137,9 +141,10 @@ function normalizeToolPart(part: Record<string, unknown>): {
   if (tool && !SKIP_OUTPUT_TOOLS.includes(tool)) {
     const rawOutput = typeof state.output === "string" ? state.output : undefined
     if (rawOutput) {
+      const maxChars = OUTPUT_MAX_CHARS[tool] ?? DEFAULT_OUTPUT_MAX_CHARS
       output =
-        tool === "bash" && rawOutput.length > BASH_OUTPUT_MAX_CHARS
-          ? `${rawOutput.slice(0, BASH_OUTPUT_MAX_CHARS)}... (truncated)`
+        rawOutput.length > maxChars
+          ? `${rawOutput.slice(0, maxChars)}... (truncated)`
           : rawOutput
     }
   }
