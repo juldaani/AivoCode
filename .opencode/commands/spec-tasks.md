@@ -1,5 +1,6 @@
 ---
 description: Generate tasks.md from spec files or current session
+agent: architect
 ---
 
 # Spec-Driven Development: Generate Tasks
@@ -8,18 +9,32 @@ You are generating a task checklist for implementation.
 
 ## Argument Handling
 
-Check `$ARGUMENTS`:
+Input argument: arg = `$ARGUMENTS`
+Follow this exact logic:
 
-- **No argument**: ask "Where to write tasks.md?" with options:
-  1. **Existing feature** - user types feature name
-  2. **Create new feature** - user types feature name
-  3. **Current session** - output in chat (no files)
+### Case: No argument provided (arg is empty)
 
-- **"new"**: ask for feature name → create folder + export session + tasks.md
+Ask the user: "Where to write tasks.md?"
 
-- **"session"**: output tasks in chat (no files)
+Present these numbered options:
+1. "Existing feature" - then ask for the feature name
+2. "Create new feature" - then ask for the feature name
+3. "Current session" - output tasks in chat only (no files)
 
-- **"<feature>"**: use existing spec folder (validate below)
+Wait for user response before proceeding.
+
+### Case: arg equals "new"
+
+Ask: "Feature name for the new spec folder?"
+Then execute the Create New Feature Flow.
+
+### Case: arg equals "session"
+
+Execute the Current Session Flow (output in chat, no files).
+
+### Case: arg is any other value
+
+Treat it as an existing feature name and execute the Validation for Existing Feature flow.
 
 ---
 
@@ -86,6 +101,17 @@ When user specifies an existing feature:
   - `(delete)` for removals
 - Order tasks logically (dependencies first)
 - Keep descriptions concise and actionable
+
+## File Creation (for Planning Agents)
+
+If you are running as a planning agent without write permissions, delegate file
+creation to the `@general` subagent:
+
+- Provide the exact file path: `specs/<feature>/tasks.md`
+- Provide the complete content to write
+- Instruct: "Write this content to the specified path. Do not modify the content."
+
+For session export, use the `export-session` tool directly (it handles its own writes).
 
 ## Important
 
