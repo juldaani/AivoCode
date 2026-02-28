@@ -6,6 +6,10 @@ export default tool({
   description: "Export current session to filtered JSON file",
   args: {
     outputPath: tool.schema.string().describe("Path to save session JSON"),
+    deleteRaw: tool.schema
+      .boolean()
+      .default(true)
+      .describe("Delete raw export file after filtering"),
   },
   async execute(args, context) {
     const { sessionID, worktree } = context
@@ -20,6 +24,9 @@ export default tool({
     const rawJson = JSON.parse(await Bun.file(rawPath).text())
     const filtered = filterSession(rawJson)
     await Bun.write(outputPath, JSON.stringify(filtered, null, 2))
+    if (args.deleteRaw) {
+      await Bun.file(rawPath).unlink()
+    }
 
     return `Exported session ${sessionID} to ${outputPath}`
   },
