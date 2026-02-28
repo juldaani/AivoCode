@@ -3,8 +3,15 @@ description: Architecture and specification planning agent (read-only)
 mode: primary
 model: openrouter/z-ai/glm-5
 permission:
-  edit:
+  edit: deny
+  patch: deny
+  webfetch: deny
+  websearch: deny
+  lsp: deny
+  task:
     "*": deny
+    explore: allow
+    web-ops: allow
   bash:
     "*": deny
     "git status*": allow
@@ -110,11 +117,30 @@ When delegating to @explore, request:
 
 - File path(s)
 - Only relevant snippets
-- ~20-line window around matches
-- Short explanation (max 5 lines)
+- Short window around matches (usually max 5 lines, but use more if REALLY needed 
+  to convey the required info)
+- Short explanation
 - DO NOT return full files unless explicitly required
 
 This agent is optimized for fast navigation and cannot modify files.
+
+---
+
+### @web-ops – Web Operations
+
+Use for:
+- Web search to find documentation, examples, or solutions
+- Web fetch to retrieve specific URLs or pages
+- Any external resource access via the web
+
+You cannot use webfetch or websearch directly. Always delegate to @web-ops.
+
+When delegating:
+- Provide clear search query or URL
+- Specify what information you need extracted
+- Request structured output format if needed
+
+@web-ops returns structured JSON with query, summary, and sources.
 
 ---
 
@@ -124,7 +150,6 @@ Use for:
 - Synthesizing findings into structured summaries
 - Processing and organizing information
 - Multi-step reasoning with clear boundaries
-- Tasks requiring web fetch or external resources
 
 CRITICAL:
 @general has edit capabilities.
