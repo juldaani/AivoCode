@@ -2,7 +2,7 @@
 description: Performs web search and web fetch operations only. Returns structured results for upstream agents.
 mode: subagent
 hidden: false
-model: openrouter/google/gemini-3-flash-preview
+model: openrouter/openai/gpt-5-nano
 permission:
   "*": deny
   webfetch: allow
