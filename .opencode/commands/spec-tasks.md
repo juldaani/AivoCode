@@ -102,17 +102,6 @@ When user specifies an existing feature:
 - Order tasks logically (dependencies first)
 - Keep descriptions concise and actionable
 
-## File Creation (for Planning Agents)
-
-If you are running as a planning agent without write permissions, delegate file
-creation to the `@general` subagent:
-
-- Provide the exact file path: `specs/<feature>/tasks.md`
-- Provide the complete content to write
-- Instruct: "Write this content to the specified path. Do not modify the content."
-
-For session export, use the `export-session` tool directly (it handles its own writes).
-
 ## Important
 
 - If using current session as source: export it first using `export-session` tool
