@@ -79,25 +79,16 @@ Parse the response:
 - **Comma-separated** (e.g., "3,5,7"): select those specific tasks
 - **Range** (e.g., "3-5"): select tasks 3 through 5 inclusive
 
-Confirm selection:
-
-```
-Will implement: tasks 3, 4, 5
-Proceed? [y/n]
-```
-
-Wait for confirmation before continuing.
-
 ---
 
 ## Phase 3: Load Context
 
 Read ALL spec files in `specs/<feature>/` into context ONCE before the implementation loop:
 
-1. Read `specs/<feature>/tasks.md` (required - most important)
+1. Read `specs/<feature>/tasks.md` (required)
 2. Read `specs/<feature>/spec.md` (if exists)
 3. Read `specs/<feature>/discovery.md` (if exists)
-4. Read any other `.md` files in the folder (api.md, data-model.md, etc.)
+4. Read any other `.md` files in the feature folder (api.md, data-model.md, etc.)
 
 This context will be used throughout the implementation loop.
 
@@ -109,10 +100,8 @@ For each selected task, in order:
 
 ### 4.1 Implement the Task
 
-- Use the spec context loaded in Phase 3
 - Implement the task as described
-- Follow the file paths and descriptions from tasks.md
-- Follow code standards from AGENTS.md
+- Follow the files: tasks.md and all spec files related to the tasks
 
 ### 4.2 Update tasks.md
 
@@ -141,13 +130,10 @@ After ALL selected tasks are implemented:
 
 1. Run the code related to implemented tasks to check for errors:
    - Execute scripts, modules, or commands that exercise the new code
-   - Check for runtime errors, import errors, or syntax issues
    - Report any error messages encountered
 
 2. Check if tests are available/applicable for this project
 3. If tests exist, run them:
-   - Python: `conda run -n env-aivocode pytest`
-   - Or check AGENTS.md for the correct test command
 4. Report all validation results (code execution + tests)
 
 ---
@@ -182,7 +168,6 @@ Implementation complete.
 - Do run code execution AND tests ONCE after all tasks are complete
 - Do update tasks.md after EACH completed task
 - Do NOT stop to ask between tasks - implement all requested tasks continuously
-- Do follow code standards from AGENTS.md
 - Do mark tasks complete only after implementation is done
 
 ---
@@ -190,12 +175,15 @@ Implementation complete.
 ## Error Handling
 
 If implementation fails for a task:
-1. Report the error clearly
+1. Report the problem clearly
 2. Do NOT mark the task as complete
-3. Ask the user how to proceed:
-   - "Retry this task?"
-   - "Skip and continue to next task?"
-   - "Abort implementation?"
+3. Continue to the next task automatically (implement all requested tasks)
+
+If a blocker/dependency prevents continuing to ANY remaining tasks:
+1. Stop implementation
+2. Inform the user of the blocker
+3. Explain which tasks are blocked and why
+4. Ask the user how to proceed
 
 ---
 
