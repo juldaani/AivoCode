@@ -118,24 +118,12 @@ specification documents.
 
 ---
 
-## File Creation (for Planning Agents)
-
-If you are running as a planning agent without write permissions, delegate file
-creation to the `@general` subagent:
-
-- Provide the exact file path for each file: `specs/<feature>/<filename>.md`
-- Provide the complete content to write for each file
-- Instruct: "Write this content to the specified path. Do not modify the content."
-
----
-
 ## Phase 4: Iterative Refinement
 
 You are in conversational iteration mode with human in the loop.
 
 **Your role:**
 - Answer questions about the spec
-- Make requested changes via `@general` delegation
 - Raise concerns when you notice issues
 - Suggest completion when specs seem sufficient
 
@@ -154,7 +142,7 @@ If called on a feature that already has spec files:
 1. Read existing spec files
 2. Ask: "Specs already exist. Update them or regenerate from scratch?"
 3. If update: incorporate changes, preserve valid content
-4. If regenerate: follow normal flow (will overwrite via `@general`)
+4. If regenerate: follow normal flow
 
 ---
 
@@ -179,4 +167,3 @@ Next steps:
 - Do note assumptions explicitly
 - Do wait for user input at each phase
 - Do raise concerns when you notice them
-- Do delegate file writes to @general
