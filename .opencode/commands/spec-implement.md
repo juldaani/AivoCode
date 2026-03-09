@@ -65,172 +65,110 @@ Remaining:
 
 ## Phase 2: Task Selection
 
-Ask the user:
-
-```
-Which tasks to implement?
-- "all" or "remaining" → implement all unchecked tasks
-- "3,5" → implement specific tasks (comma-separated)
-- "3-5" → implement range of tasks
-```
-
-Parse the response:
-- **"all"** or **"remaining"**: select all tasks with `[ ]`
-- **Comma-separated** (e.g., "3,5,7"): select those specific tasks
-- **Range** (e.g., "3-5"): select tasks 3 through 5 inclusive
+Ask: "Which tasks to implement?"
+- "all"/"remaining" → all unchecked tasks
+- "3,5" → specific tasks (comma-separated)
+- "3-5" → range (inclusive)
 
 ---
 
 ## Phase 3: Load Context
 
-Read ALL spec files in `specs/<feature>/` into context ONCE before the implementation loop:
+Read ALL spec files in `specs/<feature>/` ONCE before implementation:
 
-1. Read `specs/<feature>/tasks.md` (required)
-2. Read `specs/<feature>/spec.md` (if exists)
-3. Read `specs/<feature>/discovery.md` (if exists)
-4. Read any other `.md` files in the feature folder (api.md, data-model.md, etc.)
-
-This context will be used throughout the implementation loop.
+1. `tasks.md` (required)
+2. `spec.md` (if exists)
+3. `discovery.md` (if exists)
+4. Other `.md` files (api.md, data-model.md, etc.)
 
 ---
 
 ## Phase 4: Implementation Loop
 
-For each selected task, in order (as defined in tasks.md):
+For each selected task, in tasks.md order:
 
-### 4.1 Implement the Task
+### 4.1 Implement
 
-- Implement the task as described
-- Follow the files: tasks.md and all spec files related to the tasks
-- Follow strictly tasks.md order
+- Follow tasks.md and related spec files
 
 ### 4.2 Update tasks.md
 
-After completing each task:
+After each task:
+1. Update checkmark: `[ ]` → `[x]`
+2. Update status counts (increment Completed, decrement Remaining)
 
-1. Update the checkmark: `[ ]` → `[x]`
-2. Update the status counts at the top of tasks.md:
-   - Increment "Completed"
-   - Decrement "Remaining"
-
-Example update:
-```markdown
-## Status
-- Total: 5
-- Completed: 3
-- Remaining: 2
-```
-
-**Do NOT stop to ask the user between tasks.** Implement all selected tasks continuously.
+**Do NOT stop between tasks.** Implement all requested tasks continuously.
 
 ---
 
 ## Phase 5: Validation
 
-After ALL selected tasks are implemented:
+After ALL tasks are implemented:
 
-1. Run the code related to implemented tasks to check for errors:
-   - Execute scripts, modules, or commands that exercise the new code
-   - Report any error messages encountered
+1. Run code to check for errors (execute scripts/modules that exercise new code)
+2. Run tests if available
+3. Report results
 
-2. Check if tests are available/applicable for this project
-3. If tests exist, run them:
-4. Report all validation results (code execution + tests)
+### Validation Failure
 
-### Validation Failure Handling
-
-If validation fails (errors or test failures):
-
-1. Report the failures clearly:
-   ```
-   ## Validation Failed
-
-   Errors:
-   - [error message 1]
-   - [error message 2]
-
-   Test failures:
-   - [test name]: [failure reason]
-   ```
-
-2. Ask the user how to proceed:
-   - "Fix errors" - attempt to fix and re-run validation
-   - "Skip" - mark tasks as implemented but note validation issues
-   - "Investigate" - enter discovery mode to analyze the problem
-
-3. Do NOT auto-fix without user confirmation
+If errors or test failures:
+1. Report failures clearly
+2. Ask user: "Fix errors" / "Skip" / "Investigate"
+3. Do NOT auto-fix without confirmation
 
 ---
 
 ## Phase 6: Completion Report
 
-After implementation and validation:
-
 ```
 Implementation complete.
 
 ## Summary
-- Completed: X tasks (tasks: [list numbers])
+- Completed: X tasks (tasks: [list])
 - Status: X/Y total
 
 ## Validation
-- Code execution: [result - errors if any, or "no errors"]
-- Tests: [test command or "skipped - no tests"]
-- Result: [pass/fail with details]
+- Code: [errors or "no errors"]
+- Tests: [result or "skipped"]
 
-## Remaining Tasks
-[List any unchecked tasks, or "All tasks complete."]
+## Remaining
+[List unchecked tasks, or "All tasks complete."]
 ```
 
 ---
 
 ## Guardrails
 
-- Do not implement tasks not listed in tasks.md
-- Do not skip the validation phase
-- Do read spec files ONCE before the loop (not in each iteration)
-- Do run code execution AND tests ONCE after all tasks are complete
-- Do update tasks.md after EACH completed task
-- Do NOT stop to ask between tasks - implement all requested tasks continuously
-- Do mark tasks complete only after implementation is done
-- Do follow tasks.md order for implementation (including tests)
-- Do NOT auto-fix validation errors without user confirmation
+- Read spec files ONCE before loop
+- Update tasks.md after each completed task
+- Run validation (code + tests) ONCE after all tasks
+- Do NOT stop between tasks - implement all continuously
 
 ### Test Guardrails (CRITICAL)
 
 - **NEVER edit existing tests** to make them pass
-- Existing tests = tests that existed BEFORE this feature's tasks.md
-- If pre-existing tests fail after your changes: **FIX THE CODE, NOT THE TESTS**
-- Tests created as part of current tasks → can edit
-- If you believe a pre-existing test is genuinely wrong: inform the user, do NOT modify it
-- `tests.md` in specs folder is reference material only - follow tasks.md for what to implement
+- Existing tests = tests before this feature's tasks.md
+- Fix code, not tests
 
 ---
 
 ## Error Handling
 
-If implementation fails for a task:
-1. Report the problem clearly
-2. Do NOT mark the task as complete
-3. Continue to the next task automatically (implement all requested tasks)
+If a task fails:
+1. Report the problem
+2. Do NOT mark complete
+3. Continue to next task
 
-If a blocker/dependency prevents continuing to ANY remaining tasks:
+If blocker prevents ALL remaining tasks:
 1. Stop implementation
-2. Inform the user of the blocker
-3. Explain which tasks are blocked and why
-4. Ask the user how to proceed
+2. Inform user of blocker and affected tasks
+3. Ask how to proceed
 
 ---
 
-## After You Finish (Required)
+## After You Finish
 
-End your response with:
-
-- If tasks were implemented:
-  "Implemented X tasks. Updated `specs/<feature>/tasks.md`."
-
-- If validation was run:
-  "Validation: [code execution result] | Tests: [result summary]"
-
-- If all tasks complete:
-  "All tasks for this feature are complete."
+End with:
+- "Implemented X tasks. Updated `specs/<feature>/tasks.md`."
+- "Validation: [code result] | Tests: [result]"
+- "All tasks complete." (if applicable)
