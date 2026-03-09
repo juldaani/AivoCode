@@ -2,7 +2,6 @@
 
 ## Tooling (OpenCode)
 - Runtime: Python 3.11 (see `env-aivocode.yml`).
-- Tools: ruff, pytest, pyright.
 - Ruff and pyright work automatically, out of the box, through OpenCode. Opencode automatically
   calls ruff/pyright after file changes and notifies the agent of possible problems (DO NOT 
   EXPLICITLY CALL ruff/pyright).
@@ -11,25 +10,7 @@
 - Do not build, edit, update, or remove environments in this repo.
 - If an environment change is needed, ask the user to do it (or to explicitly request it).
 
-## Commands
-### Lint and formatting (if explicit calls needed)
-- Lint: `ruff check .`
-- Format (if configured): `ruff format .`
-- Type check: `pyright`
-
-### Tests
-- Run all tests: `conda run -n env-aivocode pytest`
-- Run a single file: `conda run -n env-aivocode pytest path/to/test_file.py`
-- Run a single test: `conda run -n env-aivocode pytest path/to/test_file.py::TestClass::test_name`
-- Run by keyword: `conda run -n env-aivocode pytest -k "keyword"`
-
-### Executing code
-- Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
-  `conda run -n env-aivocode python path/to/script.py`
-- When executing long-running code (like servers, infinite loops, ...), use timeouts/kill/etc 
-  to end the process. Otherwise we block the development.
-
-### Tmp files
+## Tmp files
  - Allowed location of temporary files (test/debug/etc logs, scripts, dumps) is at repo root in
    "tmp" folder.
 
@@ -45,32 +26,30 @@
 ## Docs & Comments Policy
 - Docstrings/comments should explain: what it does (short), why it exists/why this way,
   and how to use or extend it (contract, lifecycle, invariants).
-- Assume junior dev or someone not familiar with the current programming language 
-  reading the code -> liberal and more explaining commenting policy.
+- Assume junior dev or someone not familiar -> liberal and more explaining commenting policy.
 - Module docstring: required for non-trivial/infrastructure modules (protocols,
-  concurrency, parsing, caching). Include What/Why/How-to-read (entrypoints + flow).
-  Prefer a multi-line format with short sections and bullets when helpful. The
-  section titles are flexible; use whatever headings make sense for the module:
-
-  """
-  Title sentence.
-
-  Section title 1
-  - ...
-
-  Section title 2
-  - ...
-  """
-
+  concurrency, parsing, caching). Include What/Why/How-to-read (entrypoints + flow). Prefer 
+  a multi-line format with short sections and bullets when helpful.
 - Public API (non-`_`): docstring required (purpose, key params/returns, side effects,
   assumptions).
 - Private helpers (`_`): docstring when non-obvious (protocol/concurrency/edge cases)
   or reused.
-- Inline comments: be reasonably liberal to improve readability; avoid only the truly
-  obvious. Prioritize invariants, lock/concurrency rationale, protocol framing rules,
-  and failure modes/recovery behavior.
+- Inline comments: be liberal to improve readability; avoid only the truly obvious.
 - If broad exception handling is intentional (e.g., background loops), add a brief
   comment explaining why it’s safe and what gets logged.
+
+## Commands
+### Tests
+- Run all tests: `conda run -n env-aivocode pytest`
+- Run a single file: `conda run -n env-aivocode pytest path/to/test_file.py`
+- Run a single test: `conda run -n env-aivocode pytest path/to/test_file.py::TestClass::test_name`
+- Run by keyword: `conda run -n env-aivocode pytest -k "keyword"`
+
+### Executing code
+- Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
+  `conda run -n env-aivocode python path/to/script.py`
+- When executing long-running code (like servers, infinite loops, ...), use timeouts/kill/etc 
+  to end the process. Otherwise we block the development.
 
 ## Workflow
 1. Make focused changes (avoid unrelated diffs).
