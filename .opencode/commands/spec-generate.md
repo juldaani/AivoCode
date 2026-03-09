@@ -30,8 +30,8 @@ Argument: `$ARGUMENTS`
 
 ## Phase 1: Spec Shape Decision
 
-Read `specs/<feature>/discovery.md` if it exists. Use session context if not. 
-Neither is required for final spec to be complete — specs must stand alone.
+Read `specs/<feature>/discovery.md` if it exists **and** use current session context.
+Both provide input for spec generation — discovery.md as background, session as current/updated info.
 
 **Default to `spec.md` only.**
 
