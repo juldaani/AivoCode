@@ -45,16 +45,13 @@ extra spec files when a topic is substantial enough that keeping it inside
 - `integration.md` - External or internal system interactions, dependencies, protocols
 - `tests.md` - Test strategy, critical cases, or validation approach
 
-These are examples, not a required or exhaustive list. Only recommend extra
+These are examples—illustrative, not exhaustive. Only recommend extra
 files when they add clear standalone value.
 
 ### Extra Files (if needed)
 
-If one or more topics deserve separate files, the agent should:
-- Use judgment to determine appropriate file names and structure
-- The examples above (api.md, data-model.md, etc.) are illustrative, not exhaustive
-- Create files that serve the feature's specific needs—no rigid templates required
-- Ensure each extra file has a clear purpose readable in isolation
+If topics deserve separate files, use judgment to create them. No rigid templates—
+each extra file must be readable in isolation.
 
 **Decision rule:**
 Ask:
@@ -163,35 +160,19 @@ Include key components, flows, and integration points as needed.
 
 ### Writing Guidelines
 
-- `spec.md` is the default and primary spec file, and should be self-sufficient by
-  default
-- Extra files are deep dives, not replacements for `spec.md`
-- If extra files exist, keep a short summary in `spec.md` and reference them
-- Be complete enough for a fresh implementation agent to work largely standalone
-- **Self-Contained Requirement:** A fresh agent with no prior session context 
-  should be able to read the spec files and begin implementation. Session context 
-  and discovery.md are inputs during spec generation, but must not be required 
-  for implementation.
-- Mark assumptions: `[ASSUMPTION: ...]`
-- Mark unknowns: `[TBD: ...]`
+- `spec.md` should be self-sufficient by default
+- Extra files are deep dives—reference them in `spec.md`
+- **Self-Contained:** A fresh agent with no prior context should be able to 
+  read specs and begin implementation immediately
+- Mark assumptions: `[ASSUMPTION: ...]` and unknowns: `[TBD: ...]`
 - Only create files with meaningful content
 
 ---
 
 ## Phase 4: Iterative Refinement
 
-You are in conversational iteration mode with human in the loop.
-
-**Your role:**
-- Answer questions about the spec
-- Raise concerns when you notice issues
-- Suggest completion when specs seem sufficient
-
-**Completion triggers:**
-- User explicitly says "done" / "looks good" / "proceed"
-- Agent can suggest: "The specs seem complete. Ready to proceed to `/spec-tasks`?"
-
-Continue until either trigger occurs.
+Stay in conversational mode until user says "done" / "looks good" / "proceed" 
+or suggest: "The specs seem complete. Ready to proceed to `/spec-tasks`?"
 
 ---
 
@@ -221,9 +202,7 @@ Next steps:
 ## Guardrails
 
 - Do not implement code
-- Do not fake understanding - use [TBD] markers
-- Do not create empty template files
+- Do not fake understanding—use `[TBD]` markers
 - Do ask for clarification on blockers
 - Do note assumptions explicitly
-- Do wait for user input at each phase
 - Do raise concerns when you notice them
