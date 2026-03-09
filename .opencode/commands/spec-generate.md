@@ -12,13 +12,19 @@ You are generating specification files for a feature.
 Argument: `$ARGUMENTS`
 
 ### No argument
-List available features: `ls specs/`
-Ask: "Which feature to generate specs for?"
+1. List available features: `ls specs/`
+2. Ask: "Which feature to generate specs for, or create a new feature?"
 
 ### Feature name provided
-1. Validate: `specs/<feature>/discovery.md` exists
-   - If not: "Run `/spec-new <feature>` first to capture discovery."
-2. Proceed with generation
+1. Check if `specs/<feature>/` folder exists
+   - If not: Ask "Feature '<feature>' doesn't exist. Create it?"
+     - If yes: Create folder, proceed with generation using current session context
+     - If no: Abort
+2. If folder exists but is empty:
+   - Inform: "Feature folder exists but is empty. Using current session context for spec generation."
+   - Proceed with generation using current session context
+3. If folder exists with content:
+   - Proceed with generation (read existing files as needed)
 
 ---
 
