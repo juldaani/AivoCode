@@ -28,39 +28,64 @@ Argument: `$ARGUMENTS`
 
 ---
 
-## Phase 1: Complexity Analysis
+## Phase 1: Spec Shape Decision
 
-Read `specs/<feature>/discovery.md` and any session context.
+Read `specs/<feature>/discovery.md` if it exists. Use session context if not. 
+Neither is required for final spec to be complete — specs must stand alone.
 
-Assess these signals:
-| Signal | Low | Medium | High |
-|--------|-----|--------|------|
-| Files affected | 1-3 | 4-10 | 10+ |
-| Integration points | None | 1-3 | 4+ |
-| Domain complexity | Single | Multiple | New domain |
-| Dependencies | Internal | External API | Multi-external |
-| Risk level | Low | Data loss | Security/breaking |
-| Reversibility | Easy undo | Migration | Breaking change |
+**Default to `spec.md` only.**
 
-Calculate complexity score (count of non-low signals).
+The goal is to keep the spec package lightweight by default. Only recommend
+extra spec files when a topic is substantial enough that keeping it inside
+`spec.md` would make the spec unclear, too large, or hard to maintain.
 
-**Recommend structure:**
-- 1-2 signals → `spec.md` only
-- 3-4 signals → `spec.md` + 1-2 optional files
-- 5+ signals → `spec.md` + 2-4 optional files
+**Examples of optional files for larger features:**
+- `api.md` - API surface, contracts, request/response behavior
+- `data-model.md` - Data/storage shape, schema changes
+- `integration.md` - External or internal system interactions, dependencies, protocols
+- `tests.md` - Test strategy, critical cases, or validation approach
 
-**Available optional files:**
-- `api.md` - Endpoints, contracts, request/response schemas
-- `data-model.md` - Database schema changes, migrations
-- `integration.md` - External systems, dependencies, protocols
-- `security.md` - Auth, permissions, data sensitivity
-- `tests.md` - Test strategy, key test cases, coverage goals
-- `migration.md` - Rollout plan, data migration steps
+These are examples, not a required or exhaustive list. Only recommend extra
+files when they add clear standalone value.
 
-Present your analysis and recommended structure.
-Ask user to confirm or adjust.
+### Extra Files (if needed)
 
-Wait for user response before proceeding.
+If one or more topics deserve separate files, the agent should:
+- Use judgment to determine appropriate file names and structure
+- The examples above (api.md, data-model.md, etc.) are illustrative, not exhaustive
+- Create files that serve the feature's specific needs—no rigid templates required
+- Ensure each extra file has a clear purpose readable in isolation
+
+**Decision rule:**
+Ask:
+1. Can this feature be clearly specified in a single `spec.md`?
+2. Are any topics substantial enough to deserve their own file?
+3. Would splitting improve clarity for a fresh implementation agent?
+
+If no topic clearly needs its own file, use `spec.md` only.
+
+If one or more optional files seem useful, present them as a recommendation
+with a short reason for each, then ask the user to confirm before creating any
+extra files.
+
+Output format:
+```md
+## Spec Shape Recommendation
+
+Default:
+- `spec.md`
+
+Recommended extra files:
+- [file name] - [short reason]
+- [file name] - [short reason]
+
+Why:
+- [1-3 bullets]
+
+Proceed with this structure?
+```
+
+Wait for user confirmation before proceeding.
 
 ---
 
@@ -98,29 +123,58 @@ Wait for user confirmation.
 
 ## Phase 3: Generate Spec Files
 
-Read all relevant spec files from `specs/<feature>/` and generate/update the 
-specification documents.
+Read all relevant spec files from `specs/<feature>/` and generate/update the
+approved specification documents.
 
-### Spec Files to Generate
+### Files to Generate
 
-**Always create:**
-- `specs/<feature>/spec.md` - Overview, requirements, acceptance criteria
+**Always create/update:**
+- `specs/<feature>/spec.md`
 
-**Optionally create (only if meaningful content):**
-- `specs/<feature>/api.md` - API endpoints, contracts
-- `specs/<feature>/data-model.md` - Schema changes, migrations
-- `specs/<feature>/integration.md` - External systems, dependencies
-- `specs/<feature>/security.md` - Auth, permissions, data sensitivity
-- `specs/<feature>/tests.md` - Test strategy, key test cases
-- `specs/<feature>/migration.md` - Rollout plan, data migration
+**Only create/update extra files if the user explicitly approved them in Phase 1.**
+
+### Default `spec.md` Template
+
+`spec.md` must always include these sections:
+
+```md
+# <Feature Name>
+
+## Summary
+Briefly describe what is being built or changed, and why.
+
+## Scope
+### In scope
+- ...
+
+### Out of scope
+- ...
+
+## Requirements
+- ...
+
+## Proposed Design
+Describe the planned approach at a high level.
+Include key components, flows, and integration points as needed.
+
+## Acceptance Criteria
+- [ ] ...
+```
 
 ### Writing Guidelines
 
-- Be complete, not perfect
+- `spec.md` is the default and primary spec file, and should be self-sufficient by
+  default
+- Extra files are deep dives, not replacements for `spec.md`
+- If extra files exist, keep a short summary in `spec.md` and reference them
+- Be complete enough for a fresh implementation agent to work largely standalone
+- **Self-Contained Requirement:** A fresh agent with no prior session context 
+  should be able to read the spec files and begin implementation. Session context 
+  and discovery.md are inputs during spec generation, but must not be required 
+  for implementation.
 - Mark assumptions: `[ASSUMPTION: ...]`
 - Mark unknowns: `[TBD: ...]`
-- Only create files with meaningful content (no empty templates)
-- Cross-reference between spec files where relevant
+- Only create files with meaningful content
 
 ---
 
