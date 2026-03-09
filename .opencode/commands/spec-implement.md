@@ -96,12 +96,13 @@ This context will be used throughout the implementation loop.
 
 ## Phase 4: Implementation Loop
 
-For each selected task, in order:
+For each selected task, in order (as defined in tasks.md):
 
 ### 4.1 Implement the Task
 
 - Implement the task as described
 - Follow the files: tasks.md and all spec files related to the tasks
+- Follow strictly tasks.md order
 
 ### 4.2 Update tasks.md
 
@@ -136,6 +137,29 @@ After ALL selected tasks are implemented:
 3. If tests exist, run them:
 4. Report all validation results (code execution + tests)
 
+### Validation Failure Handling
+
+If validation fails (errors or test failures):
+
+1. Report the failures clearly:
+   ```
+   ## Validation Failed
+
+   Errors:
+   - [error message 1]
+   - [error message 2]
+
+   Test failures:
+   - [test name]: [failure reason]
+   ```
+
+2. Ask the user how to proceed:
+   - "Fix errors" - attempt to fix and re-run validation
+   - "Skip" - mark tasks as implemented but note validation issues
+   - "Investigate" - enter discovery mode to analyze the problem
+
+3. Do NOT auto-fix without user confirmation
+
 ---
 
 ## Phase 6: Completion Report
@@ -169,6 +193,17 @@ Implementation complete.
 - Do update tasks.md after EACH completed task
 - Do NOT stop to ask between tasks - implement all requested tasks continuously
 - Do mark tasks complete only after implementation is done
+- Do follow tasks.md order for implementation (including tests)
+- Do NOT auto-fix validation errors without user confirmation
+
+### Test Guardrails (CRITICAL)
+
+- **NEVER edit existing tests** to make them pass
+- Existing tests = tests that existed BEFORE this feature's tasks.md
+- If pre-existing tests fail after your changes: **FIX THE CODE, NOT THE TESTS**
+- Tests created as part of current tasks → can edit
+- If you believe a pre-existing test is genuinely wrong: inform the user, do NOT modify it
+- `tests.md` in specs folder is reference material only - follow tasks.md for what to implement
 
 ---
 
