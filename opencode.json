@@ -82,6 +82,10 @@
       ".git/**": "deny",
       ".env*": "deny",
       ".opencode*": "ask",
+      "~/miniconda3/envs/env-aivocode/**": "deny"
+    },
+    "external_directory": {
+      "~/miniconda3/envs/env-aivocode/**": "allow"
     }
   },
 
