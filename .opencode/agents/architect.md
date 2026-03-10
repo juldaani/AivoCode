@@ -7,7 +7,7 @@ permission:
     "specs/**": allow
     "**/specs/**": allow
   patch: deny
-  webfetch: deny
+  webfetch: allow
   websearch: deny
   lsp: deny
   task:
