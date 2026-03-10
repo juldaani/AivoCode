@@ -1,6 +1,6 @@
 ---
 description: Implement tasks from tasks.md with progress tracking
-agent: implementer
+agent: build
 ---
 
 # Spec-Driven Development: Implement Tasks
