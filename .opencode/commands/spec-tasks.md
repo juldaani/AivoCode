@@ -138,12 +138,38 @@ Groups are flexible - use as many as needed. Example:
 - Ask for clarification if scope is unclear
 - Do not implement tasks - only document them
 
+---
+
+## Post-Generation Validation (Required)
+
+After writing `tasks.md`, read all spec files in `specs/<feature>/` and check:
+
+1. **Coverage**: Every acceptance criterion has at least one task
+2. **Gaps**: Requirements not reflected in tasks
+3. **Ambiguities**: Undefined terms, missing file paths, unclear dependencies
+4. **Orphans**: Tasks without spec backing
+
+Report briefly:
+
+```
+## Validation Summary
+✅ All criteria covered / ⚠️ Uncovered: [list]
+✅ No gaps / ⚠️ Missing: [list]
+✅ No ambiguities / ⚠️ Ambiguous: [list]
+```
+
+If critical issues, ask user: update tasks.md, update specs, or proceed?
+
+---
+
 ## After You Finish (Required)
 
-After generating tasks, end your response with explicit file outputs in this style:
+After generating tasks and running validation, end your response with:
 
 - If you wrote a file:
   "Generated implementation checklist and wrote it to `specs/<feature>/tasks.md`."
 
 - If you output tasks in chat only:
   "Generated implementation checklist in chat (no files created)."
+
+Then include the validation summary (or "Validation: No issues found").
