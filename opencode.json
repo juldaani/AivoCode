@@ -85,7 +85,7 @@
     }
   },
 
-  "instructions": ["aivocode/CONTEXT_POLICY.md", "aivocode/SUBAGENT_POLICY.md"],
+  "instructions": ["aivocode/RULES.md", "aivocode/CONTEXT_POLICY.md", "aivocode/SUBAGENT_POLICY.md"],
 
   "provider": {
     "openrouter": {
