@@ -169,7 +169,46 @@ Include key components, flows, and integration points as needed.
 
 ---
 
-## Phase 4: Iterative Refinement
+## Phase 4: Post-Generation Validation
+
+Verify that `specs/<feature>/spec.md` contains all required sections from the
+default template (lines 135-159).
+
+### Process
+
+1. Read the generated `spec.md`
+2. Check against required sections in the template
+3. **Auto-add** any missing sections:
+   - Fill with content if information is available (from session context or discovery.md)
+   - Use `[TBD: ...]` placeholders if information is not available
+4. Inform user of what was added
+5. **Only ask user** if there are blockers, ambiguities, or uncertainties
+   that prevent adding a section
+
+### When to Ask User
+
+- Cannot determine appropriate content even as placeholder
+- Contradiction between existing content and required section
+- Missing section would require design decision the spec should capture
+
+Output format:
+```
+## Post-Generation Validation
+
+Spec file: specs/<feature>/spec.md
+
+Sections added:
+- [section name]: [filled / placeholder with TBD]
+- ...
+
+Issues requiring input: [None / list with specific questions]
+```
+
+If issues exist, ask user before proceeding to Phase 5.
+
+---
+
+## Phase 5: Iterative Refinement
 
 Stay in conversational mode until user says "done" / "looks good" / "proceed" 
 or suggest: "The specs seem complete. Ready to proceed to `/spec-tasks`?"
