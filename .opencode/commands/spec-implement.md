@@ -43,7 +43,7 @@ When user specifies an existing feature:
 ## Phase 1: Parse and Display Tasks
 
 1. Read `specs/<feature>/tasks.md`
-2. Parse the task list (lines starting with `[ ]` or `[x]`)
+2. Parse groups and tasks (lines starting with `### Group` and `[ ]` or `[x]`)
 3. Display current status:
 
 ```
@@ -51,13 +51,13 @@ When user specifies an existing feature:
 
 Status: X/Y completed
 
-Completed:
-[x] 1. <task description>
-[x] 2. <task description>
+### Group 1: <group name>
+[x] 1.1 <task description>
+[ ] 1.2 <task description>
 
-Remaining:
-[ ] 3. <task description>
-[ ] 4. <task description>
+### Group 2: <group name>
+[ ] 2.1 <task description>
+[ ] 2.2 <task description>
 ...
 ```
 
@@ -67,8 +67,13 @@ Remaining:
 
 Ask: "Which tasks to implement?"
 - "all"/"remaining" → all unchecked tasks
-- "3,5" → specific tasks (comma-separated)
-- "3-5" → range (inclusive)
+- "group 1" or "g1" → all tasks in group 1
+- "g1,g3" → all tasks in groups 1 and 3
+- "1.2,2.1" → specific tasks (comma-separated)
+- "1.1-2.2" → range (inclusive)
+
+**Note:** If partial groups are selected (not all tasks in a group), warn user:
+"Partial group selected - group validation will be skipped for incomplete groups."
 
 ---
 
@@ -85,29 +90,57 @@ Read ALL spec files in `specs/<feature>/` ONCE before implementation:
 
 ## Phase 4: Implementation Loop
 
-For each selected task, in tasks.md order:
+For each GROUP containing selected tasks:
 
-### 4.1 Implement
+### 4.1 Implement Group Tasks
 
-- Follow tasks.md and related spec files
+For each task in the group:
+1. Implement task
+2. Update tasks.md: `[ ]` → `[x]`, update status counts
 
-### 4.2 Update tasks.md
+### 4.2 Group Validation
 
-After each task:
-1. Update checkmark: `[ ]` → `[x]`
-2. Update status counts (increment Completed, decrement Remaining)
+After all tasks in group are implemented:
 
-**Do NOT stop between tasks.** Implement all requested tasks continuously.
+1. **Check if validation is possible**
+   - If group is incomplete (partial selection): note "Group X incomplete - validation skipped", proceed
+   - If group produces no runnable code: note "No validation needed", proceed
+
+2. **Execute code to check for errors**
+   - If group produces runnable code: run it directly
+   - If group produces partial code: write tmp script to `tmp/validate_<feature>_<group>.py`
+   - Execute and check for errors
+
+3. **If errors occur:**
+   - Report errors clearly
+   - Fix implementation (not tmp script)
+   - Re-run until clean
+
+4. **If no errors:**
+   - Note "Group X validated successfully"
+   - Proceed to next group
+
+**Do NOT stop between groups.** Implement all requested groups continuously.
 
 ---
 
-## Phase 5: Validation
+## Phase 5: Final Validation
 
-After ALL tasks are implemented:
+After ALL groups are implemented:
 
-1. Run code to check for errors (execute scripts/modules that exercise new code)
-2. Run tests if available
-3. Report results
+1. **Run related tests** (regression check)
+   - Tests that may be affected by changes
+   - Agent decides which tests are relevant
+
+2. **Run new tests** (if test group was implemented)
+   - Tests from this feature's tasks.md
+
+3. **Quick integration run** (if feasible)
+   - Short integration test or minimal pipeline run
+   - Skip if pipeline is long-running (> 1 minute)
+   - Group validation already confirmed code runs
+
+4. Report results
 
 ### Validation Failure
 
@@ -124,10 +157,14 @@ If errors or test failures:
 Implementation complete.
 
 ## Summary
-- Completed: X tasks (tasks: [list])
+- Completed: X tasks across Y groups
 - Status: X/Y total
 
-## Validation
+## Group Validation
+- Group 1: [validated / errors fixed / skipped]
+- Group 2: [validated / errors fixed / skipped]
+
+## Final Validation
 - Code: [errors or "no errors"]
 - Tests: [result or "skipped"]
 
@@ -141,8 +178,10 @@ Implementation complete.
 
 - Read spec files ONCE before loop
 - Update tasks.md after each completed task
-- Run validation (code + tests) ONCE after all tasks
-- Do NOT stop between tasks - implement all continuously
+- **Validate after each group** (write tmp scripts for partial code)
+- Run final validation after all groups
+- Do NOT stop between groups - implement all continuously
+- **Code execution first, tests second** - always prioritize running code over tests
 
 ### Test Guardrails (CRITICAL)
 
@@ -157,7 +196,11 @@ Implementation complete.
 If a task fails:
 1. Report the problem
 2. Do NOT mark complete
-3. Continue to next task
+3. Continue to next task in group
+
+If group validation fails after 4 fix attempts:
+1. Report the problem
+2. Ask user: "Continue to next group" / "Stop" / "Investigate"
 
 If blocker prevents ALL remaining tasks:
 1. Stop implementation
@@ -169,6 +212,7 @@ If blocker prevents ALL remaining tasks:
 ## After You Finish
 
 End with:
-- "Implemented X tasks. Updated `specs/<feature>/tasks.md`."
-- "Validation: [code result] | Tests: [result]"
+- "Implemented X tasks across Y groups. Updated `specs/<feature>/tasks.md`."
+- "Group validation: [results]"
+- "Final validation: [code result] | Tests: [result]"
 - "All tasks complete." (if applicable)
