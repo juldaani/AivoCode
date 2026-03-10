@@ -2,7 +2,6 @@
 description: Performs web search and web fetch operations only. Returns structured results for upstream agents.
 mode: subagent
 hidden: false
-model: openrouter/openai/gpt-5.2
 permission:
   "*": deny
   webfetch: allow

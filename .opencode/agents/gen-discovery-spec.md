@@ -2,7 +2,6 @@
 description: Generate discovery.md from session export
 mode: subagent
 hidden: true
-model: openrouter/z-ai/glm-5
 permission:
   read:
     "*": deny
