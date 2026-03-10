@@ -14,6 +14,15 @@ Follow this exact logic:
 
 ### Case: No argument provided (arg is empty)
 
+**Step 1: Check session context for obvious feature**
+
+Look for a single, unambiguous feature being worked on:
+- Files recently read/edited in `specs/<feature>/`
+- Session mentions of a specific feature name
+- If exactly one feature is clearly the focus → use it directly (skip to Validation for Existing Feature)
+
+**Step 2: If context is ambiguous or empty**
+
 Ask the user: "Where to write tasks.md?"
 
 Present these numbered options:
