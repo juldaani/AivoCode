@@ -19,21 +19,25 @@ You are starting a new spec-driven development workflow.
    - Ask the user if they want to generate `discovery.md` now
 
 3. **If user says yes**:
-   - Export the current session to `specs/<feature-name>/session_discovery.json`
-   - Use the custom tool `export-session` with `outputPath`
-   - Delegate to the `@gen-discovery-spec` subagent
+   - Generate `discovery.md` directly from the current conversation context
+   - Write to: `specs/<feature-name>/discovery.md`
 
-4. **When delegating**:
-   - Provide the feature name
-   - Provide the source path: `specs/<feature-name>/session_discovery.json`
-   - Provide the target path: `specs/<feature-name>/discovery.md`
+## discovery.md Requirements
 
-5. **Report results**:
-   - If generated: "Created `specs/<feature-name>/discovery.md`"
-   - If skipped: "Created `specs/<feature-name>/`"
+The document must be self-contained: a fresh agent reading only `discovery.md` 
+should understand everything the original conversation conveyed.
 
-## Notes
+Capture:
+- All requirements, constraints, decisions
+- Open questions and context
+- Important terminology and naming from the conversation
 
-- discovery.md must be self-contained and preserve all relevant knowledge
-- The subagent is responsible for summarization and structure
+Guidelines:
+- Be clear and structured, but prioritize completeness over brevity
+- DO NOT fake understanding or fill in blanks that are not grounded in context
 - Do not implement code changes
+
+## Report Results
+
+- If generated: "Created `specs/<feature-name>/discovery.md`"
+- If skipped: "Created `specs/<feature-name>/`"
