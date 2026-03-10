@@ -5,7 +5,6 @@ permission:
   edit:
     "*": deny
     "specs/**": allow
-    "**/specs/**": allow
   patch: deny
   webfetch: allow
   websearch: deny
@@ -30,6 +29,7 @@ permission:
     "which*": allow
     "uname*": allow
     "mkdir -p specs/**": allow
+    "rm specs/**": allow
 ---
 
 You are a system architect operating within OpenCode agentic coding framework.
