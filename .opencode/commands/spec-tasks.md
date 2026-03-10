@@ -65,8 +65,7 @@ When user specifies an existing feature:
 
 1. Ask: "Feature name?"
 2. Create folder: `specs/<feature>/`
-3. Export session to: `specs/<feature>/session_tasks.json` (use `export-session` tool)
-4. Generate `tasks.md` from session content
+3. Generate `tasks.md` from session content
 
 ---
 
@@ -78,6 +77,8 @@ When user specifies an existing feature:
 ---
 
 ## tasks.md Format
+
+Groups are flexible - use as many as needed. Example:
 
 ```markdown
 # Tasks: <feature-name>
@@ -91,19 +92,29 @@ When user specifies an existing feature:
 
 ## Tasks
 
-[ ] 1. <task description>
+### Group 1: <group name>
+[ ] 1.1 <task description>
  - path/to/file.py (short description of change)
- - path/to/another.py (short description)
 
-[ ] 2. <task description>
+[ ] 1.2 <task description>
  - path/to/file.py (add)
- - path/to/old_file.py (delete)
+
+### Group 2: <group name>
+[ ] 2.1 <task description>
+ - path/to/file.py (edit: description)
+
+[ ] 2.2 <task description>
+ - path/to/file.py (delete)
 ```
 
 ## Task Guidelines
 
-- Number tasks sequentially (1, 2, 3...)
+- Number tasks as `<group>.<task>` (e.g., 1.1, 1.2, 2.1)
 - Each task is a discrete unit of work
+- **Group tasks that build toward a runnable checkpoint**
+- **Each group should produce code that can be exercised**
+  - "Exercisable" = can be called/executed, even if not a complete program
+  - Implementation agent will execute the code (possibly partial) to validate it
 - List files affected with short descriptions:
   - `(add)` for new files
   - `(edit: description)` for modifications
@@ -111,9 +122,19 @@ When user specifies an existing feature:
 - Order tasks logically (dependencies first)
 - Keep descriptions concise and actionable
 
+### Group Guidelines
+
+- Group tasks that together produce runnable or testable code
+- Name groups by their deliverable (e.g., "Core Module", "API Integration", "Tests")
+- **Tests typically form the final group**
+- Typical groups:
+  - Core implementation → produces runnable module
+  - Integration → produces working integration
+  - Tests → produces passing tests
+- Avoid groups that are too small (1 task) or too large (10+ tasks)
+
 ## Important
 
-- If using current session as source: export it first using `export-session` tool
 - Ask for clarification if scope is unclear
 - Do not implement tasks - only document them
 
@@ -123,9 +144,6 @@ After generating tasks, end your response with explicit file outputs in this sty
 
 - If you wrote a file:
   "Generated implementation checklist and wrote it to `specs/<feature>/tasks.md`."
-
-- If you exported the session:
-  "Also exported the current session to `specs/<feature>/session_tasks.json` (per the flow you requested)."
 
 - If you output tasks in chat only:
   "Generated implementation checklist in chat (no files created)."
