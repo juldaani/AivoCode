@@ -85,7 +85,7 @@
     }
   },
 
-  "instructions": ["CONTEXT_POLICY.md", "SUBAGENT_POLICY.md"],
+  "instructions": ["aivocode/CONTEXT_POLICY.md", "aivocode/SUBAGENT_POLICY.md"],
 
   "provider": {
     "openrouter": {
@@ -113,12 +113,12 @@
   "agent": {
     "plan": {
       "mode": "primary",
-      "model": "opencode/kimi-k2.5",
+      "model": "opencode/glm-5",
     },
     
     "build": {
       "mode": "primary",
-      "model": "opencode/gpt-5.3-codex",
+      "model": "opencode/glm-5",
     }
   }
 }
