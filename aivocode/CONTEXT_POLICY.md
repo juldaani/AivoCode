@@ -22,6 +22,9 @@ If intermediate decisions in subagent's multi-step workflows require your judgme
 e.g., evaluating tradeoffs, choosing between options, assessing architectural
 fit — keep it in main context or break into smaller delegations with checkpoints.
 
+For hybrid tasks spanning multiple phases, split by phase and use the appropriate
+subagent for each. This creates checkpoints for your judgment.
+
 ## When to operate directly
 
 Operate directly only when all of these hold:
