@@ -4,10 +4,12 @@
 
 - Keep the main agent's context for reasoning and decisions, not for storage.
 - Do not pull in raw or intermediate data that a subagent can gather and compress.
+- Context pollution degrades reasoning. A cluttered context leads to missed
+  connections and poorer decisions.
 
 ## When to delegate
 
-Always delegate when both are true:
+Always delegate when:
 
 - Delegation meaningfully reduces context load, and
 - The work can run without the main agent's judgment during execution.
@@ -15,6 +17,10 @@ Always delegate when both are true:
 Treat both single operations and multi-step workflows as candidates for delegation.
 If a subagent can independently search, read, filter, compare, and summarize, delegate
 instead of pulling raw content yourself.
+
+If intermediate decisions in subagent's multi-step workflows require your judgment —
+e.g., evaluating tradeoffs, choosing between options, assessing architectural
+fit — keep it in main context or break into smaller delegations with checkpoints.
 
 ## When to operate directly
 
@@ -42,6 +48,9 @@ If the work mainly produces raw information rather than reasoning value, delegat
 - Avoid repeated patterns like: search -> read -> search -> read -> compare in the
   main agent.
 - For these patterns, group the work into a single delegated subagent task instead.
+- Before making a tool call, ask: what else will I likely need? Anticipate your
+  information needs and bundle them into one delegation rather than discovering
+  them incrementally.
 
 ## Delegation as compression
 
