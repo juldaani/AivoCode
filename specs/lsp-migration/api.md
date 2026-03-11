@@ -407,15 +407,25 @@ class LspManager:
 from typing import Any, Sequence
 
 from lsp_client.client import Client
+from lsp_client.capability import (
+    WithRespondConfigurationRequest,
+    WithRespondWorkspaceFoldersRequest,
+)
 
 from lsp.protocol import LspClient as LspClientProtocol
 from lsp.types import FileEvent, JsonDict, JsonValue
 
 
-class LspClientImpl(LspClientProtocol):
+class LspClientImpl(
+    LspClientProtocol,
+    WithRespondConfigurationRequest,
+    WithRespondWorkspaceFoldersRequest,
+):
     """LspClient implementation wrapping lsp-client library.
     
     Adapts lsp-client's Client to our LspClient protocol.
+    Includes capability mixins for handling server-initiated requests
+    (workspace/configuration, workspace/workspaceFolders).
     """
     
     def __init__(
@@ -427,6 +437,7 @@ class LspClientImpl(LspClientProtocol):
         self._client = client
         self._provider_id = provider_id
         self._instance_id = instance_id
+        self._running = True  # Set to True when client is initialized
     
     @property
     def provider_id(self) -> str:
@@ -465,11 +476,21 @@ class LspClientImpl(LspClientProtocol):
         )
     
     def is_running(self) -> bool:
-        # [TBD: verify lsp-client property name]
-        return self._client.is_running
+        """Check if the underlying LSP server is still running.
+        
+        Returns
+        -------
+        bool
+            True if the server process is alive and communication is possible.
+        """
+        return self._running
     
     async def shutdown(self) -> None:
-        await self._client.shutdown()
+        """Gracefully shutdown the LSP server."""
+        try:
+            await self._client.shutdown()
+        finally:
+            self._running = False
 ```
 
 ---

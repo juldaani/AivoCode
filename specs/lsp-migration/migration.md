@@ -85,7 +85,8 @@ mkdir -p lsp/config
 - [ ] Create `LspClientImpl` class
 - [ ] Implement all `LspClient` protocol methods
 - [ ] Implement `notify_did_change_watched_files()` via low-level `notify()`
-- [ ] [TBD: verify lsp-client `is_running` property name]
+- [ ] Track `is_running` state with manual flag (lsp-client has no public `is_running` property)
+- [ ] Include `WithRespondConfigurationRequest` and `WithRespondWorkspaceFoldersRequest` mixins for server-initiated request handling
 
 ### 3.2 Basedpyright Provider (`lsp/backends/lsp_client/providers/basedpyright.py`)
 
@@ -160,32 +161,57 @@ __all__ = [
 
 ### 6.1 `engine/core.py`
 
+**No backward compatibility** - update all downstream code to use new import paths.
+
 | Change | Status |
 |--------|--------|
 | Update imports from `lsp_server` to `lsp` | [ ] |
-| Update provider imports to use `lsp.backends.lsp_client.providers` | [ ] |
+| Update dynamic provider import paths in repo configs | [ ] |
 | Verify `LspManager` usage unchanged | [ ] |
 | Verify `client.request()`, `client.notify_did_change_watched_files()` unchanged | [ ] |
 
-**Old imports:**
+**Import updates in `engine/core.py`:**
 ```python
+# Old imports
 from lsp_server import WorkspaceLspManager, AsyncLspClient, FileEvent, FileChangeType
-```
 
-**New imports:**
-```python
+# New imports
 from lsp import LspManager, LspClient, FileEvent, FileChangeType
 from lsp.backends.lsp_client.providers import BasedpyrightProvider, BasedpyrightConfig
 ```
 
+**Update dynamic provider imports in repo configurations:**
+```python
+# Old paths (in repo.lsp.provider_class, repo.lsp.config_class)
+"lsp_server.basedpyright.provider.BasedPyrightProvider"
+"lsp_server.basedpyright.config.BasedPyrightConfig"
+
+# New paths
+"lsp.backends.lsp_client.providers.BasedpyrightProvider"
+"lsp.backends.lsp_client.providers.BasedpyrightConfig"
+```
+
 ### 6.2 Test Files
+
+**Rename test directory:** `tests/lsp_server/` → `tests/lsp/`
 
 | File | Status | Changes |
 |------|--------|---------|
-| `tests/lsp_server/conftest.py` | [ ] | Update imports |
-| `tests/lsp_server/helpers.py` | [ ] | Update imports |
-| `tests/lsp_server/test_basedpyright.py` | [ ] | Update imports |
-| `tests/lsp_server/test_did_change_watched_files.py` | [ ] | Update imports |
+| `tests/lsp/conftest.py` | [ ] | Update imports, rename directory |
+| `tests/lsp/helpers.py` | [ ] | Update imports |
+| `tests/lsp/test_basedpyright.py` | [ ] | Update imports |
+| `tests/lsp/test_did_change_watched_files.py` | [ ] | Update imports |
+| `tests/lsp/test_generic.py` | [ ] | Update imports |
+| `tests/lsp/config.toml` | [ ] | Update `provider_module` paths |
+
+**Update provider module paths in `config.toml`:**
+```toml
+# Old
+provider_module = "lsp_server.basedpyright"
+
+# New  
+provider_module = "lsp.backends.lsp_client.providers"
+```
 
 ---
 
@@ -194,7 +220,7 @@ from lsp.backends.lsp_client.providers import BasedpyrightProvider, Basedpyright
 ### 7.1 Run Tests
 
 ```bash
-conda run -n env-aivocode pytest tests/lsp_server/
+conda run -n env-aivocode pytest tests/lsp/
 ```
 
 - [ ] All tests pass
@@ -225,6 +251,7 @@ conda run -n env-aivocode pytest tests/lsp_server/
 | `lsp_server/how_to_use.py` | [ ] DELETE |
 | `lsp_server/basedpyright/` | [ ] DELETE |
 | `lsp_server/` directory | [ ] DELETE |
+| `tests/lsp_server/` directory | [ ] RENAME to `tests/lsp/` |
 
 ### 8.2 Update Documentation
 
@@ -258,6 +285,6 @@ If migration fails:
 
 Git commands:
 ```bash
-git checkout -- engine/core.py tests/lsp_server/
+git checkout -- engine/core.py tests/lsp/
 rm -rf lsp/
 ```

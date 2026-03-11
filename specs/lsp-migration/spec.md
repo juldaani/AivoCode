@@ -74,6 +74,9 @@ Replace the custom `lsp_server/` implementation with the `lsp-client` library wh
 | Own `LspClient` protocol | Decouples from lsp-client, enables future backends |
 | `get_instance_id()` on provider | Allows cache check before expensive client creation |
 | Low-level `notify()` for didChangeWatchedFiles | lsp-client lacks mixin for this; use direct call |
+| `is_running()` with manual flag tracking | lsp-client has no public `is_running` property; simple flag is reliable |
+| Use lsp-client built-in server request handlers | lsp-client has `WithRespondConfigurationRequest` and `WithRespondWorkspaceFoldersRequest` mixins |
+| No backward compatibility | Clean break; update all downstream imports explicitly |
 | multilspy skeleton only | Unblocks future work without current overhead |
 
 ### Module Structure
@@ -116,9 +119,11 @@ lsp/
 - Uses `LspManager.get_or_start(provider, workspace, config)`
 - Calls `client.request()`, `client.notify_did_change_watched_files()`, `client.is_running()`
 
-**Tests: `tests/lsp_server/`**
+**Tests: `tests/lsp/`**
+- Directory renamed from `tests/lsp_server/`
 - Update imports to use `lsp/` module
 - Provider tests use `BasedpyrightProvider` from `lsp.backends.lsp_client.providers`
+- Update `config.toml` provider module paths
 
 ## Acceptance Criteria
 

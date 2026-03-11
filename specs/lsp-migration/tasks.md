@@ -9,125 +9,155 @@
 
 ## Tasks
 
-### Group 1: Core Types & Exceptions
-Produce importable `lsp.types` and `lsp.exceptions` modules.
+### Group 1: Core Abstraction Module
+Checkpoint: `lsp/` exposes stable protocols, types, exceptions, and manager cache.
+Smoke-testable: no
 
-[ ] 1.1 Create directory structure
- - `lsp/` (add)
- - `lsp/backends/` (add)
- - `lsp/backends/lsp_client/` (add)
- - `lsp/backends/lsp_client/providers/` (add)
- - `lsp/backends/multilspy/` (add)
- - `lsp/backends/multilspy/providers/` (add)
- - `lsp/config/` (add)
+Smoke test:
+- N/A
+- Reason: This group is foundational API/plumbing without a runnable backend.
+- Deferred to: Group 2 (backend integration smoke test)
 
-[ ] 1.2 Implement types module
- - `lsp/types.py` (add) - FileChangeType, FileEvent, JsonDict, JsonValue
+[ ] 1.1 Create `lsp/` package structure and module entrypoints
+ - lsp/__init__.py (add: public exports surface)
+ - lsp/protocol.py (add)
+ - lsp/types.py (add)
+ - lsp/exceptions.py (add)
+ - lsp/manager.py (add)
+ - lsp/backends/__init__.py (add)
+ - lsp/config/__init__.py (add)
 
-[ ] 1.3 Implement exceptions module
- - `lsp/exceptions.py` (add) - LspError, LspMethodNotFound, LspResponseError
+[ ] 1.2 Implement core shared types
+ - lsp/types.py (edit: `JsonValue`, `JsonDict`, `FileChangeType`, `FileEvent`)
 
----
+[ ] 1.3 Implement protocol and exception contracts
+ - lsp/protocol.py (edit: `LspClient`, generic `LspProvider[ConfigT]`)
+ - lsp/exceptions.py (edit: `LspError`, `LspMethodNotFound`, `LspResponseError`)
 
-### Group 2: Protocols & Manager
-Produce usable abstraction layer with `LspClient`, `LspProvider`, and `LspManager`.
+[ ] 1.4 Implement client cache/lifecycle manager
+ - lsp/manager.py (edit: `LspManager.get_or_start()` keyed by `(provider_id, instance_id)`, `shutdown_all()`)
 
-[ ] 2.1 Implement LspClient protocol
- - `lsp/protocol.py` (add) - LspClient protocol with all methods
+[ ] 1.5 Add multilspy backend skeleton modules
+ - lsp/backends/multilspy/__init__.py (add: backend exports)
+ - lsp/backends/multilspy/client.py (add: `MultilspyClientImpl` methods raise `NotImplementedError`)
+ - lsp/backends/multilspy/providers/__init__.py (add: provider exports)
+ - lsp/backends/multilspy/providers/java.py (add: `JavaProvider` stub)
+ - lsp/backends/multilspy/providers/csharp.py (add: `CSharpProvider` stub)
 
-[ ] 2.2 Implement LspProvider protocol
- - `lsp/protocol.py` (edit: add LspProvider with get_instance_id, create_client, get_workspace_ignores)
+### Group 2: lsp-client Backend + Basedpyright Provider
+Checkpoint: A working `lsp-client` backend can start basedpyright, serve requests, and process watched-file notifications.
+Smoke-testable: yes
 
-[ ] 2.3 Implement LspManager
- - `lsp/manager.py` (add) - LspManager with get_or_start, shutdown_all
+Smoke test:
+- Goal: Prove end-to-end LSP behavior through new abstraction using basedpyright.
+- How: `conda run -n env-aivocode python tmp/validate_lsp_migration_g2.py`
+- Input: Temporary workspace with a small Python file, valid basedpyright config, and one synthetic file-change event.
+- Expect: Successful `textDocument/documentSymbol` response, successful `workspace/didChangeWatchedFiles` notify call, and clean shutdown.
 
-[ ] 2.4 Create public exports
- - `lsp/__init__.py` (add) - Export all public symbols
- - `lsp/backends/__init__.py` (add) - Empty or minimal exports
+[ ] 2.1 Implement `LspClientImpl` over lsp-client
+ - lsp/backends/lsp_client/client.py (add: request/notify wrappers, `notify_did_change_watched_files()`)
+ - lsp/backends/lsp_client/client.py (add: `is_running()` via manual `_running` flag)
 
----
+[ ] 2.2 Add server-request handling through lsp-client capabilities
+ - lsp/backends/lsp_client/client.py (edit: include `WithRespondConfigurationRequest` and `WithRespondWorkspaceFoldersRequest` mixins)
 
-### Group 3: lsp-client Backend
-Produce working backend that wraps lsp-client library.
+[ ] 2.3 Implement basedpyright provider and config
+ - lsp/backends/lsp_client/providers/basedpyright.py (add: `BasedpyrightConfig`, `BasedpyrightProvider`, `get_instance_id()`, `create_client()`, `get_workspace_ignores()`)
 
-[ ] 3.1 Implement LspClientImpl
- - `lsp/backends/lsp_client/__init__.py` (add)
- - `lsp/backends/lsp_client/client.py` (add) - LspClientImpl wrapping lsp-client's Client
+[ ] 2.4 Move and integrate config resolution utilities
+ - lsp/config/pyproject.py (add: `resolve_and_validate_config_file()` and TOML/JSON parsing helpers)
+ - lsp/backends/lsp_client/providers/__init__.py (add: provider/config exports)
+ - lsp/backends/lsp_client/__init__.py (add: backend exports)
 
-[ ] 3.2 Implement config utilities
- - `lsp/config/__init__.py` (add)
- - `lsp/config/pyproject.py` (add) - resolve_and_validate_config_file from lsp_server
+[ ] 2.5 Run smoke test for Group 2
+ - tmp/validate_lsp_migration_g2.py (add: temporary validation script)
 
-[ ] 3.3 Implement BasedpyrightProvider
- - `lsp/backends/lsp_client/providers/__init__.py` (add)
- - `lsp/backends/lsp_client/providers/basedpyright.py` (add) - BasedpyrightConfig, BasedpyrightProvider
+### Group 3: Engine + Downstream Configuration Migration
+Checkpoint: Engine uses only the new `lsp/` abstraction and downstream dynamic import settings point to new provider paths.
+Smoke-testable: yes
 
-[ ] 3.4 Update backend exports
- - `lsp/backends/lsp_client/__init__.py` (edit: export LspClientImpl, BasedpyrightProvider, BasedpyrightConfig)
+Smoke test:
+- Goal: Verify engine path from repo config → provider load → symbol query works without `lsp_server`.
+- How: Run engine symbol query flow against one configured repository (existing entrypoint or a temporary script).
+- Input: Repo configuration updated to `lsp.backends.lsp_client.providers.*` class paths.
+- Expect: Engine initializes client through `LspManager`, returns symbols, and no `lsp_server` import is required.
 
----
+[ ] 3.1 Migrate engine imports and typing to new API
+ - engine/core.py (edit: replace `lsp_server` imports with `lsp` imports and type hints)
 
-### Group 4: multilspy Skeleton
-Produce stub backend that raises NotImplementedError.
+[ ] 3.2 Update dynamic provider/config class paths
+ - Files defining `repo.lsp.provider_class` / `repo.lsp.config_class` (edit: replace `lsp_server.basedpyright.*` with `lsp.backends.lsp_client.providers.*`)
 
-[ ] 4.1 Implement MultilspyClientImpl stub
- - `lsp/backends/multilspy/__init__.py` (add)
- - `lsp/backends/multilspy/client.py` (add) - All methods raise NotImplementedError
+[ ] 3.3 Remove backward-compat assumptions
+ - engine/core.py (edit: do not add alias/fallback import logic)
+ - Any related runtime config defaults (edit: point directly to new paths)
 
-[ ] 4.2 Implement provider stubs
- - `lsp/backends/multilspy/providers/__init__.py` (add)
- - `lsp/backends/multilspy/providers/java.py` (add) - JavaProvider stub
- - `lsp/backends/multilspy/providers/csharp.py` (add) - CSharpProvider stub
+[ ] 3.4 Verify file-watcher integration still maps events to LSP file events
+ - engine/core.py (edit: preserve `FileEvent` and `FileChangeType` flow into `notify_did_change_watched_files()`)
 
----
+[ ] 3.5 Run smoke test for Group 3
+ - tmp/validate_lsp_migration_g3.py (add: temporary engine integration validation script, if needed)
 
-### Group 5: Consumer Migration
-Produce working integration with engine and tests.
+### Group 4: Test Suite Migration and Rename
+Checkpoint: Test suite is renamed to `tests/lsp/` and passes against the new module paths.
+Smoke-testable: yes
 
-[ ] 5.1 Update engine imports
- - `engine/core.py` (edit: change imports from lsp_server to lsp)
+Smoke test:
+- Goal: Confirm migrated tests execute from new location with updated imports/config paths.
+- How: `conda run -n env-aivocode pytest tests/lsp/test_generic.py tests/lsp/test_did_change_watched_files.py`
+- Input: Updated test directory, imports, and `config.toml` provider module paths.
+- Expect: Tests collect from `tests/lsp/` and pass without `lsp_server` imports.
 
-[ ] 5.2 Update test helpers
- - `tests/lsp_server/helpers.py` (edit: update imports)
+[ ] 4.1 Rename test directory
+ - tests/lsp_server/ (delete: move contents)
+ - tests/lsp/ (add: renamed test directory)
 
-[ ] 5.3 Update test fixtures
- - `tests/lsp_server/conftest.py` (edit: update imports, use LspManager)
+[ ] 4.2 Update test fixtures/util imports
+ - tests/lsp/conftest.py (edit: `LspClient`/`LspManager` imports and startup helper typing)
+ - tests/lsp/helpers.py (edit: import types from `lsp`)
 
-[ ] 5.4 Update test files
- - `tests/lsp_server/test_basedpyright.py` (edit: update imports)
- - `tests/lsp_server/test_did_change_watched_files.py` (edit: update imports)
+[ ] 4.3 Update provider-specific test imports
+ - tests/lsp/test_basedpyright.py (edit: provider/config/manager imports)
+ - tests/lsp/test_did_change_watched_files.py (edit: `FileChangeType` import)
+ - tests/lsp/test_generic.py (edit: any direct/indirect path assumptions)
 
----
+[ ] 4.4 Update test config dynamic module paths
+ - tests/lsp/config.toml (edit: `provider_module = "lsp.backends.lsp_client.providers"`)
+ - tests/lsp/config.py (edit: ensure dynamic import resolution aligns with new module layout)
 
-### Group 6: Tests
-Produce passing test suite.
+[ ] 4.5 Run smoke test for Group 4
+ - tests/lsp/ (run: targeted pytest commands above)
 
-[ ] 6.1 Run and fix tests
- - `tests/lsp_server/` (edit: fix any test failures)
+### Group 5: Cleanup, Docs Sweep, and Final Verification
+Checkpoint: Legacy implementation is removed and migration is fully verified.
+Smoke-testable: yes
 
-[ ] 6.2 Verify integration
- - Manual verification: engine starts, file watcher works, shutdown works
+Smoke test:
+- Goal: Validate final migrated state with legacy code removed.
+- How: `conda run -n env-aivocode pytest tests/lsp/` plus a repository search for `lsp_server` references.
+- Input: Cleaned codebase with `lsp_server/` removed and docs/imports updated.
+- Expect: Tests pass and no functional code paths still depend on `lsp_server`.
 
----
+[ ] 5.1 Delete legacy LSP implementation
+ - lsp_server/async_process.py (delete)
+ - lsp_server/client.py (delete)
+ - lsp_server/spec.py (delete)
+ - lsp_server/provider.py (delete)
+ - lsp_server/manager.py (delete)
+ - lsp_server/types.py (delete)
+ - lsp_server/__init__.py (delete)
+ - lsp_server/how_to_use.py (delete)
+ - lsp_server/basedpyright/ (delete)
+ - lsp_server/ (delete: directory)
 
-### Group 7: Cleanup
-Remove old implementation.
+[ ] 5.2 Update remaining docs/comments/import references
+ - Repository files referencing `lsp_server` (edit: replace with `lsp` where applicable)
 
-[ ] 7.1 Delete old lsp_server module
- - `lsp_server/async_process.py` (delete)
- - `lsp_server/client.py` (delete)
- - `lsp_server/spec.py` (delete)
- - `lsp_server/provider.py` (delete)
- - `lsp_server/manager.py` (delete)
- - `lsp_server/types.py` (delete)
- - `lsp_server/__init__.py` (delete)
- - `lsp_server/how_to_use.py` (delete)
- - `lsp_server/basedpyright/__init__.py` (delete)
- - `lsp_server/basedpyright/config.py` (delete)
- - `lsp_server/basedpyright/provider.py` (delete)
- - `lsp_server/basedpyright/` (delete)
- - `lsp_server/` (delete)
+[ ] 5.3 Verify acceptance criteria coverage explicitly
+ - specs/lsp-migration/spec.md (check: each acceptance criterion satisfied by implemented changes)
+ - specs/lsp-migration/api.md (check: protocol/contract parity)
+ - specs/lsp-migration/migration.md (check: checklist closure)
 
-[ ] 7.2 Final verification
- - Run full test suite
- - Verify no broken imports
+[ ] 5.4 Run smoke test for Group 5
+ - tests/lsp/ (run: full LSP test suite)
+ - Repository-wide search (run: ensure no unintended `lsp_server` dependencies remain)
