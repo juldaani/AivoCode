@@ -93,13 +93,33 @@ Groups are flexible - use as many as needed. Example:
 ## Tasks
 
 ### Group 1: <group name>
+Checkpoint: <short description of what this group enables>
+Smoke-testable: yes
+
+Smoke test:
+- Goal: <what functionality this smoke test demonstrates>
+- How: <command, entrypoint, tmp script, or execution approach>
+- Input: <minimal valid input / fixture / setup>
+- Expect: <observable success condition>
+
 [ ] 1.1 <task description>
  - path/to/file.py (short description of change)
 
 [ ] 1.2 <task description>
  - path/to/file.py (add)
 
+[ ] 1.3 Run smoke test for Group 1
+ - tmp/validate_<feature>_g1.py (add: temporary validation script, if needed)
+
 ### Group 2: <group name>
+Checkpoint: <short description of what this group enables>
+Smoke-testable: no
+
+Smoke test:
+- N/A
+- Reason: <why this group cannot yet be meaningfully exercised>
+- Deferred to: <group number/name that will validate this later, if applicable>
+
 [ ] 2.1 <task description>
  - path/to/file.py (edit: description)
 
@@ -111,10 +131,30 @@ Groups are flexible - use as many as needed. Example:
 
 - Number tasks as `<group>.<task>` (e.g., 1.1, 1.2, 2.1)
 - Each task is a discrete unit of work
-- **Group tasks that build toward a runnable checkpoint**
-- **Each group should produce code that can be exercised**
-  - "Exercisable" = can be called/executed, even if not a complete program
-  - Implementation agent will execute the code (possibly partial) to validate it
+- Each group must include a `Checkpoint` line describing what the group enables
+- Each group must include `Smoke-testable: yes` or `Smoke-testable: no`
+- **Group tasks that build toward a smoke-testable checkpoint when reasonable**
+- **Smoke test** = a minimal execution that exercises the group's intended functionality and
+  verifies an observable expected outcome
+- A smoke test must test behavior, not just imports, syntax, or object construction
+- A smoke test may use a small helper script in `tmp/` when the group does not yet expose a
+  direct runnable entrypoint but can still be meaningfully exercised
+- If `Smoke-testable: yes`, each group must include a `Smoke test` block with:
+  - `Goal`
+  - `How`
+  - `Input`
+  - `Expect`
+- If `Smoke-testable: yes`, each group must include an explicit final checkbox task for running
+  the smoke test
+- The smoke-test checkbox should be the last task in the group and should reference a `tmp/`
+  helper script if one may be needed
+- If `Smoke-testable: no`, each group must include a `Smoke test` block with:
+  - `N/A`
+  - `Reason`
+  - `Deferred to` (if a later group will validate the behavior)
+- If `Smoke-testable: no`, do not add a smoke-test checkbox task for that group
+- `Smoke-testable: no` is an escape hatch for groups that do not yet produce meaningful
+  behavior on their own; use it only when a smoke test would be fake or misleading
 - List files affected with short descriptions:
   - `(add)` for new files
   - `(edit: description)` for modifications
@@ -124,12 +164,15 @@ Groups are flexible - use as many as needed. Example:
 
 ### Group Guidelines
 
-- Group tasks that together produce runnable or testable code
+- Prefer groups that end in behavior that can be smoke tested
+- Use `Smoke-testable: no` only for intermediate plumbing/refactor/setup groups that do not
+  expose meaningful standalone behavior yet
+- For `Smoke-testable: yes` groups, end the group with an explicit smoke-test task
 - Name groups by their deliverable (e.g., "Core Module", "API Integration", "Tests")
 - **Tests typically form the final group**
 - Typical groups:
-  - Core implementation → produces runnable module
-  - Integration → produces working integration
+  - Core implementation → produces smoke-testable module or entrypoint
+  - Integration → produces smoke-testable integration
   - Tests → produces passing tests
 - Avoid groups that are too small (1 task) or too large (10+ tasks)
 
@@ -147,7 +190,9 @@ After writing `tasks.md`, read all spec files in `specs/<feature>/` and check:
 1. **Coverage**: Every acceptance criterion has at least one task
 2. **Gaps**: Requirements not reflected in tasks
 3. **Ambiguities**: Undefined terms, missing file paths, unclear dependencies
-4. **Orphans**: Tasks without spec backing
+4. **Smoke test structure**: Every group has `Checkpoint`, `Smoke-testable`, and `Smoke test`
+   content (or justified `N/A`); smoke-testable groups also include a final smoke-test checkbox
+5. **Orphans**: Tasks without spec backing
 
 Report briefly:
 
@@ -156,6 +201,7 @@ Report briefly:
 ✅ All criteria covered / ⚠️ Uncovered: [list]
 ✅ No gaps / ⚠️ Missing: [list]
 ✅ No ambiguities / ⚠️ Ambiguous: [list]
+✅ Smoke test structure complete / ⚠️ Missing or weak: [list]
 ```
 
 If critical issues, ask user: update tasks.md, update specs, or proceed?

@@ -43,7 +43,13 @@ When user specifies an existing feature:
 ## Phase 1: Parse and Display Tasks
 
 1. Read `specs/<feature>/tasks.md`
-2. Parse groups and tasks (lines starting with `### Group` and `[ ]` or `[x]`)
+2. Parse groups and tasks, including:
+   - group headings (`### Group`)
+   - `Checkpoint`
+   - `Smoke-testable`
+   - `Smoke test`
+   - the final smoke-test checkbox task for smoke-testable groups
+   - task lines (`[ ]` or `[x]`)
 3. Display current status:
 
 ```
@@ -52,10 +58,14 @@ When user specifies an existing feature:
 Status: X/Y completed
 
 ### Group 1: <group name>
+Checkpoint: <checkpoint description>
+Smoke-testable: yes
 [x] 1.1 <task description>
 [ ] 1.2 <task description>
 
 ### Group 2: <group name>
+Checkpoint: <checkpoint description>
+Smoke-testable: no
 [ ] 2.1 <task description>
 [ ] 2.2 <task description>
 ...
@@ -73,7 +83,7 @@ Ask: "Which tasks to implement?"
 - "1.1-2.2" → range (inclusive)
 
 **Note:** If partial groups are selected (not all tasks in a group), warn user:
-"Partial group selected - group validation will be skipped for incomplete groups."
+"Partial group selected - group smoke test will be skipped for incomplete groups."
 
 ---
 
@@ -94,30 +104,47 @@ For each GROUP containing selected tasks:
 
 ### 4.1 Implement Group Tasks
 
-For each task in the group:
+For each non-smoke-test task in the group:
 1. Implement task
 2. Update tasks.md: `[ ]` → `[x]`, update status counts
 
-### 4.2 Group Validation
+For `Smoke-testable: yes` groups:
+3. Leave the final smoke-test checkbox unchecked until the smoke test passes
+
+### 4.2 Group Smoke Test
 
 After all tasks in group are implemented:
 
-1. **Check if validation is possible**
-   - If group is incomplete (partial selection): note "Group X incomplete - validation skipped", proceed
-   - If group produces no runnable code: note "No validation needed", proceed
+1. **Check smoke-testability**
+   - If group is incomplete (partial selection): note "Group X incomplete - smoke test skipped",
+     proceed
+   - If `Smoke-testable: no`: only accept this if `tasks.md` explicitly includes `Smoke test: N/A`
+     with a `Reason`; note "Group X marked not smoke-testable", proceed
+   - If `Smoke-testable: yes`: a smoke test is required and the group must include an explicit
+     final smoke-test checkbox task
+   - If `Smoke-testable` or `Smoke test` is missing/ambiguous: report a spec gap and stop
 
-2. **Execute code to check for errors**
-   - If group produces runnable code: run it directly
-   - If group produces partial code: write tmp script to `tmp/validate_<feature>_<group>.py`
-   - Execute and check for errors
+2. **Execute the group's smoke test**
+   - Use the group's `Smoke test` instructions from `tasks.md`
+   - Prefer the public entrypoint / CLI / API / workflow named by the group
+   - If the group needs a small helper script, write it to `tmp/validate_<feature>_<group>.py`
+   - Run the smoke test and check for the expected observable outcome
+   - **A smoke test must exercise intended functionality, not just imports, syntax, or object
+     construction**
+   - Invalid substitutes include:
+     - import-only checks
+     - syntax-only checks
+     - test collection only
+     - constructing objects without exercising behavior
 
 3. **If errors occur:**
    - Report errors clearly
-   - Fix implementation (not tmp script)
+   - Fix implementation (not the smoke-test instructions)
    - Re-run until clean
 
 4. **If no errors:**
-   - Note "Group X validated successfully"
+   - Mark the group's final smoke-test checkbox task complete and update status counts
+   - Note "Group X smoke test passed"
    - Proceed to next group
 
 **Do NOT stop between groups.** Implement all requested groups continuously.
@@ -138,7 +165,7 @@ After ALL groups are implemented:
 3. **Quick integration run** (if feasible)
    - Short integration test or minimal pipeline run
    - Skip if pipeline is long-running (> 1 minute)
-   - Group validation already confirmed code runs
+   - Group smoke tests already confirmed code runs at each checkpoint
 
 4. Report results
 
@@ -160,9 +187,9 @@ Implementation complete.
 - Completed: X tasks across Y groups
 - Status: X/Y total
 
-## Group Validation
-- Group 1: [validated / errors fixed / skipped]
-- Group 2: [validated / errors fixed / skipped]
+## Group Smoke Tests
+- Group 1: [passed / errors fixed / skipped / N/A]
+- Group 2: [passed / errors fixed / skipped / N/A]
 
 ## Final Validation
 - Code: [errors or "no errors"]
@@ -178,7 +205,10 @@ Implementation complete.
 
 - Read spec files ONCE before loop
 - Update tasks.md after each completed task
-- **Validate after each group** (write tmp scripts for partial code)
+- **Run the group smoke test after each complete smoke-testable group**
+- Mark the smoke-test checkbox complete only after the smoke test passes
+- **Do not replace smoke tests with import-only or syntax-only checks** unless the group is
+  explicitly marked `Smoke-testable: no`
 - Run final validation after all groups
 - Do NOT stop between groups - implement all continuously
 - **Code execution first, tests second** - always prioritize running code over tests
@@ -198,7 +228,7 @@ If a task fails:
 2. Do NOT mark complete
 3. Continue to next task in group
 
-If group validation fails after 4 fix attempts:
+If a group smoke test fails after 4 fix attempts:
 1. Report the problem
 2. Ask user: "Continue to next group" / "Stop" / "Investigate"
 
@@ -213,6 +243,6 @@ If blocker prevents ALL remaining tasks:
 
 End with:
 - "Implemented X tasks across Y groups. Updated `specs/<feature>/tasks.md`."
-- "Group validation: [results]"
+- "Group smoke tests: [results]"
 - "Final validation: [code result] | Tests: [result]"
 - "All tasks complete." (if applicable)
