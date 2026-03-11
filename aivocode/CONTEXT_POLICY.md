@@ -1,69 +1,65 @@
 # Context Preservation Policy
 
-## Core Principle
+## Core principle
 
-Preserve the main agent’s context for reasoning, synthesis, and decisions.
+- Keep the main agent's context for reasoning and decisions, not for storage.
+- Do not pull in raw or intermediate data that a subagent can gather and compress.
 
-Use main-agent context for thinking, not for storing raw or intermediate information that can be gathered, filtered, and compressed elsewhere.
+## When to delegate
 
-## Delegation Default
+Always delegate when both are true:
 
-Delegate whenever:
-- delegation meaningfully reduces context load, and
-- the work can be done without the main agent’s judgment during execution.
+- Delegation meaningfully reduces context load, and
+- The work can run without the main agent's judgment during execution.
 
-This includes both single operations and multi-step workflows.
+Treat both single operations and multi-step workflows as candidates for delegation.
+If a subagent can independently search, read, filter, compare, and summarize, delegate
+instead of pulling raw content yourself.
 
-If a subagent can independently gather, inspect, filter, and extract the needed information, delegate it.
+## When to operate directly
 
-## Direct Operation Exception
+Operate directly only when all of these hold:
 
-Operate directly only when:
-- the task is precise and tightly scoped,
-- the information is small and low-noise, or
-- the main agent’s judgment is needed between steps,
-- and the information must remain in context for immediate reasoning.
+- The task is precise and tightly scoped (typically 1-2 files or a small output).
+- The information is small and low-noise.
+- The main agent's judgment is needed between steps.
+- The information must remain in context for immediate reasoning.
 
 If the work mainly produces raw information rather than reasoning value, delegate it.
 
-## Delegation Signals
+## Simple rule of thumb
 
-Prefer delegation for:
-- large or noisy retrieval
-- exploratory or uncertain lookup
-- repeated or chained information-gathering
-- filtering raw material into a few facts
-- comparing or summarizing multiple sources
-- tool-use patterns where small outputs accumulate into context bloat
+- If you expect to touch more than 2 files or produce more than about 150 lines of raw
+  tool output, delegate.
+- If the task can be answered by one or two tightly scoped reads or searches, and you
+  need to reason immediately on the result, operate directly.
+- When in doubt, delegate and ask subagents to return structured summaries plus minimal
+  supporting snippets.
 
-These are signals, not rigid rules.
+## Avoid the accumulation trap
 
-## Accumulation Trap
+- Many small tool calls can pollute context just as much as one large dump.
+- Avoid repeated patterns like: search -> read -> search -> read -> compare in the
+  main agent.
+- For these patterns, group the work into a single delegated subagent task instead.
 
-Context pollution also comes from many small outputs.
+## Delegation as compression
 
-A chain like:
-*search → read → search → read → compare*
-
-should usually be delegated unless the main agent’s reasoning is required between steps.
-
-## Delegation as Compression
-
-Subagents are context-compression filters.
+Treat subagents as context-compression filters.
 
 When delegating:
-- specify what to extract
-- request structured output
-- ask for minimal supporting context
-- avoid full content unless necessary
 
-After delegation, summarize the findings in your own words before continuing.
+- State the goal and the decisions you need to make.
+- Specify what to extract and in what format (lists, tables, bullet summaries).
+- Ask for concise summaries with only the minimal supporting snippets needed.
 
-## Heuristic
+After delegation, summarize the important findings in your own words before continuing.
 
-Ask:
+## Final heuristic
 
-**“Does this need to live in my context for reasoning, or can it be compressed before it reaches me?”**
+Before pulling data into context, ask:
 
-- If it can be compressed elsewhere → **delegate**
-- If it must remain in context for reasoning → **operate directly, carefully**
+- "Do I need this raw, here, to think?"
+
+If not, delegate.
+If yes, operate directly, but keep the scope as small as possible.
