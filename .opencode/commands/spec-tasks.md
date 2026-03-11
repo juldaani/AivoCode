@@ -149,8 +149,13 @@ Rules:
 - The smoke-test checkbox must be the last task in the group
 - The smoke test must exercise intended behavior and verify an observable outcome
 - Import-only, syntax-only, or object-construction-only checks do not count
+- `How` must be a concrete executable command, not a vague instruction
+- `Expect` must name an observable result such as exit code, returned value, raised error,
+  printed output, or absence of matches
 - The smoke test may use a small helper script in `tmp/` if the group is not directly runnable
   but can still be meaningfully exercised
+- Import-only smoke tests are allowed only when the checkpoint is explicitly structural or
+  scaffolding-only
 
 ### Non-smoke-testable group
 
@@ -182,6 +187,8 @@ Rules:
 - Prefer groups that end in behavior that can be smoke tested
 - Use `Smoke-testable: no` only for intermediate plumbing/refactor/setup groups that do not
   expose meaningful standalone behavior yet
+- If a group is structural/scaffolding-only, say so explicitly in the checkpoint so a limited
+  smoke test is clearly justified
 - Name groups by their deliverable (e.g., "Core Module", "API Integration", "Tests")
 - Tests are usually the final group
 - Avoid groups that are too small (1 task) or too large (10+ tasks)
@@ -202,8 +209,10 @@ After writing `tasks.md`, read all spec files in `specs/<feature>/` and check:
 3. **Ambiguities**: Undefined terms, missing file paths, unclear dependencies
 4. **Smoke test structure**: Every group has `Checkpoint`, `Smoke-testable`, and `Smoke test`
    content (or justified `N/A`); smoke-testable groups also include a final smoke-test checkbox
-5. **Orphans**: Tasks without spec backing
-6. **Hard rule check**: No smoke-testable group is missing its final smoke-test checkbox task
+5. **Smoke test quality**: `How` is an exact executable command, `Expect` is observable, and
+   smoke tests are not import-only unless the checkpoint is explicitly structural/scaffolding-only
+6. **Orphans**: Tasks without spec backing
+7. **Hard rule check**: No smoke-testable group is missing its final smoke-test checkbox task
 
 Report briefly:
 
@@ -213,6 +222,7 @@ Report briefly:
 ✅ No gaps / ⚠️ Missing: [list]
 ✅ No ambiguities / ⚠️ Ambiguous: [list]
 ✅ Smoke test structure complete / ⚠️ Missing or weak: [list]
+✅ Smoke test quality acceptable / ⚠️ Weak: [list]
 ✅ Hard rules satisfied / ❌ Invalid: [list]
 ```
 
