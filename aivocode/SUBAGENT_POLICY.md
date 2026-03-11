@@ -63,27 +63,29 @@ Delegate to subagents to keep the main agent focused on reasoning and decisions.
 
 ## @general
 
-**Use for:** Multi-step workflows that need edits or non-trivial restructuring.
+**Use for:** Bounded multi-step tasks that may need full tool access after the main agent has defined the goal and constraints: 
 
-- Search/compare/summarize combined with file edits
-- Multi-file refactors
-- Organizational work (grouping, rewriting, restructuring)
+- Well-scoped tasks that mostly need execution
+- Chained operations involving edits, commands, search, or verification
+- Independent work that can run without frequent main-agent decisions
+- Parallel work packets
 
-**Output:** Compressed, structured result with only essential supporting snippets.
+**Output:** A concise execution summary with files touched, key actions, blockers, minimal supporting snippets.
 
 **Use case examples:**
 
-1. **Refactor** — Rename/restructure across files
-   - "Rename `UserModel` to `User` across the entire codebase."
-2. **Apply** — Apply a pattern/fix across multiple files
-   - "Add `@retry(max_attempts=3)` to all functions that call external APIs."
-3. **Research & document** — Investigate and create documentation
-   - "Research the caching strategy and write a brief doc explaining how to add a new cache."
-4. **Remove** — Delete code and update references
-   - "Delete `legacy/parser.py` and update all imports to use `parser.py`."
-
+1. **Refactor** — Apply an approved change across files
+   - "Rename `UserModel` to `User` across the identified files and update imports."
+2. **Migrate** — Carry out a chosen transition
+   - "Replace usages of `legacy/parser.py` with `parser.py` and remove the legacy module."
+3. **Apply** — Roll out an approved pattern
+   - "Add the approved retry wrapper to the external API call sites and update affected tests."
+4. **Parallelize** — Handle one independent work packet
+   - "Update the logging layer in the ingest pipeline to match the new interface and report mismatches."
+   
 **Do NOT use for:**
-
-- Read-only codebase exploration (use `@explore`)
-- Replacing main-agent judgment on critical design decisions
-- Trivial single-step tasks
+- Architecture or tradeoff decisions
+- Open-ended implementation where the design is still evolving
+- Tasks needing frequent checkpoint decisions
+- Read-only local exploration (use `@explore`)
+- External web research (use `@web-ops`)
