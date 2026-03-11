@@ -167,6 +167,7 @@ Required fields:
 Rules:
 - Do not add a smoke-test checkbox task
 - Use this only when a meaningful smoke test would be fake or misleading
+- Do not use `Smoke-testable: no` for convenience
 
 ## Group Design Rules
 
@@ -202,6 +203,7 @@ After writing `tasks.md`, read all spec files in `specs/<feature>/` and check:
 4. **Smoke test structure**: Every group has `Checkpoint`, `Smoke-testable`, and `Smoke test`
    content (or justified `N/A`); smoke-testable groups also include a final smoke-test checkbox
 5. **Orphans**: Tasks without spec backing
+6. **Hard rule check**: No smoke-testable group is missing its final smoke-test checkbox task
 
 Report briefly:
 
@@ -211,6 +213,7 @@ Report briefly:
 ✅ No gaps / ⚠️ Missing: [list]
 ✅ No ambiguities / ⚠️ Ambiguous: [list]
 ✅ Smoke test structure complete / ⚠️ Missing or weak: [list]
+✅ Hard rules satisfied / ❌ Invalid: [list]
 ```
 
 If critical issues, ask user: update tasks.md, update specs, or proceed?

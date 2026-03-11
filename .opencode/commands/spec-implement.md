@@ -108,8 +108,9 @@ For each selected group:
      smoke test passes
 
 2. Decide whether the group gets a smoke test
+   - Only complete-group selections may run a group smoke test
    - If the selected tasks do not complete the group: note "Group X incomplete - smoke test
-     skipped" and continue
+     skipped", do not mark the smoke-test checkbox, and continue
    - If `Smoke-testable: no`: require `Smoke test: N/A` with `Reason`; note
      "Group X marked not smoke-testable" and continue
    - If `Smoke-testable: yes`: require both:
@@ -194,6 +195,7 @@ Implementation complete.
 - Read all spec files ONCE before the implementation loop
 - Update `tasks.md` immediately after each completed task
 - Do not mark a smoke-test checkbox complete until the smoke test passes
+- Do not report a smoke-testable group as passed without marking its smoke-test checkbox
 - Do not replace smoke tests with import-only or syntax-only checks
 - Code execution first, tests second
 - Do not stop between groups unless blocked
