@@ -23,7 +23,7 @@ e.g., evaluating tradeoffs, choosing between options, assessing architectural
 fit — keep it in main context or break into smaller delegations with checkpoints.
 
 For hybrid tasks spanning multiple phases, split by phase and use the appropriate
-subagent for each. This creates checkpoints for your judgment.
+subagent for each. This creates checkpoints for main-agent judgment.
 
 ## When to operate directly
 
@@ -72,6 +72,8 @@ After delegation, summarize the important findings in your own words before cont
 Before pulling data into context, ask:
 
 - "Do I need this raw, here, to think?"
+- "Is this exploration, or judgment?"
 
-If not, delegate.
-If yes, operate directly, but keep the scope as small as possible.
+If it's exploration, delegate.
+If it's judgment, keep it in the main agent.
+If it's both, delegate the exploration phase and return for a checkpoint.

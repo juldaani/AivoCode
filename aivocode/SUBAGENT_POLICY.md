@@ -10,8 +10,6 @@ Delegate to subagents to keep the main agent focused on reasoning and decisions.
 | External web, docs, APIs | `@web-ops` |
 | Multi-step with edits or restructuring | `@general` |
 
-**Rule:** If it's read-only on the local repo, use `@explore` — even multi-step workflows with intermediate decisions.
-
 ---
 
 ## @explore
@@ -20,7 +18,7 @@ Delegate to subagents to keep the main agent focused on reasoning and decisions.
 
 - Codebase discovery, navigation, symbol lookup
 - Multi-file search and pattern finding
-- Multi-step workflows with intermediate decisions (find X → analyze → search Y)
+- Multi-step investigation workflows
 - Summaries and explanations of modules, flows, or patterns
 - Cross-cutting analysis (error handling, feature flags, config, etc.)
 
