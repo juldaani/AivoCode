@@ -38,7 +38,7 @@ If the work mainly produces raw information rather than reasoning value, delegat
 
 ## Simple rule of thumb
 
-- If you expect to touch more than 2 files or produce more than about 150 lines of raw
+- If you expect to touch more than 2 files or produce more than about 100 lines of raw
   tool output, delegate.
 - If the task can be answered by one or two tightly scoped reads or searches, and you
   need to reason immediately on the result, operate directly.

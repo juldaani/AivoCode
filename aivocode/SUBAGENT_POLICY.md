@@ -2,14 +2,6 @@
 
 Delegate to subagents to keep the main agent focused on reasoning and decisions.
 
-## Routing Rules
-
-| Task Type | Subagent |
-|-----------|----------|
-| Read-only on local codebase | `@explore` |
-| External web, docs, APIs | `@web-ops` |
-| Multi-step with edits or restructuring | `@general` |
-
 ---
 
 ## @explore
