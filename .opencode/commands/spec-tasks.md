@@ -127,53 +127,62 @@ Smoke test:
  - path/to/file.py (delete)
 ```
 
-## Task Guidelines
+## Group Schema
 
-- Number tasks as `<group>.<task>` (e.g., 1.1, 1.2, 2.1)
-- Each task is a discrete unit of work
-- Each group must include a `Checkpoint` line describing what the group enables
-- Each group must include `Smoke-testable: yes` or `Smoke-testable: no`
-- **Group tasks that build toward a smoke-testable checkpoint when reasonable**
-- **Smoke test** = a minimal execution that exercises the group's intended functionality and
-  verifies an observable expected outcome
-- A smoke test must test behavior, not just imports, syntax, or object construction
-- A smoke test may use a small helper script in `tmp/` when the group does not yet expose a
-  direct runnable entrypoint but can still be meaningfully exercised
-- If `Smoke-testable: yes`, each group must include a `Smoke test` block with:
+Each group must follow exactly one of these forms.
+
+### Smoke-testable group
+
+Required fields:
+- `### Group N: <name>`
+- `Checkpoint: <short description of what this group enables>`
+- `Smoke-testable: yes`
+- `Smoke test:` with:
   - `Goal`
   - `How`
   - `Input`
   - `Expect`
-- If `Smoke-testable: yes`, each group must include an explicit final checkbox task for running
-  the smoke test
-- The smoke-test checkbox should be the last task in the group and should reference a `tmp/`
-  helper script if one may be needed
-- If `Smoke-testable: no`, each group must include a `Smoke test` block with:
+- one or more implementation tasks
+- a final checkbox task for running the smoke test
+
+Rules:
+- The smoke-test checkbox must be the last task in the group
+- The smoke test must exercise intended behavior and verify an observable outcome
+- Import-only, syntax-only, or object-construction-only checks do not count
+- The smoke test may use a small helper script in `tmp/` if the group is not directly runnable
+  but can still be meaningfully exercised
+
+### Non-smoke-testable group
+
+Required fields:
+- `### Group N: <name>`
+- `Checkpoint: <short description of what this group enables>`
+- `Smoke-testable: no`
+- `Smoke test:` with:
   - `N/A`
   - `Reason`
   - `Deferred to` (if a later group will validate the behavior)
-- If `Smoke-testable: no`, do not add a smoke-test checkbox task for that group
-- `Smoke-testable: no` is an escape hatch for groups that do not yet produce meaningful
-  behavior on their own; use it only when a smoke test would be fake or misleading
-- List files affected with short descriptions:
+- one or more implementation tasks
+
+Rules:
+- Do not add a smoke-test checkbox task
+- Use this only when a meaningful smoke test would be fake or misleading
+
+## Group Design Rules
+
+- Number tasks as `<group>.<task>` (e.g., 1.1, 1.2, 2.1)
+- Each task should be a discrete unit of work
+- List affected files under each task:
   - `(add)` for new files
   - `(edit: description)` for modifications
   - `(delete)` for removals
 - Order tasks logically (dependencies first)
 - Keep descriptions concise and actionable
-
-### Group Guidelines
-
 - Prefer groups that end in behavior that can be smoke tested
 - Use `Smoke-testable: no` only for intermediate plumbing/refactor/setup groups that do not
   expose meaningful standalone behavior yet
-- For `Smoke-testable: yes` groups, end the group with an explicit smoke-test task
 - Name groups by their deliverable (e.g., "Core Module", "API Integration", "Tests")
-- **Tests typically form the final group**
-- Typical groups:
-  - Core implementation → produces smoke-testable module or entrypoint
-  - Integration → produces smoke-testable integration
-  - Tests → produces passing tests
+- Tests are usually the final group
 - Avoid groups that are too small (1 task) or too large (10+ tasks)
 
 ## Important
