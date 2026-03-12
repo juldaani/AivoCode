@@ -9,7 +9,8 @@ Pulling large amounts of raw data into context causes:
 - Missed connections
 - Poorer decisions
 
-Subagents gather, compress and execute. Main agent receives summaries, not raw files.
+Subagents gather, synthetize, compress and execute. Main agent receives summaries, not raw files.
+
 This preserves context for what matters: thinking and deciding.
 
 ### Main Agent Role
@@ -24,6 +25,10 @@ This preserves context for what matters: thinking and deciding.
 - Execution of specific tasks
 - Gathering information
 - Carrying out delegated work
+
+Note: Subagents are weaker models. They cannot see the big picture or
+the full session context. They only see what you provide in the delegation.
+Think of them like functions: discrete inputs, bounded scope.
 
 ## WORKFLOW LOOP
 
@@ -57,11 +62,25 @@ This preserves context for what matters: thinking and deciding.
 
 Default: Delegate.
 
+### What to Delegate
+
+Tasks suitable for delegation are:
+- Discrete: Clear start and end
+- Bounded: Limited scope (files, operations)
+- Well-defined: Specific ask and expected output
+- Independent: Can run without main agent reasoning in between
+- Parallelizable: Can run alongside other tasks 
+
+### Operate Directly
+
 Operate directly only when ALL of these are true:
 - Target is precisely known (file + location)
 - Single file, small output
 - Judgment needed immediately on the content
 - No exploration required
+
+If a task needs main agent judgment during execution, it's too large.
+Break it into smaller tasks with checkpoints.
 
 If the work produces raw information rather than reasoning value, delegate.
 
@@ -109,3 +128,112 @@ Sending any "coding task" to @general without checking if bounded.
 ### Premature Delegation
 Delegating before you know the goal, scope, or approach.
 Plan first. Delegate when the task is clear and bounded.
+
+## Example Scenarios
+
+Concrete cases showing the workflow in action.
+
+### Scenario 1: Finding Code Locations
+
+Goal: Find where `process_payment` is defined and called.
+
+Step 1: HAS GOAL — Locate payment function.
+Step 2: IDENTIFIES GAP — Don't know which files.
+Step 3: CAN DELEGATE? Yes. Location unknown.
+   Delegate to @explore: "Find all definitions and calls of process_payment.
+   Return: file paths + line numbers + 1-line context each."
+Step 4: INTEGRATES — Has locations.
+Step 5: DECIDES — Goal complete.
+
+### Scenario 2: Understanding a Module
+
+Goal: Understand auth flow before making changes.
+
+Step 1: HAS GOAL — Understand auth architecture.
+Step 2: IDENTIFIES GAP — Don't know the flow.
+Step 3: CAN DELEGATE? Yes. Exploration needed.
+   Delegate to @explore: "Explain authentication flow: entry points,
+   validation steps, session management. Return: numbered steps + key files."
+Step 4: INTEGRATES — Has mental model.
+Step 5: DECIDES — Ready to design changes. Loop to 2.
+
+### Scenario 3: Quick Verification
+
+Goal: Check return type of `process()` in known file.
+
+Step 1: HAS GOAL — Verify function signature.
+Step 2: IDENTIFIES GAP — Need type annotation.
+Step 3: CAN DELEGATE? No. Target known, single file, small output.
+   Operate directly: Read specific function in services/processor.py.
+Step 4: INTEGRATES — Has answer.
+Step 5: DECIDES — Goal complete.
+
+### Scenario 4: Implementation After Design
+
+Goal: Implement approved refactoring.
+
+Step 1: HAS GOAL — Apply changes.
+Step 2: IDENTIFIES GAP — Need execution.
+Step 3: CAN DELEGATE? Yes. Bounded task, design decided.
+   Delegate to @general: "Rename UserModel to User in these 3 files.
+   Update imports. Return: files modified, any issues."
+Step 4: INTEGRATES — Changes applied.
+Step 5: DECIDES — Goal complete.
+
+### Scenario 5: Anti-Pattern — Cascading Reads
+
+What happened:
+- Read auth.py → saw import of session.py
+- Read session.py → saw reference to cache.py
+- Read cache.py → saw import of config.py
+- Read config.py → context polluted, 4 files in memory
+
+What should have happened:
+- After 2nd read: PAUSE. Consider delegating.
+- After 3rd read: STOP. Delegate remaining investigation to @explore.
+
+## Subagent Quick Reference
+
+Quick lookup: which subagent for what task.
+
+### @explore
+
+Use for: All read-only work on local repo.
+- Finding code locations
+- Understanding modules or flows
+- Multi-file search
+- Cross-cutting analysis
+
+Returns: File paths, minimal snippets, structured summaries.
+Do NOT ask for: Full file contents.
+
+### @web-ops
+
+Use for: External web lookup.
+- Documentation and guides
+- API references
+- Current status or versions
+- How-to examples
+- Other web-related reads
+
+Returns: Summaries, code examples, sources.
+
+### @general
+
+Use for: Bounded execution after design is decided.
+- Applying approved changes
+- Running tests
+- Executing well-defined tasks
+
+Returns: Files touched, actions taken, blockers.
+NOT for: Exploration, design decisions, open-ended work.
+
+### Decision Guide
+
+| Need to... | Use |
+|------------|-----|
+| Find code in repo | @explore |
+| Understand a module | @explore |
+| Look up docs or guides | @web-ops |
+| Execute bounded changes | @general |
+| Make a decision | Main agent (stay here) |
