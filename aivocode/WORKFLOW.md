@@ -183,13 +183,3 @@ Note: @general is capable of complex work. The constraint is context isolation,
 not task complexity. Provide all needed context in the delegation.
 
 Returns: Files touched, actions taken, blockers.
-
-### Decision Guide
-
-| Need to... | Use |
-|------------|-----|
-| Find code in repo | @explore |
-| Understand a module | @explore |
-| Look up docs or guides | @web-ops |
-| Execute bounded changes | @general |
-| Make a decision | Main agent (stay here) |
