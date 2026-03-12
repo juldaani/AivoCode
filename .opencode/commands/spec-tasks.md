@@ -94,13 +94,6 @@ Groups are flexible - use as many as needed. Example:
 
 ### Group 1: <group name>
 Checkpoint: <short description of what this group enables>
-Smoke-testable: yes
-
-Smoke test:
-- Goal: <what functionality this smoke test demonstrates>
-- How: <command, entrypoint, tmp script, or execution approach>
-- Input: <minimal valid input / fixture / setup>
-- Expect: <observable success condition>
 
 [ ] 1.1 <task description>
  - path/to/file.py (short description of change)
@@ -108,17 +101,8 @@ Smoke test:
 [ ] 1.2 <task description>
  - path/to/file.py (add)
 
-[ ] 1.3 Run smoke test for Group 1
- - tmp/validate_<feature>_g1.py (add: temporary validation script, if needed)
-
 ### Group 2: <group name>
 Checkpoint: <short description of what this group enables>
-Smoke-testable: no
-
-Smoke test:
-- N/A
-- Reason: <why this group cannot yet be meaningfully exercised>
-- Deferred to: <group number/name that will validate this later, if applicable>
 
 [ ] 2.1 <task description>
  - path/to/file.py (edit: description)
@@ -129,50 +113,19 @@ Smoke test:
 
 ## Group Schema
 
-Each group must follow exactly one of these forms.
+Each group must follow this form:
 
-### Smoke-testable group
-
-Required fields:
 - `### Group N: <name>`
 - `Checkpoint: <short description of what this group enables>`
-- `Smoke-testable: yes`
-- `Smoke test:` with:
-  - `Goal`
-  - `How`
-  - `Input`
-  - `Expect`
-- one or more implementation tasks
-- a final checkbox task for running the smoke test
+- One or more implementation tasks, numbered as `<group>.<task>` (e.g., 1.1, 1.2)
 
-Rules:
-- The smoke-test checkbox must be the last task in the group
-- The smoke test must exercise intended behavior and verify an observable outcome
-- Import-only, syntax-only, or object-construction-only checks do not count
-- `How` must be a concrete executable command, not a vague instruction
-- `Expect` must name an observable result such as exit code, returned value, raised error,
-  printed output, or absence of matches
-- The smoke test may use a small helper script in `tmp/` if the group is not directly runnable
-  but can still be meaningfully exercised
-- Import-only smoke tests are allowed only when the checkpoint is explicitly structural or
-  scaffolding-only
+Tasks:
 
-### Non-smoke-testable group
-
-Required fields:
-- `### Group N: <name>`
-- `Checkpoint: <short description of what this group enables>`
-- `Smoke-testable: no`
-- `Smoke test:` with:
-  - `N/A`
-  - `Reason`
-  - `Deferred to` (if a later group will validate the behavior)
-- one or more implementation tasks
-
-Rules:
-- Do not add a smoke-test checkbox task
-- Use this only when a meaningful smoke test would be fake or misleading
-- Do not use `Smoke-testable: no` for convenience
+- `[ ] N.M <task description>`
+- Followed by one or more bullet lines listing affected files:
+  - `path/to/file.py (add)`
+  - `path/to/file.py (edit: description)`
+  - `path/to/file.py (delete)`
 
 ## Group Design Rules
 
@@ -183,12 +136,7 @@ Rules:
   - `(edit: description)` for modifications
   - `(delete)` for removals
 - Order tasks logically (dependencies first)
-- Keep descriptions concise and actionable
-- Prefer groups that end in behavior that can be smoke tested
-- Use `Smoke-testable: no` only for intermediate plumbing/refactor/setup groups that do not
-  expose meaningful standalone behavior yet
-- If a group is structural/scaffolding-only, say so explicitly in the checkpoint so a limited
-  smoke test is clearly justified
+- Prefer groups that end in a meaningful, verifiable behavior or state
 - Name groups by their deliverable (e.g., "Core Module", "API Integration", "Tests")
 - Tests are usually the final group
 - Avoid groups that are too small (1 task) or too large (10+ tasks)
@@ -207,12 +155,8 @@ After writing `tasks.md`, read all spec files in `specs/<feature>/` and check:
 1. **Coverage**: Every acceptance criterion has at least one task
 2. **Gaps**: Requirements not reflected in tasks
 3. **Ambiguities**: Undefined terms, missing file paths, unclear dependencies
-4. **Smoke test structure**: Every group has `Checkpoint`, `Smoke-testable`, and `Smoke test`
-   content (or justified `N/A`); smoke-testable groups also include a final smoke-test checkbox
-5. **Smoke test quality**: `How` is an exact executable command, `Expect` is observable, and
-   smoke tests are not import-only unless the checkpoint is explicitly structural/scaffolding-only
-6. **Orphans**: Tasks without spec backing
-7. **Hard rule check**: No smoke-testable group is missing its final smoke-test checkbox task
+4. **Group clarity**: Each group has a clear `Checkpoint` and a coherent set of tasks
+5. **Orphans**: Tasks without spec backing
 
 Report briefly:
 
@@ -221,9 +165,8 @@ Report briefly:
 ✅ All criteria covered / ⚠️ Uncovered: [list]
 ✅ No gaps / ⚠️ Missing: [list]
 ✅ No ambiguities / ⚠️ Ambiguous: [list]
-✅ Smoke test structure complete / ⚠️ Missing or weak: [list]
-✅ Smoke test quality acceptable / ⚠️ Weak: [list]
-✅ Hard rules satisfied / ❌ Invalid: [list]
+✅ Group structure clear / ⚠️ Weak groups: [list]
+✅ No orphans / ⚠️ Orphan tasks: [list]
 ```
 
 If critical issues, ask user: update tasks.md, update specs, or proceed?

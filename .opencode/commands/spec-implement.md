@@ -44,12 +44,9 @@ When user specifies an existing feature:
 
 1. Read `specs/<feature>/tasks.md`
 2. Parse:
-   - group headings (`### Group`)
-   - `Checkpoint`
-   - `Smoke-testable`
-   - `Smoke test`
-   - task checkboxes (`[ ]` / `[x]`)
-   - the final smoke-test checkbox task for smoke-testable groups
+    - group headings (`### Group`)
+    - `Checkpoint`
+    - task checkboxes (`[ ]` / `[x]`)
 3. Display current status:
 
 ```
@@ -59,13 +56,11 @@ Status: X/Y completed
 
 ### Group 1: <group name>
 Checkpoint: <checkpoint description>
-Smoke-testable: yes
 [x] 1.1 <task description>
 [ ] 1.2 <task description>
 
 ### Group 2: <group name>
 Checkpoint: <checkpoint description>
-Smoke-testable: no
 [ ] 2.1 <task description>
 [ ] 2.2 <task description>
 ...
@@ -81,9 +76,6 @@ Ask: "Which tasks to implement?"
 - "g1,g3" → all tasks in groups 1 and 3
 - "1.2,2.1" → specific tasks (comma-separated)
 - "1.1-2.2" → range (inclusive)
-
-**Note:** If partial groups are selected (not all tasks in a group), warn user:
-"Partial group selected - group smoke test will be skipped for incomplete groups."
 
 ---
 
@@ -102,45 +94,11 @@ Read ALL spec files in `specs/<feature>/` ONCE before implementation:
 
 For each selected group:
 
-1. Implement all selected non-smoke-test tasks in the group
-   - After each completed task, update `tasks.md` (`[ ]` → `[x]`) and status counts
-   - For `Smoke-testable: yes` groups, leave the final smoke-test checkbox unchecked until the
-     smoke test passes
+1. Implement all selected tasks in the group.
+   - After each completed task, update `tasks.md` (`[ ]` → `[x]`) and status counts.
+   - Treat any testing-related tasks (for example, adding or running tests) as normal tasks.
 
-2. Decide whether the group gets a smoke test
-   - Only complete-group selections may run a group smoke test
-   - If the selected tasks do not complete the group: note "Group X incomplete - smoke test
-     skipped", do not mark the smoke-test checkbox, and continue
-   - If `Smoke-testable: no`: require `Smoke test: N/A` with `Reason`; note
-     "Group X marked not smoke-testable" and continue
-   - If `Smoke-testable: yes`: require both:
-     - a `Smoke test` block
-     - a final smoke-test checkbox task
-   - If `Smoke-testable` or `Smoke test` is missing or ambiguous: report a spec gap and stop
-
-3. Run the group smoke test for complete smoke-testable groups
-   - Use the group's `Smoke test` instructions from `tasks.md`
-   - Prefer the public entrypoint / CLI / API / workflow named by the group
-   - If needed, create a small helper script in `tmp/validate_<feature>_<group>.py`
-   - The smoke test must exercise intended behavior and verify an observable outcome
-   - Invalid substitutes include:
-     - import-only checks
-     - syntax-only checks
-     - test collection only
-     - constructing objects without exercising behavior
-
-4. If the smoke test fails
-   - Report the error clearly
-   - Fix the implementation, not the smoke-test instructions
-   - Re-run the smoke test until clean
-   - After 4 failed attempts, ask the user: "Continue to next group" / "Stop" /
-     "Investigate"
-
-5. If the smoke test passes
-   - Mark the final smoke-test checkbox task complete and update status counts
-   - Note "Group X smoke test passed"
-
-Continue through all selected groups without stopping unless blocked.
+2. Continue through all selected groups without stopping unless blocked.
 
 ---
 
@@ -154,9 +112,8 @@ After all selected groups are processed:
 2. Run new tests from this feature, if applicable
 
 3. Run a quick integration check if feasible
-   - Use a short integration test or minimal pipeline run
-   - Skip if it would run longer than 1 minute
-   - Group smoke tests already confirmed code runs at each checkpoint
+    - Use a short integration test or minimal pipeline run
+    - Skip if it would run longer than 1 minute
 
 4. Report results
 
@@ -176,13 +133,9 @@ Implementation complete.
 - Completed: X tasks across Y groups
 - Status: X/Y total
 
-## Group Smoke Tests
-- Group 1: [passed / errors fixed / skipped / N/A]
-- Group 2: [passed / errors fixed / skipped / N/A]
-
-## Final Validation
-- Code: [errors or "no errors"]
-- Tests: [result or "skipped"]
+## Tests & Checks
+- Unit/functional tests: [result or "skipped"]
+- Integration checks: [result or "skipped"]
 
 ## Remaining
 [List unchecked tasks, or "All tasks complete."]
@@ -194,9 +147,6 @@ Implementation complete.
 
 - Read all spec files ONCE before the implementation loop
 - Update `tasks.md` immediately after each completed task
-- Do not mark a smoke-test checkbox complete until the smoke test passes
-- Do not report a smoke-testable group as passed without marking its smoke-test checkbox
-- Do not replace smoke tests with import-only or syntax-only checks
 - Code execution first, tests second
 - Do not stop between groups unless blocked
 - **NEVER edit existing tests** to make them pass
@@ -217,6 +167,5 @@ Implementation complete.
 
 End with:
 - "Implemented X tasks across Y groups. Updated `specs/<feature>/tasks.md`."
-- "Group smoke tests: [results]"
 - "Final validation: [code result] | Tests: [result]"
 - "All tasks complete." (if applicable)
