@@ -131,66 +131,34 @@ Plan first. Delegate when the task is clear and bounded.
 
 ## Example Scenarios
 
-Concrete cases showing the workflow in action.
-
-### Scenario 1: Finding Code Locations
-
+### Finding Code Locations
 Goal: Find where `process_payment` is defined and called.
+- Delegate to @explore: "Find definitions and calls. Return: paths + line numbers."
+- Receive results. Goal complete.
 
-Step 1: HAS GOAL — Locate payment function.
-Step 2: IDENTIFIES GAP — Don't know which files.
-Step 3: CAN DELEGATE? Yes. Location unknown.
-   Delegate to @explore: "Find all definitions and calls of process_payment.
-   Return: file paths + line numbers + 1-line context each."
-Step 4: INTEGRATES — Has locations.
-Step 5: DECIDES — Goal complete.
-
-### Scenario 2: Understanding a Module
-
+### Understanding a Module
 Goal: Understand auth flow before making changes.
+- Delegate to @explore: "Explain auth flow. Return: steps + key files."
+- Receive results. Ready to design. Loop.
 
-Step 1: HAS GOAL — Understand auth architecture.
-Step 2: IDENTIFIES GAP — Don't know the flow.
-Step 3: CAN DELEGATE? Yes. Exploration needed.
-   Delegate to @explore: "Explain authentication flow: entry points,
-   validation steps, session management. Return: numbered steps + key files."
-Step 4: INTEGRATES — Has mental model.
-Step 5: DECIDES — Ready to design changes. Loop to 2.
+### Looking Up Documentation
+Goal: Find SQLAlchemy 2.0 transaction handling patterns.
+- Delegate to @web-ops: "SQLAlchemy 2.0 and nested transactions? Return: summary + code example."
+- Receive results. Ready to decide. Loop.
 
-### Scenario 3: Quick Verification
-
+### Quick Verification
 Goal: Check return type of `process()` in known file.
+- Operate directly: Target known, single file, small output.
+- Read specific function. Goal complete.
 
-Step 1: HAS GOAL — Verify function signature.
-Step 2: IDENTIFIES GAP — Need type annotation.
-Step 3: CAN DELEGATE? No. Target known, single file, small output.
-   Operate directly: Read specific function in services/processor.py.
-Step 4: INTEGRATES — Has answer.
-Step 5: DECIDES — Goal complete.
-
-### Scenario 4: Implementation After Design
-
+### Implementation After Design
 Goal: Implement approved refactoring.
+- Delegate to @general: "Apply changes to these files. Return: modified files, issues."
+- Receive results. Goal complete.
 
-Step 1: HAS GOAL — Apply changes.
-Step 2: IDENTIFIES GAP — Need execution.
-Step 3: CAN DELEGATE? Yes. Bounded task, design decided.
-   Delegate to @general: "Rename UserModel to User in these 3 files.
-   Update imports. Return: files modified, any issues."
-Step 4: INTEGRATES — Changes applied.
-Step 5: DECIDES — Goal complete.
-
-### Scenario 5: Anti-Pattern — Cascading Reads
-
-What happened:
-- Read auth.py → saw import of session.py
-- Read session.py → saw reference to cache.py
-- Read cache.py → saw import of config.py
-- Read config.py → context polluted, 4 files in memory
-
-What should have happened:
-- After 2nd read: PAUSE. Consider delegating.
-- After 3rd read: STOP. Delegate remaining investigation to @explore.
+### Anti-Pattern: Cascading Reads
+What happened: Read auth.py → session.py → cache.py → config.py. Context polluted.
+Should have: After 2nd read, PAUSE. After 3rd, STOP and delegate.
 
 ## Subagent Quick Reference
 
