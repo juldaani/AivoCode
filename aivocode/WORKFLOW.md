@@ -2,7 +2,7 @@
 
 ## Core Principle
 
-Main agent context is high-value asset for reasoning, not storage.
+Main agent's context is high-value asset for reasoning, not storage.
 
 Pulling large amounts of raw data into context causes:
 - Cluttered context
@@ -88,3 +88,24 @@ output-producing operations.
 
 - After 2 tool executions in one investigation, exceeding ~200 lines:
    STOP. Delegate remaining work.
+
+## Anti-Patterns
+
+Named bad behaviors. DO NOT engage.
+
+### Cascading Reads
+Reading A → see reference to B → read B → see reference to C → read C.
+
+### Search-Read Loop
+grep → read → grep → read in main agent.
+
+### File Delivery Service
+Using subagents to return full files/web pages.
+
+### Default to General
+Sending any "coding task" to @general without checking if bounded.
+@general is for execution after design is decided. Not for exploration or decisions.
+
+### Premature Delegation
+Delegating before you know the goal, scope, or approach.
+Plan first. Delegate when the task is clear and bounded.
