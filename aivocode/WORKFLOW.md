@@ -173,7 +173,6 @@ Use for: All read-only work on local repo.
 - Cross-cutting analysis
 
 Returns: File paths, minimal snippets, structured summaries.
-Do NOT ask for: Full file contents.
 
 ### @web-ops
 
@@ -182,19 +181,34 @@ Use for: External web lookup.
 - API references
 - Current status or versions
 - How-to examples
-- Other web-related reads
+- Other web-related ops/reads
 
 Returns: Summaries, code examples, sources.
 
 ### @general
 
-Use for: Bounded execution after design is decided.
-- Applying approved changes
-- Running tests
-- Executing well-defined tasks
+Use for: Tasks that can be completed with only the delegation prompt.
+
+Capabilities:
+- File editing, Bash
+- Multi-step workflows combining read + write
+- Parallel execution of independent tasks
+
+Do NOT use for:
+- Repo exploration → use @explore
+- Web lookup → use @web-ops
+
+The Context Test:
+- Needs reasoning from earlier conversation?
+- Needs context we've built up?
+
+If task needs session context → main agent
+If task is self-contained → @general
+
+Note: @general is capable of complex work. The constraint is context isolation,
+not task complexity. Provide all needed context in the delegation.
 
 Returns: Files touched, actions taken, blockers.
-NOT for: Exploration, design decisions, open-ended work.
 
 ### Decision Guide
 
