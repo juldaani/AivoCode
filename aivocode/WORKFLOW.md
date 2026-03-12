@@ -13,6 +13,15 @@ Subagents gather, synthetize, compress and execute. Main agent receives summarie
 
 This preserves context for what matters: thinking and deciding.
 
+### Context Hierarchy
+
+**Main Agent:** Full session context, reasoning, decisions.
+
+**Subagents:** Isolated context (what you provide), execution, gathering.
+
+Subagents are weaker models. They cannot see the big picture. 
+Think of them like functions: discrete inputs, bounded scope.
+
 ### Main Agent Role
 
 - Planning and strategy
@@ -25,10 +34,6 @@ This preserves context for what matters: thinking and deciding.
 - Execution of specific tasks
 - Gathering information
 - Carrying out delegated work
-
-Note: Subagents are weaker models. They cannot see the big picture or
-the full session context. They only see what you provide in the delegation.
-Think of them like functions: discrete inputs, bounded scope.
 
 ## WORKFLOW LOOP
 
