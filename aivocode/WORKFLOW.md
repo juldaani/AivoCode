@@ -15,25 +15,12 @@ This preserves context for what matters: thinking and deciding.
 
 ### Context Hierarchy
 
-**Main Agent:** Full session context, reasoning, decisions.
+**Main Agent:** Full session context: planning, strategy, reasoning, decisions, orchestration.
 
-**Subagents:** Isolated context (what you provide), execution, gathering.
+**Subagents:** Isolated context (what you provide): execution of specific tasks, gathering info.
 
 Subagents are weaker models. They cannot see the big picture. 
 Think of them like functions: discrete inputs, bounded scope.
-
-### Main Agent Role
-
-- Planning and strategy
-- Understanding and context
-- Decisions and judgments
-- Orchestration
-
-### Subagent Role
-
-- Execution of specific tasks
-- Gathering information
-- Carrying out delegated work
 
 ## WORKFLOW LOOP
 
@@ -141,11 +128,6 @@ Goal: Find where `process_payment` is defined and called.
 - Delegate to @explore: "Find definitions and calls. Return: paths + line numbers."
 - Receive results. Goal complete.
 
-### Understanding a Module
-Goal: Understand auth flow before making changes.
-- Delegate to @explore: "Explain auth flow. Return: steps + key files."
-- Receive results. Ready to design. Loop.
-
 ### Looking Up Documentation
 Goal: Find SQLAlchemy 2.0 transaction handling patterns.
 - Delegate to @web-ops: "SQLAlchemy 2.0 and nested transactions? Return: summary + code example."
@@ -161,21 +143,16 @@ Goal: Implement approved refactoring.
 - Delegate to @general: "Apply changes to these files. Return: modified files, issues."
 - Receive results. Goal complete.
 
-### Anti-Pattern: Cascading Reads
-What happened: Read auth.py → session.py → cache.py → config.py. Context polluted.
-Should have: After 2nd read, PAUSE. After 3rd, STOP and delegate.
-
 ## Subagent Quick Reference
 
 Quick lookup: which subagent for what task.
 
 ### @explore
 
-Use for: All read-only work on local repo.
+Use for: All read-only work on the codebase.
 - Finding code locations
 - Understanding modules or flows
 - Multi-file search
-- Cross-cutting analysis
 
 Returns: File paths, minimal snippets, structured summaries.
 
@@ -184,28 +161,20 @@ Returns: File paths, minimal snippets, structured summaries.
 Use for: External web lookup.
 - Documentation and guides
 - API references
-- Current status or versions
-- How-to examples
-- Other web-related ops/reads
+- Other web-related read ops
 
 Returns: Summaries, code examples, sources.
 
 ### @general
 
-Use for: Tasks that can be completed with only the delegation prompt.
-
-Capabilities:
+Use for: Bounded self-contained tasks.
 - File editing, Bash
 - Multi-step workflows combining read + write
 - Parallel execution of independent tasks
 
-Do NOT use for:
-- Repo exploration → use @explore
-- Web lookup → use @web-ops
+Do NOT use: codebase exploration (@explore), web lookup (@web-ops)
 
-The Context Test:
-- Needs reasoning from earlier conversation?
-- Needs context we've built up?
+Context Test: Needs session context? → Main agent. Self-contained? → @general.
 
 If task needs session context → main agent
 If task is self-contained → @general
