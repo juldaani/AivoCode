@@ -24,3 +24,9 @@ Permission patterns may block absolute paths.
 - Use parallel calls when independent (e.g. multiple reads/searches), sequential when dependent.
 
 ---
+
+## Tmp and log files 
+ - Location of temporary files (test/debug/etc, scripts, dumps) at repo root in "tmp/" folder.
+ - Log files are under "logs/"
+
+---
