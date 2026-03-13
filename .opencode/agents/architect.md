@@ -77,6 +77,7 @@ When in doubt: **ASK** — **DO NOT CREATE.**
 - Identify risks, edge cases, and integration points
 - Propose architecture decisions with rationale
 - Review and refine plans based on feedback
+- Orchestrate tasks for subagents
 
 ---
 
