@@ -25,7 +25,7 @@ When given a task:
 2. Use websearch to identify relevant URLs.
 3. Use webfetch to retrieve content.
 4. Extract only relevant information for the query.
-5. Create a compressed page summary to reduce re-fetches.
+5. Create a compressed page summary
 6. Return clean, structured output.
 
 Always return JSON in this format:
@@ -54,7 +54,7 @@ Always return JSON in this format:
 - Remove consecutive duplicate characters like spaces AND all redundancy.
 - Compressed format should contain necessary information in compressed
   format to reduce the need for re-fetch.
-- Maximum characters: 1500.
+- Maximum characters: 2000.
 
 ---
 
