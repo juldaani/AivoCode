@@ -89,7 +89,7 @@
     }
   },
 
-  "instructions": ["aivocode/RULES.md", "aivocode/SUBAGENT_WORKFLOW.md"],
+  "instructions": ["aivocode/RULES.md", "aivocode/SUBAGENT_WORKFLOW.md", "aivocode/TONE.md"],
 
   "provider": {
     "openrouter": {
@@ -110,13 +110,26 @@
     "plan": {
       "mode": "primary",
       "model": "opencode/glm-5",
+      "disable": true
     },
     "build": {
       "mode": "primary",
       "model": "opencode/glm-5",
+      "disable": true
     },
+
+    // Custom agents
     "web-ops": {
       "model": "opencode/minimax-m2.5"
+    },
+    "explore": {
+      "model": "opencode/minimax-m2.5"
+    },
+    "architect": {
+      "model": "opencode/glm-5"
+    },
+    "coder": {
+      "model": "opencode/gpt-5.2-codex",
     },
   },
   "default_agent": "architect",
