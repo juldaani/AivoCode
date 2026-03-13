@@ -26,7 +26,7 @@ Permission patterns may block absolute paths.
 ---
 
 ## Tmp and log files 
- - Location of temporary files (test/debug/etc, scripts, dumps) at repo root in "tmp/" folder.
+ - Location of temporary files (tests/debug/scripts/dumps/etc) at repo root in "tmp/" folder.
  - Log files are under "logs/"
 
 ---
