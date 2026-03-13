@@ -1,5 +1,7 @@
 # Subagent Workflow
 
+---
+
 ## Core Principle
 
 Main agent's context is high-value asset for reasoning, not storage.
@@ -21,6 +23,8 @@ This preserves context for what matters: thinking and deciding.
 
 Subagents are weaker models. They cannot see the big picture. 
 Think of them like functions: discrete inputs, bounded scope.
+
+---
 
 ## WORKFLOW LOOP
 
@@ -50,6 +54,8 @@ Think of them like functions: discrete inputs, bounded scope.
    - Gap remains? Loop to 2.
    - Goal complete? End.
 
+---
+
 ## Delegation Rules
 
 Default: Delegate.
@@ -78,6 +84,8 @@ If the work produces raw information rather than reasoning value, delegate.
 
 If uncertain, delegate.
 
+---
+
 ## Self-Correcting Triggers
 
 Triggers catch you mid-execution when falling into anti-patterns.
@@ -100,6 +108,8 @@ output-producing operations.
 - After 2 tool executions in one investigation, exceeding ~200 lines:
    STOP. Delegate remaining work.
 
+---
+
 ## Anti-Patterns
 
 Named bad behaviors. DO NOT engage.
@@ -120,6 +130,8 @@ Sending any "coding task" to @general without checking if bounded.
 ### Premature Delegation
 Delegating before you know the goal, scope, or approach.
 Plan first. Delegate when the task is clear and bounded.
+
+---
 
 ## Example Scenarios
 
@@ -142,6 +154,8 @@ Goal: Check return type of `process()` in known file.
 Goal: Implement approved refactoring.
 - Delegate to @general: "Apply changes to these files. Return: modified files, issues."
 - Receive results. Goal complete.
+
+---
 
 ## Subagent Quick Reference
 
@@ -183,3 +197,5 @@ Note: @general is capable of complex work. The constraint is context isolation,
 not task complexity. Provide all needed context in the delegation.
 
 Returns: Files touched, actions taken, blockers.
+
+---

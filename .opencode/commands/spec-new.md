@@ -22,6 +22,8 @@ You are starting a new spec-driven development workflow.
    - Generate `discovery.md` directly from the current conversation context
    - Write to: `specs/<feature-name>/discovery.md`
 
+---
+
 ## discovery.md Requirements
 
 The document must be self-contained: a fresh agent reading only `discovery.md` 
@@ -37,7 +39,11 @@ Guidelines:
 - DO NOT fake understanding or fill in blanks that are not grounded in context
 - Do not implement code changes
 
+---
+
 ## Report Results
 
 - If generated: "Created `specs/<feature-name>/discovery.md`"
 - If skipped: "Created `specs/<feature-name>/`"
+
+---

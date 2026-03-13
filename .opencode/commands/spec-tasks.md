@@ -111,6 +111,8 @@ Checkpoint: <short description of what this group enables>
  - path/to/file.py (delete)
 ```
 
+---
+
 ## Group Schema
 
 Each group must follow this form:
@@ -127,6 +129,8 @@ Tasks:
   - `path/to/file.py (edit: description)`
   - `path/to/file.py (delete)`
 
+---
+
 ## Group Design Rules
 
 - Number tasks as `<group>.<task>` (e.g., 1.1, 1.2, 2.1)
@@ -140,6 +144,8 @@ Tasks:
 - Name groups by their deliverable (e.g., "Core Module", "API Integration", "Tests")
 - Tests are usually the final group
 - Avoid groups that are too small (1 task) or too large (10+ tasks)
+
+---
 
 ## Important
 
@@ -184,3 +190,5 @@ After generating tasks and running validation, end your response with:
   "Generated implementation checklist in chat (no files created)."
 
 Then include the validation summary (or "Validation: No issues found").
+
+---
