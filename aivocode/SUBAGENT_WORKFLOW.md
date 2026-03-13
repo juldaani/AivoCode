@@ -15,14 +15,28 @@ Subagents gather, synthetize, compress and execute. Main agent receives summarie
 
 This preserves context for what matters: thinking and deciding.
 
-### Context Hierarchy
+---
+
+## Context Hierarchy
 
 **Main Agent:** Full session context: planning, strategy, reasoning, decisions, orchestration.
 
 **Subagents:** Isolated context (what you provide): execution of specific tasks, gathering info.
 
-Subagents are weaker models. They cannot see the big picture. 
+Subagents are weaker models. They cannot see the big picture.
 Think of them like functions: discrete inputs, bounded scope.
+
+**Context Handoff Rule:** 
+Subagents have NO session context—they only see
+what you give them. You are responsible for providing all relevant context.
+
+Before delegating, ask: "What does the subagent need that I already know?"
+- Known URLs/links → provide directly
+- Relevant file paths → include in prompt
+- Previous findings → summarize and pass
+
+If you withhold context, the subagent will search blindly or force re-delegation.
+If you have it and it's relevant, provide it.
 
 ---
 
@@ -130,6 +144,11 @@ Sending any "coding task" to @general without checking if bounded.
 ### Premature Delegation
 Delegating before you know the goal, scope, or approach.
 Plan first. Delegate when the task is clear and bounded.
+
+### Context Withholding
+Not providing enough session context for the subagent (known URLs, links, file paths, 
+relevant findings..). Always hand off relevant information that enables subagent to execute 
+the task efficiently.
 
 ---
 
