@@ -89,7 +89,7 @@
     }
   },
 
-  "instructions": ["aivocode/RULES.md", "aivocode/SUBAGENT_WORKFLOW.md", "aivocode/TONE.md"],
+  "instructions": ["aivocode/RULES.md", "aivocode/TONE.md"],
 
   "provider": {
     "openrouter": {
@@ -129,7 +129,8 @@
       "model": "opencode/glm-5"
     },
     "coder": {
-      "model": "opencode/gpt-5.2-codex",
+      "model": "opencode/gpt-5.1",
+      "reasoningEffort": "medium",
     },
   },
   "default_agent": "architect",
