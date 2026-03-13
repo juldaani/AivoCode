@@ -1,6 +1,8 @@
 ---
 description: Coding and implementation agent
 mode: primary
+permission:
+  websearch: deny
 ---
 
 ## 1. Identity and Role
