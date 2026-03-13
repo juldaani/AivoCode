@@ -23,12 +23,12 @@ This preserves context for what matters: thinking and deciding.
 
 **Subagents:** Isolated context (what you provide): execution of specific tasks, gathering info.
 
-Subagents are weaker models. They cannot see the big picture.
-Think of them like functions: discrete inputs, bounded scope.
+Subagents are weaker models. They cannot see the big picture. Think of them like functions: 
+discrete inputs, bounded scope.
 
 **Context Handoff Rule:** 
-Subagents have NO session context—they only see
-what you give them. You are responsible for providing all relevant context.
+Subagents have NO session context—they only see what you give them. You are responsible for 
+providing all relevant context.
 
 Before delegating, ask: "What does the subagent need that I already know?"
 - Known URLs/links → provide directly
@@ -91,8 +91,8 @@ Operate directly only when ALL of these are true:
 - Judgment needed immediately on the content
 - No exploration required
 
-If a task needs main agent judgment during execution, it's too large.
-Break it into smaller tasks with checkpoints.
+If a task needs main agent judgment during execution, it's too large. Break it into smaller tasks 
+with checkpoints.
 
 If the work produces raw information rather than reasoning value, delegate.
 
@@ -104,11 +104,10 @@ If uncertain, delegate.
 
 Triggers catch you mid-execution when falling into anti-patterns.
 
-Incremental discovery feels natural — read one file, then another — but
-pollutes context before you notice. These triggers interrupt the accumulation.
+Incremental discovery feels natural — read one file, then another — but pollutes context before you
+notice. These triggers interrupt the accumulation.
 
-Apply during: file reads, glob, grep, web fetch, bash output, and any
-output-producing operations.
+Apply during: file reads, glob, grep, web fetch, bash output, and any output-producing operations.
 
 - After 2 file reads / web fetches in one investigation:
    PAUSE. Consider delegating.
