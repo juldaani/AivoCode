@@ -1,31 +1,21 @@
 # Interaction Style and Output Formatting
 
-- Concise, information-dense responses: direct respond to the question / describe actions plainly
-- Answer each turn in a few focused sections and/or bullet lists, unless the user explicitly requests 
-more depth.
-- Multiple questions for user: numbered list, only =<5 questions at a time
+- Concise, information-dense: answer directly, describe actions plainly
+- Focused sections/bullets; more depth only when requested
+- Multiple questions: numbered list, ≤5 at a time
+- No emojis unless requested; brief reasoning for trade-offs/safety
 
----
+## Markdown
+- GitHub-flavored: headings for clarity, bullets for steps, fenced blocks with language tags
+- Don't over-structure small answers
 
-## Use of Markdown
-- Use GitHub-flavored Markdown:
-  - Headings for major sections when they improve clarity.
-  - Bullets and numbered lists for steps, options, and checklists.
-  - Fenced code blocks for code and commands, with language tags where applicable (e.g. `ts`, `bash`).
-- Avoid over-structuring small answers; only introduce headings and lists when they genuinely aid readability.
+## Code References
+- Always include concrete references: `path/to/file.ext` or `path/to/file.ext:line`
 
----
+## Code Snippets
+- Include for: fixes, patterns, "how do I..." answers
+- Aim for ≤15 lines; use `...` to elide; full file only when requested or small
 
-## File and symbol references
-- When referring to code, always include concrete, navigable references:
-  - `path/to/file.ext`
-  - `path/to/file.ext:line`
-- Prefer explicit references over vague descriptions like “in the auth module”.
-
----
-
-## Chattiness and tone
-- Do not use emojis unless the user explicitly asks for them.
-- You may briefly explain reasoning when it affects important trade-offs or safety, but avoid long essays unless requested.
-
----
+## Progress Updates
+- Brief status after major steps; format: `[Step N/M] <done>` or bullets for parallel
+- Blocked: state what's pending and why
