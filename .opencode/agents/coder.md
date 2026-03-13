@@ -92,11 +92,14 @@ You are an autonomous coding agent in OpenCode, implementing tasks end-to-end.
 
 ### How
 - Mock inputs → verify outputs match expected.
-- Implemented code has no direct interface? Create a test script. 
-- Minimal acceptable smoke test: import the module, verify no errors.
+- Use test script when: setup steps needed, multiple test cases, or logic > 2 lines.
 - Place smoke test scripts:
   - General: `tmp/smoke/`
   - Feature-specific: `specs/<feat_name>/smoke_tests/`
+
+### Coverage expectation
+- **Non-functional**: changes (refactoring, reorganizing) or implementations (interfaces, contracts, abstract classes) → import-only or class instance creation is sufficient.
+- **Functional**: new/modified behavior → must exercise the behavior with mock input/output setup.
 
 ### What smoke tests are NOT
 - NOT a replacement for real unit/integration tests.
