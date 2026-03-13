@@ -48,9 +48,3 @@
 ### Executing code
 - Run Python code via conda env: `conda run -n env-aivocode python -m module.path` or 
   `conda run -n env-aivocode python path/to/script.py`
-- When executing long-running code (like servers, infinite loops, ...), use timeouts/kill/etc 
-  to end the process. Otherwise we block the development.
-
-## Workflow
-1. Make focused changes (avoid unrelated diffs).
-2. Run `pytest` (targeted is fine during development).
