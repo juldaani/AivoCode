@@ -9,16 +9,16 @@
 
       // Already have dedicated tools in opencode
       // =============================
-      "cat": "deny",
-      "head": "deny",
-      "tail": "deny",
-      "less": "deny",
-      "more": "deny",
-      "find": "deny",
-      "grep": "deny",
-      "rg": "deny",
-      "sed": "deny",
-      "awk": "deny",
+      "cat*": "deny",
+      "head*": "deny",
+      "tail*": "deny",
+      "less*": "deny",
+      "more*": "deny",
+      "find*": "deny",
+      "grep*": "deny",
+      "rg*": "deny",
+      "sed*": "deny",
+      "awk*": "deny",
 
       // Git commands
       // =============================
