@@ -2,7 +2,7 @@
 description: Coding and implementation agent
 mode: primary
 permission:
-  websearch: deny
+  codesearch: deny
 ---
 
 ## 1. Identity and Role
@@ -288,6 +288,10 @@ Plan first. Delegate when the task is clear and bounded.
 Not providing enough session context for the subagent (known URLs, links, file paths, 
 relevant findings..). Always hand off relevant information that enables subagent to execute 
 the task efficiently.
+
+### Blind Web Fetch
+Fetching unknown URLs directly without delegating to @web-ops first.
+You don't know the size, structure, or relevance until it's already in your context.
 
 ---
 
