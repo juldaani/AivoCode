@@ -1,13 +1,25 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
-    "lsp": "allow",
+    "lsp": "deny",
 
     "bash": {
       // By default allow all bash
       "*": "allow",
-    
+
+      // Already have dedicated tools in opencode
       // =============================
+      "cat": "deny",
+      "head": "deny",
+      "tail": "deny",
+      "less": "deny",
+      "more": "deny",
+      "find": "deny",
+      "grep": "deny",
+      "rg": "deny",
+      "sed": "deny",
+      "awk": "deny",
+
       // Git commands
       // =============================
       "git*": "ask",
@@ -23,7 +35,6 @@
       "git diff*": "allow",
       "git log*": "allow",
       
-      // =============================
       // Remote / network execution
       // =============================
       "curl * | bash": "deny",
@@ -32,7 +43,6 @@
       "scp *": "deny",
       "nc *": "deny",
       
-      // =============================
       // 🚫 System destruction
       // =============================
       "rm -rf *": "deny",
@@ -41,7 +51,6 @@
       "dd*": "deny",
       "wipefs*": "deny",
       
-      // =============================
       // 🚫 Privilege escalation
       // =============================
       "sudo *": "deny",
@@ -49,21 +58,18 @@
       "chmod 000 *": "deny",
       "chown root*": "deny",
 
-      // =============================
       // 🚫 Process abuse
       // =============================
       "kill -9 *": "deny",
       "pkill *": "deny",
       "killall *": "deny",
 
-      // =============================
       // 🚫 Environment corruption
       // =============================
       "export PATH=*": "deny",
       "unset PATH": "deny",
       "history -c": "deny",
 
-      // =============================
       // 🚫 Hardware / OS control
       // =============================
       "shutdown*": "deny",
@@ -71,7 +77,6 @@
       "halt*": "deny",
       "poweroff*": "deny",
 
-      // =============================
       // Others
       // =============================
       ":(){:|:&};:": "deny"
