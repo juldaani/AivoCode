@@ -15,6 +15,13 @@ import { exportAndFilterSession } from "./export-session"
 export default tool({
   description: `Create a git commit with session export and tracking.
 
+Commit message format (hard-coded):
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+
 Automatically includes:
 - Session-ID trailer (always added)
 - Session export file (aivocode/sessions/<id>/<id>.json) auto-staged
@@ -26,12 +33,33 @@ Optional trailers:
   Validation: specs/<feature-name>/ directory must exist and contain files
 
 Args:
-- message: Commit description (what and why)
+- type: Commit type (feat|fix|refactor|docs|test|chore|style|perf)
+- scope: Optional scope (e.g., 'auth', 'api')
+- subject: Commit subject (imperative, no period)
+- body: Optional body explaining what and why
+- footer: Optional footer (e.g., 'Closes #123')
 - files: Files to commit (required, session export auto-added)
 - trailers: Additional custom trailers (optional)`,
 
   args: {
-    message: tool.schema.string().describe("Commit message description"),
+    type: tool.schema
+      .enum(["feat", "fix", "refactor", "docs", "test", "chore", "style", "perf"])
+      .describe("Commit type"),
+    scope: tool.schema
+      .string()
+      .optional()
+      .describe("Optional scope (e.g., 'auth', 'api')"),
+    subject: tool.schema
+      .string()
+      .describe("Commit subject (imperative, no period)"),
+    body: tool.schema
+      .string()
+      .optional()
+      .describe("Optional body explaining what and why"),
+    footer: tool.schema
+      .string()
+      .optional()
+      .describe("Optional footer (e.g., 'Closes #123')"),
     files: tool.schema
       .array(tool.schema.string())
       .describe("Files to stage and commit (required)"),
@@ -48,6 +76,21 @@ Args:
     // Validate required args
     if (!args.files || args.files.length === 0) {
       throw new Error("files array is required and cannot be empty")
+    }
+
+    // Build commit message from structured parts
+    let message = `${args.type}`
+    if (args.scope) {
+      message += `(${args.scope})`
+    }
+    message += `: ${args.subject}`
+
+    if (args.body) {
+      message += `\n\n${args.body}`
+    }
+
+    if (args.footer) {
+      message += `\n\n${args.footer}`
     }
 
     // Validate Spec trailer if provided (case-insensitive: Spec/spec)
@@ -171,7 +214,7 @@ Args:
     try {
       await $`sh -c ${`git add ${quotedFiles}`}`
 
-      const commitCmd = `git commit --author="opencode/${agent} <noreply@opencode.ai>" --message "${args.message}" ${trailerArgs}`
+      const commitCmd = `git commit --author="opencode/${agent} <noreply@opencode.ai>" --message "${message}" ${trailerArgs}`
       const result = await $`sh -c ${commitCmd}`.text()
 
       return `Committed successfully: ${result.trim()}\nSession-ID: ${sessionID}`
