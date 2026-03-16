@@ -2,46 +2,42 @@ import path from "path"
 import { tool } from "@opencode-ai/plugin"
 import { $ } from "bun"
 
-export default tool({
-  description: "Export current session to filtered JSON file",
-  args: {
-    outputPath: tool.schema.string().describe("Path to save session JSON"),
-    deleteRaw: tool.schema
-      .boolean()
-      .default(true)
-      .describe("Delete raw export file after filtering"),
-  },
-  async execute(args, context) {
-    const { sessionID, worktree } = context
-    const baseDir = worktree ?? process.cwd()
-    const outputPath = path.isAbsolute(args.outputPath)
-      ? args.outputPath
-      : path.join(baseDir, args.outputPath)
-    const rawPath = `${outputPath}.raw.json`
+/**
+ * Export and filter a session to JSON file.
+ *
+ * This function is shared between export-session tool and git-commit tool
+ * to ensure identical session export behavior.
+ *
+ * @param sessionID - The session ID to export
+ * @param outputPath - Path where filtered JSON should be saved
+ * @param options - Options for export behavior
+ * @returns The path to the exported file
+ */
+export async function exportAndFilterSession(
+  sessionID: string,
+  outputPath: string,
+  options?: { deleteRaw?: boolean }
+): Promise<string> {
+  const rawPath = `${outputPath}.raw.json`
 
-    await $`sh -c ${`opencode export ${sessionID} > ${rawPath}`}`
+  await $`sh -c ${`opencode export ${sessionID} > ${rawPath}`}`
 
-    const rawJson = JSON.parse(await Bun.file(rawPath).text())
-    const filtered = filterSession(rawJson)
-    await Bun.write(outputPath, JSON.stringify(filtered, null, 2))
-    if (args.deleteRaw) {
-      await Bun.file(rawPath).unlink()
-    }
+  const rawJson = JSON.parse(await Bun.file(rawPath).text())
+  const filtered = filterSession(rawJson)
+  await Bun.write(outputPath, JSON.stringify(filtered, null, 2))
 
-    return `Exported session ${sessionID} to ${outputPath}`
-  },
-})
+  if (options?.deleteRaw !== false) {
+    await Bun.file(rawPath).unlink()
+  }
 
-type ToolInput = Record<string, unknown> | string | number | boolean | null
-
-const SKIP_OUTPUT_TOOLS = ["webfetch"]
-const DEFAULT_OUTPUT_MAX_CHARS = 10000
-const OUTPUT_MAX_CHARS: Record<string, number> = {
-  bash: 1000,
-  grep: 4000,
+  return outputPath
 }
 
-type FilteredMessage = {
+// --- Shared types and filtering logic ---
+
+export type ToolInput = Record<string, unknown> | string | number | boolean | null
+
+export type FilteredMessage = {
   role?: string
   content?: string
   tools_used?: Array<{
@@ -53,7 +49,18 @@ type FilteredMessage = {
   }>
 }
 
-function filterSession(raw: unknown): { sessionID?: string; messages: FilteredMessage[] } {
+const SKIP_OUTPUT_TOOLS = ["webfetch"]
+const DEFAULT_OUTPUT_MAX_CHARS = 10000
+const OUTPUT_MAX_CHARS: Record<string, number> = {
+  bash: 1000,
+  grep: 4000,
+}
+
+/**
+ * Filter raw session export to extract relevant information.
+ * Keeps: sessionID, message roles, text content, tool calls with truncated output.
+ */
+export function filterSession(raw: unknown): { sessionID?: string; messages: FilteredMessage[] } {
   if (!raw || typeof raw !== "object") {
     return { messages: [] }
   }
@@ -160,3 +167,27 @@ function normalizeToolPart(part: Record<string, unknown>): {
   const sessionId = typeof metadata.sessionId === "string" ? metadata.sessionId : undefined
   return { tool, input, output, status, sessionId }
 }
+
+// --- Tool definition ---
+
+export default tool({
+  description: "Export current session to filtered JSON file",
+  args: {
+    outputPath: tool.schema.string().describe("Path to save session JSON"),
+    deleteRaw: tool.schema
+      .boolean()
+      .default(true)
+      .describe("Delete raw export file after filtering"),
+  },
+  async execute(args, context) {
+    const { sessionID, worktree } = context
+    const baseDir = worktree ?? process.cwd()
+    const outputPath = path.isAbsolute(args.outputPath)
+      ? args.outputPath
+      : path.join(baseDir, args.outputPath)
+
+    await exportAndFilterSession(sessionID, outputPath, { deleteRaw: args.deleteRaw })
+
+    return `Exported session ${sessionID} to ${outputPath}`
+  },
+})
