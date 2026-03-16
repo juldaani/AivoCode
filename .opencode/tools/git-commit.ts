@@ -10,7 +10,7 @@ import { exportAndFilterSession } from "./export-session"
  * - Automatic Session-ID trailer for tracking
  * - Session export file (aivocode/sessions/<id>/<id>.json) auto-staged
  * - Custom author (opencode/<agent>) for filtering commits
- * - Optional custom trailers (e.g., spec: feature-name)
+ * - Optional custom trailers (e.g., Spec: feature-name)
  */
 export default tool({
   description: `Create a git commit with session export and tracking.
@@ -21,8 +21,8 @@ Automatically includes:
 - Author: opencode/<agent> <noreply@opencode.ai>
 
 Optional trailers:
-- spec: Include when session reads/generates spec docs.
-  Format: "spec: <feature-name>" (e.g., "spec: lsp-client")
+- Spec: ONLY include when session reads/generates spec docs under specs/<feature-name>/.
+  Format: "Spec: <feature-name>" (e.g., "Spec: lsp-client")
   Validation: specs/<feature-name>/ directory must exist and contain files
 
 Args:
@@ -38,7 +38,7 @@ Args:
     trailers: tool.schema
       .record(tool.schema.string(), tool.schema.string())
       .optional()
-      .describe("Custom trailers (e.g., { spec: 'lsp-client' })"),
+      .describe("Custom trailers (e.g., { Spec: 'lsp-client' })"),
   },
 
   async execute(args, context) {
@@ -50,9 +50,11 @@ Args:
       throw new Error("files array is required and cannot be empty")
     }
 
-    // Validate spec trailer if provided
-    if (args.trailers?.spec) {
-      const specValue = args.trailers.spec
+    // Validate Spec trailer if provided (case-insensitive: Spec/spec)
+    const specValue =
+      args.trailers?.Spec ??
+      (args.trailers as Record<string, string> | undefined)?.spec
+    if (specValue) {
       const specDir = path.join(baseDir, "specs", specValue)
       
       // Check directory exists using Bun.file().stat()
@@ -96,6 +98,29 @@ Args:
     const exportPath = path.join(sessionDir, `${sessionID}.json`)
     await exportAndFilterSession(sessionID, exportPath)
 
+    // 2b. If a Spec trailer is present, ensure this session actually
+    // touched specs/<specValue>/ via read/write/edit/patch tools.
+    if (specValue) {
+      const rawSession = JSON.parse(await Bun.file(exportPath).text()) as {
+        sessionID?: string
+        messages?: Array<{
+          tools_used?: Array<{
+            tool?: string
+            input?: unknown
+            output?: unknown
+          }>
+        }>
+      }
+
+      if (!sessionTouchedSpec(rawSession, specValue, worktree)) {
+        throw new Error(
+          `Spec trailer "Spec: ${specValue}" used but this session never ` +
+            `touched specs/${specValue}/ via read/write/edit/apply_patch tools. ` +
+            `Only include Spec when the session reads or generates docs there.`,
+        )
+      }
+    }
+
     // 3. Build trailer arguments (Session-ID always included)
     const trailerEntries: [string, string][] = [["Session-ID", sessionID]]
     if (args.trailers) {
@@ -127,3 +152,76 @@ Args:
     }
   },
 })
+
+// --- Spec usage detection helpers ---
+
+function stringTouchesSpec(
+  value: string,
+  specValue: string,
+  worktree?: string,
+): boolean {
+  const relative = `specs/${specValue}/`
+  if (value.includes(relative)) {
+    return true
+  }
+
+  if (worktree) {
+    const absolute = path.join(worktree, "specs", specValue) + "/"
+    if (value.includes(absolute)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function sessionTouchedSpec(
+  session: {
+    messages?: Array<{
+      tools_used?: Array<{
+        tool?: string
+        input?: unknown
+        output?: unknown
+      }>
+    }>
+  },
+  specValue: string,
+  worktree?: string,
+): boolean {
+  const messages = session.messages ?? []
+
+  return messages.some((msg) => {
+    const tools = msg.tools_used ?? []
+    return tools.some((t) => {
+      if (!t.tool) return false
+
+      // read/write/edit: check input.filePath (or input string) for spec path
+      if (t.tool === "read" || t.tool === "write" || t.tool === "edit") {
+        const input = t.input as unknown
+        let filePath: unknown
+
+        if (typeof input === "string") {
+          filePath = input
+        } else if (input && typeof input === "object") {
+          filePath = (input as Record<string, unknown>).filePath
+        }
+
+        if (typeof filePath === "string") {
+          return stringTouchesSpec(filePath, specValue, worktree)
+        }
+        return false
+      }
+
+      // apply_patch: check textual output for specs/<feature>/ paths
+      if (t.tool === "apply_patch") {
+        const out = t.output
+        if (typeof out === "string") {
+          return stringTouchesSpec(out, specValue, worktree)
+        }
+        return false
+      }
+
+      return false
+    })
+  })
+}
