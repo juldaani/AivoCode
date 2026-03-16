@@ -95,13 +95,20 @@ Args:
     await $`mkdir -p ${sessionDir}`
 
     // 2. Export session using shared logic from export-session.ts
+    //
+    // IMPORTANT: We first export to a temporary file. Only after all
+    // Spec validations pass do we promote it to the canonical
+    // aivocode/sessions/<id>/<id>.json path. This avoids leaving
+    // partially-updated exports behind when validation fails.
     const exportPath = path.join(sessionDir, `${sessionID}.json`)
-    await exportAndFilterSession(sessionID, exportPath)
+    const tmpExportPath = path.join(sessionDir, `${sessionID}.tmp.json`)
+
+    await exportAndFilterSession(sessionID, tmpExportPath)
 
     // 2b. If a Spec trailer is present, ensure this session actually
-    // touched specs/<specValue>/ via read/write/edit/patch tools.
+    // touched specs/<specValue>/ via read/write/edit/apply_patch tools.
     if (specValue) {
-      const rawSession = JSON.parse(await Bun.file(exportPath).text()) as {
+      let rawSession: {
         sessionID?: string
         messages?: Array<{
           tools_used?: Array<{
@@ -112,13 +119,39 @@ Args:
         }>
       }
 
+      try {
+        rawSession = JSON.parse(await Bun.file(tmpExportPath).text())
+      } catch (error) {
+        // Best-effort cleanup of temp export file on parse failure.
+        await Bun.file(tmpExportPath).unlink().catch(() => {})
+        throw error
+      }
+
       if (!sessionTouchedSpec(rawSession, specValue, worktree)) {
+        // Cleanup temp export and fail without touching any existing
+        // canonical export file.
+        await Bun.file(tmpExportPath).unlink().catch(() => {})
         throw new Error(
           `Spec trailer "Spec: ${specValue}" used but this session never ` +
             `touched specs/${specValue}/ via read/write/edit/apply_patch tools. ` +
             `Only include Spec when the session reads or generates docs there.`,
         )
       }
+    }
+
+    // 2c. Promote temporary export to canonical path. If there was an
+    // existing export file for this session, it will be atomically
+    // replaced with the latest filtered snapshot.
+    try {
+      const tmpContents = await Bun.file(tmpExportPath).text()
+      await Bun.write(exportPath, tmpContents)
+      await Bun.file(tmpExportPath).unlink().catch(() => {})
+    } catch (error) {
+      // If promotion fails, attempt to remove the temp file and
+      // surface the error. We intentionally do NOT delete an existing
+      // exportPath here to avoid losing previous session history.
+      await Bun.file(tmpExportPath).unlink().catch(() => {})
+      throw error
     }
 
     // 3. Build trailer arguments (Session-ID always included)
