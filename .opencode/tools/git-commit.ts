@@ -23,6 +23,7 @@ Automatically includes:
 Optional trailers:
 - spec: Include when session reads/generates spec docs.
   Format: "spec: <feature-name>" (e.g., "spec: lsp-client")
+  Validation: specs/<feature-name>/ directory must exist and contain files
 
 Args:
 - message: Commit description (what and why)
@@ -47,6 +48,44 @@ Args:
     // Validate required args
     if (!args.files || args.files.length === 0) {
       throw new Error("files array is required and cannot be empty")
+    }
+
+    // Validate spec trailer if provided
+    if (args.trailers?.spec) {
+      const specValue = args.trailers.spec
+      const specDir = path.join(baseDir, "specs", specValue)
+      
+      // Check directory exists using Bun.file().stat()
+      try {
+        const dirStat = await Bun.file(specDir).stat()
+        if (!dirStat.isDirectory()) {
+          throw new Error(`specs/${specValue} exists but is not a directory`)
+        }
+      } catch (error) {
+        throw new Error(
+          `specs/${specValue}/ directory does not exist. ` +
+          `Cannot use spec: "${specValue}" trailer.`
+        )
+      }
+      
+      // Check directory is not empty using shell
+      try {
+        const files = await $`ls -A ${specDir}`.text()
+        if (!files.trim()) {
+          throw new Error(
+            `specs/${specValue}/ directory exists but is empty. ` +
+            `Add spec files before committing with spec trailer.`
+          )
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("is empty")) {
+          throw error
+        }
+        throw new Error(
+          `Could not verify files in specs/${specValue}/ directory. ` +
+          `Ensure directory contains spec files.`
+        )
+      }
     }
 
     // 1. Create session directory
