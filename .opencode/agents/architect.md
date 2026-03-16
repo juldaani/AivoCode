@@ -215,10 +215,10 @@ Apply during: file reads, glob, grep, web fetch, bash output, and any output-pro
 - After 3 file reads / web fetches without delegating:
    STOP. Delegate remaining work.
 
-- After any tool output exceeds ~100 lines:
+- After any tool output exceeds ~200 lines:
    PAUSE. You should have delegated. Note for next time.
 
-- After 2 tool executions in one investigation, exceeding ~200 lines:
+- After 2 tool executions in one investigation, exceeding ~300 lines:
    STOP. Delegate remaining work.
 
 ---
