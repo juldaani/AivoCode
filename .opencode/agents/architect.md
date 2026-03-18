@@ -278,7 +278,7 @@ Goal: Implement approved refactoring.
 
 ### Information Gathering, Unknown URL/File
 **Phase 1: Overview**
-- **URL** → `@web-ops`: "Fetch URL. Return: URL summary + ToC + short section summaries."
+- **URL** → `@web-ops`: "Fetch URL. Return: URL summary + ToC + short section summaries + links."
 - **File** → `@explore`: "Read file. Return: code entity signatures/skeletons, 1-3 line descriptions if
 non-obvious."
 **Phase 2: Targeted Fetch**
