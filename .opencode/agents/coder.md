@@ -193,7 +193,7 @@ If you have it and it's relevant, provide it.
    See Delegation Rules for criteria.
    
    - YES: Delegate to subagent.
-          Subagent: gathers, searches, filters.
+          Subagent: gathers, searches, filters, synthesizes.
           Returns: results.
           Go to 4.
    
@@ -226,7 +226,6 @@ Tasks suitable for delegation are:
 
 ### Operate Directly
 
-Operate directly only when ALL of these are true:
 - Target is precisely known (file + location)
 - Single file, small output
 - Judgment needed immediately on the content
