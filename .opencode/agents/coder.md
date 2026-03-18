@@ -290,8 +290,8 @@ Not providing enough session context for the subagent (known URLs, links, file p
 relevant findings..). Always hand off relevant information that enables subagent to execute 
 the task efficiently.
 
-### Blind Web Fetch
-Fetching unknown URLs directly without delegating to @web-ops first.
+### Blind Web Fetch / File Read
+Fetching unknown URLs or read files directly without delegating first.
 You don't know the size, structure, or relevance until it's already in your context.
 
 ---
@@ -317,6 +317,16 @@ Goal: Check return type of `process()` in known file.
 Goal: Implement approved refactoring.
 - Delegate to @general: "Apply changes to these files. Return: modified files, issues."
 - Receive results. Goal complete.
+
+### Information Gathering, Unknown URL/File
+**Phase 1: Overview**
+- **URL** → `@web-ops`: "Fetch URL. Return: URL summary + ToC + short section summaries."
+- **File** → `@explore`: "Read file. Return: code entity signatures/skeletons, 1-3 line descriptions if
+non-obvious."
+**Phase 2: Targeted Fetch**
+- Identify specific sections/code needed.
+- **URL** → `@web-ops`: "Fetch section(s) X, Y. Return: full content."
+- **File** → `@explore`: "Extract function X (lines A:B), class Y (lines C:D). Return: full code."
 
 ---
 
@@ -350,8 +360,6 @@ Use for: Bounded self-contained tasks.
 - Parallel execution of independent tasks
 
 Do NOT use: codebase exploration (@explore), web lookup (@web-ops)
-
-Context Test: Needs session context? → Main agent. Self-contained? → @general.
 
 If task needs session context → main agent
 If task is self-contained → @general
