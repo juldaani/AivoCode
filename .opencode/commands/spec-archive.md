@@ -5,7 +5,7 @@ agent: architect
 
 # Spec-Driven Development: Archive Feature
 
-Move completed feature specs to specs/archive/ with timestamp.
+Move completed feature specs to aivocode/specs/archive/ with timestamp.
 
 ## Argument Handling
 
@@ -13,8 +13,8 @@ Input argument: arg = `$ARGUMENTS`
 
 ### Case: No argument
 
-1. List features: `ls specs/` (exclude archive folder)
-2. If no features: abort with "No features found in specs/."
+1. List features: `ls aivocode/specs/` (exclude archive folder)
+2. If no features: abort with "No features found in aivocode/specs/."
 3. Ask: "Which feature to archive?"
 
 ### Case: arg provided
@@ -25,11 +25,11 @@ Treat as feature name, proceed to validation.
 
 ## Validation
 
-1. Check `specs/<feature>/` exists
-   - **Not found**: abort with "Folder specs/<feature>/ not found."
+1. Check `aivocode/specs/<feature>/` exists
+   - **Not found**: abort with "Folder aivocode/specs/<feature>/ not found."
 
 2. Check `tasks.md` exists
-   - **Not found**: abort with "No tasks.md found in specs/<feature>/."
+   - **Not found**: abort with "No tasks.md found in aivocode/specs/<feature>/."
 
 ---
 
@@ -45,9 +45,9 @@ Treat as feature name, proceed to validation.
 
 ## Archive
 
-1. Create `specs/archive/` if not exists
+1. Create `aivocode/specs/archive/` if not exists
 2. Generate timestamp: `YYYY-MM-DD`
-3. Move `specs/<feature>/` to `specs/archive/<timestamp>_<feature>/`
+3. Move `aivocode/specs/<feature>/` to `aivocode/specs/archive/<timestamp>_<feature>/`
 4. Preserve all files
 
 ---
@@ -55,7 +55,7 @@ Treat as feature name, proceed to validation.
 ## Confirmation
 
 ```
-Archived: specs/<feature>/ → specs/archive/<timestamp>_<feature>/
+Archived: aivocode/specs/<feature>/ → aivocode/specs/archive/<timestamp>_<feature>/
 
 Files moved:
 - tasks.md

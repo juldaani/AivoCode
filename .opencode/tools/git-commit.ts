@@ -28,9 +28,9 @@ Automatically includes:
 - Author: opencode/<agent> <noreply@opencode.ai>
 
 Optional trailers:
-- Spec: ONLY include when session reads/generates spec docs under specs/<feature-name>/.
+- Spec: ONLY include when session reads/generates spec docs under aivocode/specs/<feature-name>/.
   Format: "Spec: <feature-name>" (e.g., "Spec: lsp-client")
-  Validation: specs/<feature-name>/ directory must exist and contain files
+  Validation: aivocode/specs/<feature-name>/ directory must exist and contain files
 
 Args:
 - type: Commit type (feat|fix|refactor|docs|test|chore|style|perf)
@@ -104,11 +104,11 @@ Args:
       try {
         const dirStat = await Bun.file(specDir).stat()
         if (!dirStat.isDirectory()) {
-          throw new Error(`specs/${specValue} exists but is not a directory`)
+          throw new Error(`aivocode/specs/${specValue} exists but is not a directory`)
         }
       } catch (error) {
         throw new Error(
-          `specs/${specValue}/ directory does not exist. ` +
+          `aivocode/specs/${specValue}/ directory does not exist. ` +
           `Cannot use spec: "${specValue}" trailer.`
         )
       }
@@ -118,7 +118,7 @@ Args:
         const files = await $`ls -A ${specDir}`.text()
         if (!files.trim()) {
           throw new Error(
-            `specs/${specValue}/ directory exists but is empty. ` +
+            `aivocode/specs/${specValue}/ directory exists but is empty. ` +
             `Add spec files before committing with spec trailer.`
           )
         }
@@ -127,7 +127,7 @@ Args:
           throw error
         }
         throw new Error(
-          `Could not verify files in specs/${specValue}/ directory. ` +
+          `Could not verify files in aivocode/specs/${specValue}/ directory. ` +
           `Ensure directory contains spec files.`
         )
       }
@@ -149,7 +149,7 @@ Args:
     await exportAndFilterSession(sessionID, tmpExportPath)
 
     // 2b. If a Spec trailer is present, ensure this session actually
-    // touched specs/<specValue>/ via read/write/edit/apply_patch tools.
+    // touched aivocode/specs/<specValue>/ via read/write/edit/apply_patch tools.
     if (specValue) {
       let rawSession: {
         sessionID?: string
@@ -176,7 +176,7 @@ Args:
         await Bun.file(tmpExportPath).unlink().catch(() => {})
         throw new Error(
           `Spec trailer "Spec: ${specValue}" used but this session never ` +
-            `touched specs/${specValue}/ via read/write/edit/apply_patch tools. ` +
+            `touched aivocode/specs/${specValue}/ via read/write/edit/apply_patch tools. ` +
             `Only include Spec when the session reads or generates docs there.`,
         )
       }
@@ -236,7 +236,7 @@ function stringTouchesSpec(
   specValue: string,
   worktree?: string,
 ): boolean {
-  const relative = `specs/${specValue}/`
+  const relative = `aivocode/specs/${specValue}/`
   if (value.includes(relative)) {
     return true
   }
@@ -288,7 +288,7 @@ function sessionTouchedSpec(
         return false
       }
 
-      // apply_patch: check textual output for specs/<feature>/ paths
+      // apply_patch: check textual output for aivocode/specs/<feature>/ paths
       if (t.tool === "apply_patch") {
         const out = t.output
         if (typeof out === "string") {

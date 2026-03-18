@@ -12,11 +12,11 @@ You are generating specification files for a feature.
 Argument: `$ARGUMENTS`
 
 ### No argument
-1. List available features: `ls specs/`
+1. List available features: `ls aivocode/specs/`
 2. Ask: "Which feature to generate specs for, or create a new feature?"
 
 ### Feature name provided
-1. Check if `specs/<feature>/` folder exists
+1. Check if `aivocode/specs/<feature>/` folder exists
    - If not: Ask "Feature '<feature>' doesn't exist. Create it?"
      - If yes: Create folder, proceed with generation using current session context
      - If no: Abort
@@ -30,7 +30,7 @@ Argument: `$ARGUMENTS`
 
 ## Phase 1: Spec Shape Decision
 
-Read `specs/<feature>/discovery.md` if it exists **and** use current session context.
+Read `aivocode/specs/<feature>/discovery.md` if it exists **and** use current session context.
 Both provide input for spec generation — discovery.md as background, session as current/updated info.
 
 **Default to `spec.md` only.**
@@ -120,13 +120,13 @@ Wait for user confirmation.
 
 ## Phase 3: Generate Spec Files
 
-Read all relevant spec files from `specs/<feature>/` and generate/update the
+Read all relevant spec files from `aivocode/specs/<feature>/` and generate/update the
 approved specification documents.
 
 ### Files to Generate
 
 **Always create/update:**
-- `specs/<feature>/spec.md`
+- `aivocode/specs/<feature>/spec.md`
 
 **Only create/update extra files if the user explicitly approved them in Phase 1.**
 
@@ -171,7 +171,7 @@ Include key components, flows, and integration points as needed.
 
 ## Phase 4: Post-Generation Validation
 
-Verify that `specs/<feature>/spec.md` contains all required sections from the
+Verify that `aivocode/specs/<feature>/spec.md` contains all required sections from the
 default template (lines 135-159).
 
 ### Process
@@ -195,7 +195,7 @@ Output format:
 ```
 ## Post-Generation Validation
 
-Spec file: specs/<feature>/spec.md
+Spec file: aivocode/specs/<feature>/spec.md
 
 Sections added:
 - [section name]: [filled / placeholder with TBD]

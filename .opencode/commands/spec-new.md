@@ -12,15 +12,15 @@ You are starting a new spec-driven development workflow.
    - If `$ARGUMENTS` provided: use that as the feature name
    - If no arguments: ask the user for a feature name
      - Suggest a name based on the current conversation context
-   - Create folder: `specs/<feature-name>/`
-   - Use: `mkdir -p specs/<feature-name>/` (safe, no overwrite)
+   - Create folder: `aivocode/specs/<feature-name>/`
+   - Use: `mkdir -p aivocode/specs/<feature-name>/` (safe, no overwrite)
 
 2. **Ask about discovery.md**:
    - Ask the user if they want to generate `discovery.md` now
 
 3. **If user says yes**:
    - Generate `discovery.md` directly from the current conversation context
-   - Write to: `specs/<feature-name>/discovery.md`
+   - Write to: `aivocode/specs/<feature-name>/discovery.md`
 
 ---
 
@@ -43,7 +43,7 @@ Guidelines:
 
 ## Report Results
 
-- If generated: "Created `specs/<feature-name>/discovery.md`"
-- If skipped: "Created `specs/<feature-name>/`"
+- If generated: "Created `aivocode/specs/<feature-name>/discovery.md`"
+- If skipped: "Created `aivocode/specs/<feature-name>/`"
 
 ---

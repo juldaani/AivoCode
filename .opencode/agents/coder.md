@@ -98,7 +98,7 @@ You are an autonomous coding agent in OpenCode, implementing tasks end-to-end.
 - Use test script when: setup steps needed, multiple test cases, or logic > 2 lines.
 - Place smoke test scripts:
   - General: `tmp/smoke/`
-  - Feature-specific: `specs/<feat_name>/smoke_tests/`
+  - Feature-specific: `aivocode/specs/<feat_name>/smoke_tests/`
 
 ### Coverage expectation
 - **Non-functional**: changes (refactoring, reorganizing) or implementations (interfaces, contracts, abstract classes) → import-only or class instance creation is sufficient.

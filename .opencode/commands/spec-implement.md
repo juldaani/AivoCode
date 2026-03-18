@@ -14,8 +14,8 @@ Follow this exact logic:
 
 ### Case: No argument provided (arg is empty)
 
-1. List available features: `ls specs/`
-2. If no features exist: abort with "No features found in specs/. Run `/spec-new` first."
+1. List available features: `ls aivocode/specs/`
+2. If no features exist: abort with "No features found in aivocode/specs/. Run `/spec-new` first."
 3. Ask: "Which feature to implement?"
    - List all feature names found
 4. Wait for user response before proceeding.
@@ -30,11 +30,11 @@ Treat it as an existing feature name and execute the Validation flow.
 
 When user specifies an existing feature:
 
-1. Check if `specs/<feature>/` folder exists
-   - **Not found**: abort with "Folder specs/<feature>/ not found."
+1. Check if `aivocode/specs/<feature>/` folder exists
+   - **Not found**: abort with "Folder aivocode/specs/<feature>/ not found."
 
 2. Check for `tasks.md` inside
-   - **Not found**: abort with "No tasks.md found in specs/<feature>/. Run `/spec-tasks <feature>` first."
+   - **Not found**: abort with "No tasks.md found in aivocode/specs/<feature>/. Run `/spec-tasks <feature>` first."
 
 3. Proceed to Task Selection.
 
@@ -42,7 +42,7 @@ When user specifies an existing feature:
 
 ## Parse tasks.md
 
-1. Read `specs/<feature>/tasks.md`
+1. Read `aivocode/specs/<feature>/tasks.md`
 2. Parse:
     - group headings (`### Group`)
     - `Checkpoint`
@@ -50,7 +50,7 @@ When user specifies an existing feature:
 3. Display current status:
 
 ```
-## Tasks in specs/<feature>/tasks.md
+## Tasks in aivocode/specs/<feature>/tasks.md
 
 Status: X/Y completed
 
@@ -81,7 +81,7 @@ Ask: "Which tasks to implement?"
 
 ## Load Spec Context
 
-Read ALL spec files in `specs/<feature>/` ONCE before implementation:
+Read ALL spec files in `aivocode/specs/<feature>/` ONCE before implementation:
 
 1. `tasks.md` (required)
 2. `spec.md` (if exists)
@@ -166,6 +166,6 @@ Implementation complete.
 ## After You Finish
 
 End with:
-- "Implemented X tasks across Y groups. Updated `specs/<feature>/tasks.md`."
+- "Implemented X tasks across Y groups. Updated `aivocode/specs/<feature>/tasks.md`."
 - "Final validation: [code result] | Tests: [result]"
 - "All tasks complete." (if applicable)

@@ -17,7 +17,7 @@ Follow this exact logic:
 **Step 1: Check session context for obvious feature**
 
 Look for a single, unambiguous feature being worked on:
-- Files recently read/edited in `specs/<feature>/`
+- Files recently read/edited in `aivocode/specs/<feature>/`
 - Session mentions of a specific feature name
 - If exactly one feature is clearly the focus → use it directly (skip to Validation for Existing Feature)
 
@@ -51,11 +51,11 @@ Treat it as an existing feature name and execute the Validation for Existing Fea
 
 When user specifies an existing feature:
 
-1. Check if `specs/<feature>/` folder exists
-   - **Not found**: abort with "Folder specs/<feature>/ not found."
+1. Check if `aivocode/specs/<feature>/` folder exists
+   - **Not found**: abort with "Folder aivocode/specs/<feature>/ not found."
 
 2. Check for spec files inside (`discovery.md` or `spec*.md`)
-   - **No spec files**: abort with "No spec files found in specs/<feature>/. Add spec files first."
+   - **No spec files**: abort with "No spec files found in aivocode/specs/<feature>/. Add spec files first."
 
 3. Read spec files and generate `tasks.md`
 
@@ -64,7 +64,7 @@ When user specifies an existing feature:
 ## Create New Feature Flow
 
 1. Ask: "Feature name?"
-2. Create folder: `specs/<feature>/`
+2. Create folder: `aivocode/specs/<feature>/`
 3. Generate `tasks.md` from session content
 
 ---
@@ -72,7 +72,7 @@ When user specifies an existing feature:
 ## Current Session Flow
 
 - Generate tasks and output directly in chat
-- No files created in `specs/`
+- No files created in `aivocode/specs/`
 
 ---
 
@@ -156,7 +156,7 @@ Tasks:
 
 ## Post-Generation Validation (Required)
 
-After writing `tasks.md`, read all spec files in `specs/<feature>/` and check:
+After writing `tasks.md`, read all spec files in `aivocode/specs/<feature>/` and check:
 
 1. **Coverage**: Every acceptance criterion has at least one task
 2. **Gaps**: Requirements not reflected in tasks
@@ -184,7 +184,7 @@ If critical issues, ask user: update tasks.md, update specs, or proceed?
 After generating tasks and running validation, end your response with:
 
 - If you wrote a file:
-  "Generated implementation checklist and wrote it to `specs/<feature>/tasks.md`."
+  "Generated implementation checklist and wrote it to `aivocode/specs/<feature>/tasks.md`."
 
 - If you output tasks in chat only:
   "Generated implementation checklist in chat (no files created)."

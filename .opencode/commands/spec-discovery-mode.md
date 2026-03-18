@@ -6,7 +6,7 @@ agent: architect
 Enter discovery mode. Think deeply. Follow the conversation naturally.
 
 **Discovery mode is for thinking, not implementing.** You may read files and explore
-the codebase. You may create/edit spec artifacts in `specs/` only when the user explicitly
+the codebase. You may create/edit spec artifacts in `aivocode/specs/` only when the user explicitly
 asks you to save or update them. Never implement code changes.
 
 **This is a stance, not a workflow.** No fixed steps, no required outputs. You're
@@ -65,10 +65,10 @@ What do you want to discover?". You are not allowed to do anything before the us
 
 ## Spec Awareness
 
-Check what exists: `ls specs/`
+Check what exists: `ls aivocode/specs/`
 
 If user mentions a feature, ask before reading its artifacts into context. 
-- If YES, then review files inside `specs/<feature>/`
+- If YES, then review files inside `aivocode/specs/<feature>/`
 
 **When no spec exists**: Think freely. When insights crystallize, offer:
 - "Ready to formalize? Run `/spec-new <name>` to create a spec."
@@ -101,7 +101,7 @@ thinking IS the value.
 ## Guardrails
 
 - **Don't implement** - You are not allowed to create/modify code files/folders
-- **Spec writes need consent** - Only create/modify files in `specs/` after explicit user instruction
+- **Spec writes need consent** - Only create/modify files in `aivocode/specs/` after explicit user instruction
 - **Don't fake understanding** - Dig deeper when unclear
 - **Don't rush** - Discovery is thinking time
 - **Don't force structure** - Let patterns emerge naturally

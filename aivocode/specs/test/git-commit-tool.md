@@ -4,7 +4,7 @@ This spec documents a minimal usage scenario for the custom
 `git-commit` tool added in this session.
 
 Goals:
-- Ensure the tool can commit docs under `specs/test/`.
+- Ensure the tool can commit docs under `aivocode/specs/test/`.
 - Verify the `Spec: test` trailer validation and session export
   behavior end-to-end.
 
