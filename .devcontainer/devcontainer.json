@@ -1,0 +1,19 @@
+{
+  "name": "aivocode",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null && /usr/local/bin/sync-rclone.sh init",
+  "postStartCommand": "nohup supervisord -c /etc/supervisor/conf.d/supervisord.conf &",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/envs/env-aivocode/bin/python"
+      }
+    }
+  }
+}
