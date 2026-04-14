@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence, get_type_hints
 
 from file_watcher import WatchConfig, awatch_repos
-from lsp_server import WorkspaceLspManager, AsyncLspClient, FileEvent, FileChangeType
+from lsp import WorkspaceLspManager, LspClient, FileEvent, FileChangeType
 from .config import EngineConfig
 from .utils import import_from_string
 
@@ -30,7 +30,7 @@ class AivoEngine:
         self.lsp_manager = WorkspaceLspManager()
         
         # Maps repo_root Path to the active LSP client for that repo
-        self._path_to_client: dict[Path, AsyncLspClient] = {}
+        self._path_to_client: dict[Path, LspClient] = {}
         # Maps repo_label string to repo_root Path
         self._label_to_path: dict[str, Path] = {}
         
@@ -200,7 +200,7 @@ class AivoEngine:
                     
                     client = self._path_to_client.get(root)
                     if client and client.is_running():
-                        await client.notify_did_change_watched_files(lsp_events)
+                        await client.notify_file_changes(lsp_events)
 
         except asyncio.CancelledError:
             log.info("File watcher task cancelled")

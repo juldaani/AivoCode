@@ -2,16 +2,16 @@
 path = "/home/juho/dev_folder/AivoCode"
 
 [repos.aivocode.lsp]
-provider_class = "lsp_server.basedpyright.BasedPyrightProvider"
-config_class = "lsp_server.basedpyright.BasedPyrightConfig"
+provider_class = "lsp.basedpyright.BasedPyrightProvider"
+config_class = "lsp.basedpyright.BasedPyrightConfig"
 config_file = "pyproject.toml"
 
 [repos.tiliote_analyzer]
 path = "/home/juho/dev_folder/tiliote-analyzer"
 
 [repos.tiliote_analyzer.lsp]
-provider_class = "lsp_server.basedpyright.BasedPyrightProvider"
-config_class = "lsp_server.basedpyright.BasedPyrightConfig"
+provider_class = "lsp.basedpyright.BasedPyrightProvider"
+config_class = "lsp.basedpyright.BasedPyrightConfig"
 config_file = ""
 
 [logging]
