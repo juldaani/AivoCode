@@ -1,7 +1,7 @@
-"""Custom LSP client for aivocode, backed by basedpyright.
+"""Custom LSP client for aivocode.
 
 What this package provides
-- LspClient: a server-agnostic, config-driven LSP client.
+- LspClient: a server-agnostic, config-driven LSP client with MCP-ready tools.
 - LanguageEntry: dataclass for one language server configuration.
 - load_config: reads lsp_config.toml and returns list[LanguageEntry].
 - SYMBOL_KIND_NAMES: maps LSP SymbolKind integers to human-readable names.

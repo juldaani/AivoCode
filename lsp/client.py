@@ -1,7 +1,7 @@
 """Custom LSP client for aivocode.
 
 What this module provides
-- LspClient: a server-agnostic, config-driven LSP client.
+- LspClient: a server-agnostic, config-driven LSP client with MCP-ready tools.
 
 How to use
 - Construct with a LanguageEntry and workspace path::
@@ -10,14 +10,31 @@ How to use
 
     entry = LanguageEntry(name="python", suffixes=[".py"], ...)
     async with LspClient(lang_entry=entry, workspace=Path.cwd()) as client:
+        # Query methods (require open_files context for document-scoped requests)
         async with client.open_files(my_file):
             symbols = await client.request_document_symbol_list(my_file)
 
-- Available request methods:
-    - request_document_symbol_list(file_path) -> DocumentSymbol[] | None
-    - request_references(file_path, position) -> Location[] | None
+        # Capability check before exposing a tool
+        if client.supports("definition_provider"):
+            ...
 
-- File change notification (from file_watcher):
+        # Diagnostics (waits for server if not yet available)
+        diags = await client.get_diagnostics(my_file)
+
+- Request methods (from lsp-client mixins):
+    - request_document_symbol_list(file_path) -> DocumentSymbol[] | None
+    - request_workspace_symbol_list(query) -> SymbolInformation[] | None
+    - request_definition(file_path, position) -> Location[] | None
+    - request_type_definition(file_path, position) -> Location[] | None
+    - request_references(file_path, position) -> Location[] | None
+    - request_hover(file_path, position) -> Hover | None
+    - request_call_hierarchy_incoming_call(file_path, position) -> CallHierarchyIncomingCall[] | None
+    - request_call_hierarchy_outgoing_call(file_path, position) -> CallHierarchyOutgoingCall[] | None
+    - request_rename(file_path, position, new_name) -> WorkspaceEdit | None
+
+- Our additions:
+    - get_diagnostics(file_path, timeout=5.0) -> Diagnostic[]
+    - supports(capability) -> bool
     - notify_file_changes(batch) — filters by suffix, sends didChangeWatchedFiles
 
 See Also
@@ -27,9 +44,11 @@ See Also
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import suppress
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from attrs import define, field
@@ -39,8 +58,17 @@ from collections.abc import AsyncGenerator
 
 from lsp_client import Client, LocalServer
 from lsp_client.capability.request import (
+    WithRequestCallHierarchy,
+    WithRequestDefinition,
     WithRequestDocumentSymbol,
+    WithRequestHover,
     WithRequestReferences,
+    WithRequestRename,
+    WithRequestTypeDefinition,
+    WithRequestWorkspaceSymbol,
+)
+from lsp_client.capability.server_notification import (
+    WithReceivePublishDiagnostics,
 )
 from lsp_client.server import ServerRuntimeError
 from lsp_client.protocol.client import CapabilityClientProtocol
@@ -57,17 +85,42 @@ from lsp._translate import translate
 logger = logging.getLogger(__name__)
 
 
+def _already_set_event() -> asyncio.Event:
+    """Return an asyncio.Event that is already set (signaled)."""
+    event = asyncio.Event()
+    event.set()
+    return event
+
+
 @define
-class LspClient(Client, WithRequestDocumentSymbol, WithRequestReferences):
-    """Config-driven LSP client.
+class LspClient(
+    Client,
+    # Request capabilities — each adds check_server_capability + request methods
+    WithRequestDocumentSymbol,
+    WithRequestReferences,
+    WithRequestWorkspaceSymbol,
+    WithRequestDefinition,
+    WithRequestTypeDefinition,
+    WithRequestHover,
+    WithRequestCallHierarchy,
+    WithRequestRename,
+    # Notification capabilities
+    WithReceivePublishDiagnostics,
+):
+    """Config-driven LSP client with MCP-ready tool surface.
 
     Composed capabilities:
     - WithNotifyTextDocumentSynchronize (inherited from Client base)
       -- didOpen/didClose/didChange notifications and open_files() context manager.
-    - WithRequestDocumentSymbol (mixed in explicitly)
-      -- textDocument/documentSymbol requests.
-    - WithRequestReferences (mixed in explicitly)
-      -- textDocument/references requests.
+    - WithRequestDocumentSymbol — textDocument/documentSymbol
+    - WithRequestReferences — textDocument/references
+    - WithRequestWorkspaceSymbol — workspace/symbol
+    - WithRequestDefinition — textDocument/definition
+    - WithRequestTypeDefinition — textDocument/typeDefinition
+    - WithRequestHover — textDocument/hover
+    - WithRequestCallHierarchy — textDocument/prepareCallHierarchy + incoming/outgoing
+    - WithRequestRename — textDocument/rename
+    - WithReceivePublishDiagnostics — textDocument/publishDiagnostics (cached)
 
     Attributes
     ----------
@@ -82,6 +135,13 @@ class LspClient(Client, WithRequestDocumentSymbol, WithRequestReferences):
     server_capabilities: lsp_type.ServerCapabilities | None = field(
         init=False, default=None
     )
+    # Diagnostics state: uri -> (diagnostics, event).
+    # The event is set when publishDiagnostics arrives from the server.
+    # get_diagnostics() creates the event if diagnostics haven't arrived yet,
+    # or returns immediately if they already have.
+    _diagnostics_state: dict[
+        str, tuple[list[lsp_type.Diagnostic], asyncio.Event]
+    ] = field(init=False, factory=dict)
 
     @classmethod
     @override
@@ -181,6 +241,119 @@ class LspClient(Client, WithRequestDocumentSymbol, WithRequestReferences):
         await self.notify(
             lsp_type.InitializedNotification(params=lsp_type.InitializedParams())
         )
+
+    # --- Capability check ----------------------------------------------------
+
+    def supports(self, capability: str) -> bool:
+        """Check if the connected server supports a capability.
+
+        Use this to decide which MCP tools to expose. Returns False before
+        the client is initialized (server_capabilities is None).
+
+        Parameters
+        ----------
+        capability : str
+            LSP ServerCapabilities field name, e.g. "definition_provider",
+            "hover_provider", "workspace_symbol_provider".
+
+        Returns
+        -------
+        bool
+            True if the server advertises a truthy value for this capability.
+
+        Examples
+        --------
+        >>> client.supports("definition_provider")
+        True
+        >>> client.supports("type_hierarchy_provider")  # not all servers
+        False
+        """
+        if self.server_capabilities is None:
+            return False
+        return bool(getattr(self.server_capabilities, capability, False))
+
+    # --- Diagnostics ---------------------------------------------------------
+
+    @override
+    async def _receive_publish_diagnostics(
+        self, params: lsp_type.PublishDiagnosticsParams
+    ) -> None:
+        """Store diagnostics and unblock any waiters.
+
+        Called by lsp-client's dispatch loop when the server pushes
+        textDocument/publishDiagnostics.
+        """
+        diagnostics = list(params.diagnostics)
+        existing = self._diagnostics_state.get(params.uri)
+
+        if existing is not None:
+            # Update data, reuse existing event
+            _, event = existing
+            self._diagnostics_state[params.uri] = (diagnostics, event)
+        else:
+            # First push — no one is waiting yet. Create an already-set event
+            # so future get_diagnostics() calls return immediately.
+            self._diagnostics_state[params.uri] = (
+                diagnostics,
+                _already_set_event(),
+            )
+
+        # Unblock any get_diagnostics() call that is waiting
+        self._diagnostics_state[params.uri][1].set()
+
+    async def get_diagnostics(
+        self,
+        file_path: Path,
+        *,
+        timeout: float = 5.0,
+    ) -> list[lsp_type.Diagnostic]:
+        """Get diagnostics for a file.
+
+        Returns immediately if the server already sent fresh diagnostics.
+        Otherwise waits up to timeout for the server to respond after
+        a file change. Returns an empty list if the server doesn't
+        respond in time.
+
+        Parameters
+        ----------
+        file_path : Path
+            File to get diagnostics for.
+        timeout : float
+            Max seconds to wait for the server. Defaults to 5.0.
+
+        Returns
+        -------
+        list[Diagnostic]
+            Current diagnostics for the file (errors, warnings, hints).
+
+        Usage
+        -----
+        After editing a file::
+
+            await client.notify_file_changes(batch)  # tell server about changes
+            diags = await client.get_diagnostics(file_path)
+        """
+        uri = self.as_uri(file_path)
+
+        # Case 1: diagnostics already arrived (event was set by
+        # _receive_publish_diagnostics) — return immediately.
+        if uri in self._diagnostics_state:
+            data, event = self._diagnostics_state[uri]
+            if event.is_set():
+                return data
+
+        # Case 2: no data yet — create an event and wait for the server.
+        if uri not in self._diagnostics_state:
+            self._diagnostics_state[uri] = ([], asyncio.Event())
+
+        _, event = self._diagnostics_state[uri]
+        try:
+            await asyncio.wait_for(event.wait(), timeout)
+        except asyncio.TimeoutError:
+            pass  # server too slow — return whatever we have
+        return self._diagnostics_state[uri][0]
+
+    # --- File change notification --------------------------------------------
 
     async def notify_file_changes(self, batch: WatchBatch) -> None:
         """Translate file_watcher batch and send didChangeWatchedFiles.
