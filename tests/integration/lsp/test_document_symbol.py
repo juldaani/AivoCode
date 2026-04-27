@@ -86,6 +86,38 @@ class TestDocumentSymbolPython:
         # __init__.py may be empty or have re-exports; just check no error
         assert symbols is not None
 
+    @pytest.mark.anyio
+    async def test_types_file_has_symbols(
+        self, python_client: LspClient, python_workspace: Path
+    ) -> None:
+        """documentSymbol returns symbols for types.py."""
+        file_path = python_workspace / "mock_pkg" / "types.py"
+        async with python_client.open_files(file_path):
+            symbols = await python_client.request_document_symbol_list(file_path)
+
+        assert symbols is not None
+        assert len(symbols) > 0
+        names = {sym.name for sym in symbols}
+        assert "TypeGreeter" in names
+        assert "TypeGreeterFactory" in names
+        assert "process_greeting" in names
+
+    @pytest.mark.anyio
+    async def test_types_file_class_hierarchy(
+        self, python_client: LspClient, python_workspace: Path
+    ) -> None:
+        """TypeGreeter in types.py has __init__ and greet as children."""
+        file_path = python_workspace / "mock_pkg" / "types.py"
+        async with python_client.open_files(file_path):
+            symbols = await python_client.request_document_symbol_list(file_path)
+
+        assert symbols is not None
+        greeter = next((s for s in symbols if s.name == "TypeGreeter"), None)
+        assert greeter is not None, "TypeGreeter class not found"
+        assert greeter.children is not None and len(greeter.children) > 0
+        child_names = {c.name for c in greeter.children}
+        assert "greet" in child_names
+
 
 class TestDocumentSymbolTypeScript:
     """Test documentSymbol with TypeScript (skipped if server unavailable)."""
