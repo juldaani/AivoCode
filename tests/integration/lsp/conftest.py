@@ -1,15 +1,23 @@
 """Pytest configuration for LSP integration tests.
 
 What this file provides
-- Fixtures for creating LspClient instances with real language servers.
+- Module-scoped fixtures for LspClient (one server process per module).
+- Module-scoped workspace copies for isolated file operations.
 - Auto-skips tests if the configured language server is not on PATH.
-- Provides a temporary workspace copy for isolated testing.
+
+Why module-scoped
+- Starting basedpyright-langserver takes ~2-3s (subprocess spawn + init handshake).
+- With 13 integration tests, function-scoped would cost ~30-40s just on startup.
+- Module-scoped reuses one server process across all tests in the module.
+- Tests use unique file names so they don't interfere with each other.
 """
 
 from __future__ import annotations
 
 import shutil
+import tempfile
 from pathlib import Path
+from typing import AsyncGenerator
 
 import pytest
 
@@ -20,7 +28,7 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def python_language_entry() -> LanguageEntry:
     """Return a LanguageEntry for Python (basedpyright)."""
     return LanguageEntry(
@@ -31,7 +39,7 @@ def python_language_entry() -> LanguageEntry:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def typescript_language_entry() -> LanguageEntry:
     """Return a LanguageEntry for TypeScript."""
     return LanguageEntry(
@@ -42,37 +50,38 @@ def typescript_language_entry() -> LanguageEntry:
     )
 
 
-@pytest.fixture
-def python_workspace(tmp_path: Path) -> Path:
-    """Copy Python mock repo to a temp workspace."""
+@pytest.fixture(scope="module")
+def python_workspace() -> Path:
+    """Copy Python mock repo to a module-scoped temp workspace."""
     src = _repo_root() / "tests" / "data" / "mock_repos" / "python"
-    dst = tmp_path / "python"
-    shutil.copytree(src, dst)
-    return dst
+    dst = Path(tempfile.mkdtemp(prefix="lsp_python_"))
+    shutil.copytree(src, dst / "python")
+    return dst / "python"
 
 
-@pytest.fixture
-def typescript_workspace(tmp_path: Path) -> Path:
-    """Copy TypeScript mock repo to a temp workspace."""
+@pytest.fixture(scope="module")
+def typescript_workspace() -> Path:
+    """Copy TypeScript mock repo to a module-scoped temp workspace."""
     src = _repo_root() / "tests" / "data" / "mock_repos" / "typescript"
-    dst = tmp_path / "typescript"
-    shutil.copytree(src, dst)
-    return dst
+    dst = Path(tempfile.mkdtemp(prefix="lsp_typescript_"))
+    shutil.copytree(src, dst / "typescript")
+    return dst / "typescript"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 async def python_client(
     python_language_entry: LanguageEntry, python_workspace: Path
-) -> LspClient:
-    """Yield a started LspClient for Python.
+) -> AsyncGenerator[LspClient, None]:
+    """Yield a started LspClient for Python (module-scoped).
 
     Skips if basedpyright-langserver is not installed.
+    The client is started once per test module and shut down after
+    all tests in the module complete.
     """
-    import anyio
-
-    # Check server availability
     try:
-        client = LspClient(lang_entry=python_language_entry, workspace=python_workspace)
+        client = LspClient(
+            lang_entry=python_language_entry, workspace=python_workspace
+        )
         await client.__aenter__()
     except Exception as exc:
         pytest.skip(f"basedpyright-langserver not available: {exc}")
@@ -80,11 +89,11 @@ async def python_client(
     await client.shutdown()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 async def typescript_client(
     typescript_language_entry: LanguageEntry, typescript_workspace: Path
-) -> LspClient:
-    """Yield a started LspClient for TypeScript.
+) -> AsyncGenerator[LspClient, None]:
+    """Yield a started LspClient for TypeScript (module-scoped).
 
     Skips if typescript-language-server is not installed.
     """

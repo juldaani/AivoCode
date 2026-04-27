@@ -50,35 +50,47 @@ class TestFileChangesPython:
     async def test_notify_changed_file(
         self, python_client: LspClient, python_workspace: Path
     ) -> None:
-        """Modify a file, notify server, verify updated symbols."""
+        """Modify a file, notify server, verify updated symbols.
+
+        Restores utils.py after the test so subsequent tests see the original.
+        """
         utils_file = python_workspace / "mock_pkg" / "utils.py"
-
-        # Verify symbol doesn't exist yet
-        async with python_client.open_files(utils_file):
-            symbols_before = await python_client.request_document_symbol_list(
-                utils_file
-            )
-        assert symbols_before is not None
-        names_before = {sym.name for sym in symbols_before}
-        assert "brand_new_func" not in names_before
-
-        # Modify file
         original = utils_file.read_text(encoding="utf-8")
-        utils_file.write_text(
-            original + "\n\ndef brand_new_func() -> int:\n    return 42\n",
-            encoding="utf-8",
-        )
 
-        await python_client.notify_did_change_watched_files_raw(
-            [_file_event(utils_file.as_uri(), lsp_type.FileChangeType.Changed)]
-        )
+        try:
+            # Verify symbol doesn't exist yet
+            async with python_client.open_files(utils_file):
+                symbols_before = await python_client.request_document_symbol_list(
+                    utils_file
+                )
+            assert symbols_before is not None
+            names_before = {sym.name for sym in symbols_before}
+            assert "brand_new_func" not in names_before
 
-        # Re-open and verify
-        async with python_client.open_files(utils_file):
-            symbols_after = await python_client.request_document_symbol_list(utils_file)
-        assert symbols_after is not None
-        names_after = {sym.name for sym in symbols_after}
-        assert "brand_new_func" in names_after
+            # Modify file
+            utils_file.write_text(
+                original + "\n\ndef brand_new_func() -> int:\n    return 42\n",
+                encoding="utf-8",
+            )
+
+            await python_client.notify_did_change_watched_files_raw(
+                [_file_event(utils_file.as_uri(), lsp_type.FileChangeType.Changed)]
+            )
+
+            # Re-open and verify
+            async with python_client.open_files(utils_file):
+                symbols_after = await python_client.request_document_symbol_list(
+                    utils_file
+                )
+            assert symbols_after is not None
+            names_after = {sym.name for sym in symbols_after}
+            assert "brand_new_func" in names_after
+        finally:
+            # Restore original content for other tests
+            utils_file.write_text(original, encoding="utf-8")
+            await python_client.notify_did_change_watched_files_raw(
+                [_file_event(utils_file.as_uri(), lsp_type.FileChangeType.Changed)]
+            )
 
     @pytest.mark.anyio
     async def test_notify_deleted_file(
