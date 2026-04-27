@@ -96,6 +96,16 @@
       "children": []
     },
     {
+      "name": "create_and_greet",
+      "kind_category": "Function",
+      "children": []
+    },
+    {
+      "name": "full_greeting",
+      "kind_category": "Function",
+      "children": []
+    },
+    {
       "name": "DEFAULT_NAME",
       "kind_category": "Constant",
       "children": []

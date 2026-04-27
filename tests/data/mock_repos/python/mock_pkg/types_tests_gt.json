@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "source": "mock_pkg/types.py",
+  "kind_legend": {
+    "Class": [5],
+    "Method": [6],
+    "Function": [12]
+  },
+  "symbols": [
+    {
+      "name": "TypeGreeter",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "__init__",
+          "kind_category": "Method",
+          "children": []
+        },
+        {
+          "name": "greet",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "TypeGreeterFactory",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "create",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "process_greeting",
+      "kind_category": "Function",
+      "children": []
+    }
+  ]
+}

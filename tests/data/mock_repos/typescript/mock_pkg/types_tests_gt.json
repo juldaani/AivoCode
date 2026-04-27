@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "source": "mock_pkg/types.ts",
+  "kind_legend": {
+    "Class": [5],
+    "Method": [6],
+    "Function": [12]
+  },
+  "symbols": [
+    {
+      "name": "Greeter",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "greet",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "GreeterFactory",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "create",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "processGreeting",
+      "kind_category": "Function",
+      "children": []
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "source": "mock_pkg/index.ts",
+  "kind_legend": {
+    "Interface": [11],
+    "Class": [5],
+    "Method": [6],
+    "Function": [12],
+    "Constant": [14]
+  },
+  "symbols": [
+    {
+      "name": "MAX_ITEMS",
+      "kind_category": "Constant",
+      "children": []
+    },
+    {
+      "name": "Greeter",
+      "kind_category": "Interface",
+      "children": [
+        {
+          "name": "greet",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "FriendlyGreeter",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "greet",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "FormalGreeter",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "greet",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "createGreeter",
+      "kind_category": "Function",
+      "children": []
+    },
+    {
+      "name": "formatMessage",
+      "kind_category": "Function",
+      "children": []
+    },
+    {
+      "name": "createAndGreet",
+      "kind_category": "Function",
+      "children": []
+    },
+    {
+      "name": "fullGreeting",
+      "kind_category": "Function",
+      "children": []
+    }
+  ]
+}

@@ -3,6 +3,8 @@
 from enum import Enum
 from typing import Final
 
+from mock_pkg.types import TypeGreeter, TypeGreeterFactory, process_greeting
+
 MAX_RETRIES: Final[int] = 3
 WELCOME_MESSAGE: Final[str] = "hello"
 DEFAULT_NAME: Final[str] = "world"
@@ -59,3 +61,25 @@ class GreeterFactory:
 class GreetingStyle(Enum):
     FRIENDLY = "friendly"
     FORMAL = "formal"
+
+
+def create_and_greet(name: str) -> str:
+    """Cross-file call chain: create a TypeGreeter via factory, then greet.
+
+    Calls TypeGreeterFactory.create and TypeGreeter.greet from types.py —
+    useful for testing definition jumps and call_hierarchy across files.
+    """
+    greeter = TypeGreeterFactory.create(name)
+    return greeter.greet()
+
+
+def full_greeting(name: str) -> str:
+    """Top of call hierarchy: calls create_and_greet and process_greeting.
+
+    4-level call chain:
+    full_greeting → create_and_greet → GreeterFactory.create → Greeter.greet
+    full_greeting → process_greeting (cross-file to types.py)
+    """
+    g1 = create_and_greet(name)
+    g2 = process_greeting(name)
+    return f"{g1} | {g2}"
