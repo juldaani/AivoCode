@@ -75,7 +75,7 @@ from lsp_client.protocol.client import CapabilityClientProtocol
 from lsp_client.protocol.lang import LanguageConfig
 from lsp_client.server import ContainerServer, DefaultServers, Server
 from lsp_client.settings import settings
-from lsp_client.utils.types import lsp_type
+from lsp_client.utils.types import AnyPath, lsp_type
 
 from file_watcher.types import WatchBatch
 
@@ -199,19 +199,69 @@ class LspClient(
 
     @classmethod
     @override
+    def register_text_document_capability(
+        cls, cap: lsp_type.TextDocumentClientCapabilities
+    ) -> None:
+        """Register text-document capabilities, including push diagnostics.
+
+        The upstream ``lsp-client`` publish-diagnostics mixin currently advertises
+        ``textDocument.diagnostic`` (pull diagnostics) but not
+        ``textDocument.publishDiagnostics`` (push diagnostics). Servers such as
+        ``vtsls`` only send ``textDocument/publishDiagnostics`` when the push
+        capability is present, so we add it here for every configured language.
+        """
+        super().register_text_document_capability(cap)
+        cap.publish_diagnostics = lsp_type.PublishDiagnosticsClientCapabilities(
+            related_information=True,
+            tag_support=lsp_type.ClientDiagnosticsTagOptions(
+                value_set=[*lsp_type.DiagnosticTag]
+            ),
+            code_description_support=True,
+            data_support=True,
+        )
+
+    @classmethod
+    @override
     def get_language_config(cls) -> LanguageConfig:
         """Return language configuration.
 
-        Note: this is a classmethod but the real config is instance-specific
-        (lang_entry). We return a minimal default here; in practice the
-        language_id used in didOpen comes from the LanguageKind enum lookup
-        based on lang_entry.name, which is handled in the open_files() flow
-        by lsp-client's own logic.
+        This is a classmethod so it can't use instance data (lang_entry).
+        Returns a generic default. The actual language kind is resolved
+        in notify_text_document_opened via _language_kind().
         """
         return LanguageConfig(
             kind=lsp_type.LanguageKind.Python,
-            suffixes=[".py"],
-            project_files=["pyproject.toml"],
+            suffixes=["*"],
+            project_files=[],
+        )
+
+    def _language_kind(self) -> lsp_type.LanguageKind:
+        """Resolve LanguageKind from lang_entry.name."""
+        kind_map: dict[str, lsp_type.LanguageKind] = {
+            "python": lsp_type.LanguageKind.Python,
+            "typescript": lsp_type.LanguageKind.TypeScript,
+            "javascript": lsp_type.LanguageKind.JavaScript,
+            "go": lsp_type.LanguageKind.Go,
+            "rust": lsp_type.LanguageKind.Rust,
+            "java": lsp_type.LanguageKind.Java,
+        }
+        return kind_map.get(self.lang_entry.name, lsp_type.LanguageKind.Python)
+
+    @override
+    async def notify_text_document_opened(
+        self, file_path: AnyPath, file_content: str
+    ) -> None:
+        """Override to use correct language kind from lang_entry."""
+        uri = self.as_uri(file_path)
+        await self._notify_text_document_opened(
+            lsp_type.DidOpenTextDocumentParams(
+                text_document=lsp_type.TextDocumentItem(
+                    uri=uri,
+                    language_id=self._language_kind(),
+                    version=0,
+                    text=file_content,
+                )
+            )
         )
 
     @override

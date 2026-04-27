@@ -54,7 +54,7 @@ export function formatMessage(message: string, prefix = "INFO"): string {
 
 // --- Cross-file calls (imported from types.ts) ---
 
-import { TypeGreeter, TypeGreeterFactory, processGreeting } from "./types";
+import { TypeGreeter, TypeGreeterFactory, processGreeting } from "./types";  // MARK:import
 
 /**
  * Cross-file call chain: create a TypeGreeter via factory, then greet.
@@ -62,8 +62,10 @@ import { TypeGreeter, TypeGreeterFactory, processGreeting } from "./types";
  * Calls TypeGreeterFactory.create and TypeGreeter.greet from types.ts —
  * useful for testing definition jumps and call_hierarchy across files.
  */
-export function createAndGreet(name: string): string {
+export function createAndGreet(name: string): string {  // MARK:create_def
+  // MARK:greeter_var
   const greeter = TypeGreeterFactory.create(name);
+  // MARK:greet_call
   return greeter.greet();
 }
 
@@ -74,7 +76,7 @@ export function createAndGreet(name: string): string {
  * fullGreeting → createAndGreet → TypeGreeterFactory.create → TypeGreeter.greet
  * fullGreeting → processGreeting (cross-file to types.ts)
  */
-export function fullGreeting(name: string): string {
+export function fullGreeting(name: string): string {  // MARK:full_def
   const g1 = createAndGreet(name);
   const g2 = processGreeting(name);
   return `${g1} | ${g2}`;

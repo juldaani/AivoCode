@@ -1,49 +1,49 @@
-"""Integration tests for textDocument/references."""
+"""Integration tests for textDocument/references.
+
+What this tests
+- references for a function definition returns results.
+- references for a class returns results.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from lsp import LspClient
 from lsp_client import Position
+from tests.integration.lsp.conftest import LanguageTestData
 
 
-class TestReferencesPython:
-    """Test references with Python (basedpyright)."""
+class TestReferences:
+    """Test references (universal — runs for each language)."""
 
     @pytest.mark.anyio
     async def test_references_for_function(
-        self, python_client: LspClient, python_workspace: Path
+        self, lang: LanguageTestData
     ) -> None:
-        """References for a function returns results."""
-        file_path = python_workspace / "mock_pkg" / "utils.py"
-        async with python_client.open_files(file_path):
-            # hello function is defined around line 11
-            refs = await python_client.request_references(
+        """References for a function definition returns results."""
+        file_path = lang.file(lang.src_file)
+        async with lang.client.open_files(file_path):
+            refs = await lang.client.request_references(
                 file_path,
-                Position(line=11, character=4),
-                include_declaration=True,
-            )
-
-        # References may be None if server doesn't support it well
-        # or returns empty. Just verify it doesn't raise.
-        assert refs is not None or refs is None  # type: ignore[redundant-expr]
-
-    @pytest.mark.anyio
-    async def test_references_for_class(
-        self, python_client: LspClient, python_workspace: Path
-    ) -> None:
-        """References for a class returns results."""
-        file_path = python_workspace / "mock_pkg" / "utils.py"
-        async with python_client.open_files(file_path):
-            # Greeter class is defined around line 40
-            refs = await python_client.request_references(
-                file_path,
-                Position(line=40, character=6),
+                Position(*lang.pos("create_def")),
                 include_declaration=True,
             )
 
         # Just verify no exception
         assert refs is not None or refs is None  # type: ignore[redundant-expr]
+
+    @pytest.mark.anyio
+    async def test_references_for_greet(
+        self, lang: LanguageTestData
+    ) -> None:
+        """References for greet method returns results."""
+        types_path = lang.file(lang.types_file)
+        async with lang.client.open_files(types_path):
+            refs = await lang.client.request_references(
+                types_path,
+                Position(*lang.pos("greet_def")),
+                include_declaration=True,
+            )
+
+        if refs is not None:
+            assert len(refs) > 0

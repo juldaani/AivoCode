@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "source": "mock_pkg/helpers.ts",
+  "kind_legend": {
+    "Class": [5],
+    "Method": [6],
+    "Function": [12]
+  },
+  "symbols": [
+    {
+      "name": "welcomeUser",
+      "kind_category": "Function",
+      "children": []
+    },
+    {
+      "name": "UserService",
+      "kind_category": "Class",
+      "children": [
+        {
+          "name": "addUser",
+          "kind_category": "Method",
+          "children": []
+        },
+        {
+          "name": "getUsers",
+          "kind_category": "Method",
+          "children": []
+        }
+      ]
+    }
+  ]
+}

@@ -10,7 +10,7 @@ own Greeter/GreeterFactory (which test different things).
 from __future__ import annotations
 
 
-class TypeGreeter:
+class TypeGreeter:  ## MARK:class_def
     """Base greeter that produces greeting strings.
 
     Attributes
@@ -22,7 +22,7 @@ class TypeGreeter:
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def greet(self) -> str:
+    def greet(self) -> str:  ## MARK:greet_def
         """Return a greeting for this greeter's name."""
         return f"Hello, {self.name}!"
 

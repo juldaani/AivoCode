@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Final
 
-from mock_pkg.types import TypeGreeter, TypeGreeterFactory, process_greeting
+from mock_pkg.types import TypeGreeter, TypeGreeterFactory, process_greeting  ## MARK:import
 
 MAX_RETRIES: Final[int] = 3
 WELCOME_MESSAGE: Final[str] = "hello"
@@ -63,17 +63,19 @@ class GreetingStyle(Enum):
     FORMAL = "formal"
 
 
-def create_and_greet(name: str) -> str:
+def create_and_greet(name: str) -> str:  ## MARK:create_def
     """Cross-file call chain: create a TypeGreeter via factory, then greet.
 
     Calls TypeGreeterFactory.create and TypeGreeter.greet from types.py —
     useful for testing definition jumps and call_hierarchy across files.
     """
+    ## MARK:greeter_var
     greeter = TypeGreeterFactory.create(name)
+    ## MARK:greet_call
     return greeter.greet()
 
 
-def full_greeting(name: str) -> str:
+def full_greeting(name: str) -> str:  ## MARK:full_def
     """Top of call hierarchy: calls create_and_greet and process_greeting.
 
     4-level call chain:

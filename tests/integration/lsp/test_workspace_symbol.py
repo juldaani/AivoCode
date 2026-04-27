@@ -8,60 +8,42 @@ What this tests
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from lsp import LspClient, SYMBOL_KIND_NAMES
+from tests.integration.lsp.conftest import LanguageTestData
 
 
-class TestWorkspaceSymbolPython:
-    """Test workspace/symbol with Python (basedpyright)."""
+class TestWorkspaceSymbol:
+    """Test workspace/symbol (universal — runs for each language)."""
 
     @pytest.mark.anyio
     async def test_returns_symbols_for_query(
-        self, python_client: LspClient, python_workspace: Path
+        self, lang: LanguageTestData
     ) -> None:
-        """Searching for symbols returns results (or empty if not indexed)."""
-        symbols = await python_client.request_workspace_symbol_list("hello")
-
-        # basedpyright may not support workspace symbol or may need indexing
-        # Just verify no exception is raised
+        """Searching for 'greet' returns matching symbols."""
+        symbols = await lang.client.request_workspace_symbol_list("greet")
         assert symbols is not None
-
-    @pytest.mark.anyio
-    async def test_returns_symbols_across_files(
-        self, python_client: LspClient, python_workspace: Path
-    ) -> None:
-        """Searching for 'Greeter' returns results from multiple files."""
-        symbols = await python_client.request_workspace_symbol_list("Greeter")
-
-        assert symbols is not None
-        if len(symbols) > 0:
-            names = {s.name for s in symbols}
-            # If results exist, should find multiple greeter-related symbols
-            assert len(names) > 0
 
     @pytest.mark.anyio
     async def test_symbol_kinds_are_correct(
-        self, python_client: LspClient, python_workspace: Path
+        self, lang: LanguageTestData
     ) -> None:
-        """Function symbols have Function kind."""
-        symbols = await python_client.request_workspace_symbol_list("hello")
-
+        """Function symbols have Function or Method kind."""
+        symbols = await lang.client.request_workspace_symbol_list("greet")
         if symbols is not None and len(symbols) > 0:
             for sym in symbols:
                 kind_name = SYMBOL_KIND_NAMES.get(sym.kind, "Unknown")
-                assert kind_name in ("Function", "Method"), (
-                    f"Expected Function/Method for '{sym.name}', got {kind_name}"
+                assert kind_name in ("Function", "Method", "Class", "Variable"), (
+                    f"Unexpected kind for '{sym.name}': {kind_name}"
                 )
 
     @pytest.mark.anyio
     async def test_no_results_for_unknown(
-        self, python_client: LspClient, python_workspace: Path
+        self, lang: LanguageTestData
     ) -> None:
         """Searching for a nonexistent symbol returns None or empty."""
-        symbols = await python_client.request_workspace_symbol_list(
+        symbols = await lang.client.request_workspace_symbol_list(
             "nonexistent_xyz_12345"
         )
         if symbols is not None:

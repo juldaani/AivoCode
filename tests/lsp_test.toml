@@ -1,0 +1,13 @@
+[[language]]
+name = "python"
+server = "basedpyright-langserver"
+server_args = ["--stdio"]
+suffix = ".py"
+mock_repo = "python"
+
+[[language]]
+name = "typescript"
+server = "vtsls"
+server_args = ["--stdio"]
+suffix = ".ts"
+mock_repo = "typescript"
