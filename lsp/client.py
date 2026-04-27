@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import suppress
+from collections.abc import Sequence
 from typing import Any
 
 from attrs import define, field
@@ -195,9 +196,39 @@ class LspClient(Client, WithRequestDocumentSymbol, WithRequestReferences):
         file_events = translate(batch, self.lang_entry.suffixes)
         if not file_events:
             return
+        await self.notify_did_change_watched_files_raw(file_events)
 
+    async def notify_did_change_watched_files_raw(
+        self, events: Sequence[lsp_type.FileEvent]
+    ) -> None:
+        """Send workspace/didChangeWatchedFiles with raw FileEvent objects.
+
+        This is a lower-level alternative to notify_file_changes() for
+        tests and callers that already have FileEvent objects.
+
+        Parameters
+        ----------
+        events : Sequence[lsp_type.FileEvent]
+            LSP FileEvent objects to send.
+        """
         await self.notify(
             lsp_type.DidChangeWatchedFilesNotification(
-                params=lsp_type.DidChangeWatchedFilesParams(changes=file_events)
+                params=lsp_type.DidChangeWatchedFilesParams(changes=list(events))
             )
         )
+
+    async def shutdown(self) -> None:
+        """Gracefully shut down the LSP server.
+
+        Sends shutdown request then exit notification. Idempotent — safe
+        to call multiple times. This is an alternative to using the async
+        context manager exit.
+        """
+        try:
+            await self._shutdown()
+        except Exception:
+            pass
+        try:
+            await self._exit()
+        except Exception:
+            pass
