@@ -1,2 +1,0 @@
-[tool.pyright]
-exclude = [".git", ".venv", "data", "figures", "notebooks"]
