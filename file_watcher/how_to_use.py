@@ -151,6 +151,12 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
         action="store_false",
         help="Disable forced polling (use native notifications when possible).",
     )
+    parser.add_argument(
+        "--poll-delay-ms",
+        type=int,
+        default=300,
+        help="Delay in ms between polls when force_polling is enabled (default: 300).",
+    )
     parser.set_defaults(force_polling=None)
     return parser.parse_args(argv)
 
@@ -174,6 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         debounce_ms=args.debounce_ms,
         step_ms=args.step_ms,
         force_polling=args.force_polling,
+        poll_delay_ms=args.poll_delay_ms,
         ignore_permission_denied=args.ignore_permission_denied,
         defaults_filter=not args.no_defaults_filter,
         gitignore_filter=not args.no_gitignore_filter,

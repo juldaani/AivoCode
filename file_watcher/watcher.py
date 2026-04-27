@@ -225,6 +225,7 @@ def watch_repos(roots: Sequence[Path], cfg: WatchConfig) -> Iterator[WatchBatch]
         step=cfg.step_ms,
         recursive=cfg.recursive,
         force_polling=cfg.force_polling,
+        poll_delay_ms=cfg.poll_delay_ms,
         ignore_permission_denied=cfg.ignore_permission_denied,
     ):
         ts = datetime.now()
@@ -252,6 +253,7 @@ async def awatch_repos(roots: Sequence[Path], cfg: WatchConfig) -> AsyncIterator
         step=cfg.step_ms,
         recursive=cfg.recursive,
         force_polling=cfg.force_polling,
+        poll_delay_ms=cfg.poll_delay_ms,
         ignore_permission_denied=cfg.ignore_permission_denied,
     ):
         ts = datetime.now()

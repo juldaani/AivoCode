@@ -30,6 +30,7 @@ class WatchConfig:
     debounce_ms: int = 1600
     step_ms: int = 50
     force_polling: bool | None = None
+    poll_delay_ms: int = 300
     ignore_permission_denied: bool = False
 
     # filtering toggles
