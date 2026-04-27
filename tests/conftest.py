@@ -1,4 +1,4 @@
-"""Pytest fixtures for file_watcher tests.
+"""Shared pytest fixtures for all tests.
 
 What this file provides
 - mock_python_repo: Path to the mock Python repo used for gitignore testing.
@@ -19,7 +19,7 @@ from file_watcher.types import WatchEvent
 @pytest.fixture
 def mock_python_repo() -> Path:
     """Path to the mock Python repo (inside AivoCode git worktree)."""
-    return Path(__file__).parent.parent / "data" / "mock_repos" / "python"
+    return Path(__file__).parent / "data" / "mock_repos" / "python"
 
 
 @pytest.fixture
