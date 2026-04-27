@@ -14,11 +14,12 @@ RUN mamba env create -f /tmp/environment.yml -y && \
 RUN micromamba run -n env-aivocode crawl4ai-setup && \
     micromamba run -n env-aivocode crawl4ai-doctor
 
-# Install Node.js and npm (needed for TypeScript language server)
-RUN apt-get update && \
-    apt-get install -y nodejs npm && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install Node.js (needed for TypeScript language server)
+# Using NodeSource script — faster, fewer deps, modern LTS vs apt's nodejs/npm
+RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install TypeScript language server globally
 RUN npm install -g typescript-language-server typescript
