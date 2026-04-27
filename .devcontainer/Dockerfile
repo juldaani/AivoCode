@@ -1,7 +1,7 @@
 # AivoCode devcontainer using devcontainer-base
 # Extends base image, creates mamba environment
 
-FROM ghcr.io/slamengine/devcontainer-base/opencode:latest
+FROM ghcr.io/slamengine/base-images/opencode-cpu:latest
 
 # Copy environment file
 COPY environment.yml /tmp/environment.yml
