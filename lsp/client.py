@@ -236,16 +236,23 @@ class LspClient(
         )
 
     def _language_kind(self) -> lsp_type.LanguageKind:
-        """Resolve LanguageKind from lang_entry.name."""
-        kind_map: dict[str, lsp_type.LanguageKind] = {
-            "python": lsp_type.LanguageKind.Python,
-            "typescript": lsp_type.LanguageKind.TypeScript,
-            "javascript": lsp_type.LanguageKind.JavaScript,
-            "go": lsp_type.LanguageKind.Go,
-            "rust": lsp_type.LanguageKind.Rust,
-            "java": lsp_type.LanguageKind.Java,
-        }
-        return kind_map.get(self.lang_entry.name, lsp_type.LanguageKind.Python)
+        """Resolve LanguageKind from lang_entry.name.
+
+        The config name must be a valid LSP language identifier
+        (e.g. "cpp", "typescript", "python").  Raises ValueError if
+        the name is not recognised so that misconfiguration is caught
+        early and loudly.
+        """
+        name = self.lang_entry.name.lower()
+
+        try:
+            return lsp_type.LanguageKind(name)
+        except ValueError as exc:
+            valid = [m.value for m in lsp_type.LanguageKind]
+            raise ValueError(
+                f"Unknown language '{self.lang_entry.name}'. "
+                f"Use a valid LSP language identifier (e.g. {', '.join(valid[:5])}, …)."
+            ) from exc
 
     @override
     async def notify_text_document_opened(
