@@ -52,10 +52,9 @@ class TestDefinition:
         target_name_part = gt_def["target_name_contains"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            result = await lang.client.request_definition(
-                file_path, Position(*lang.find_after("greet_call", "greet"))
-            )
+        result = await lang.client.request_definition(
+            file_path, Position(*lang.find_after("greet_call", "greet"))
+        )
 
         assert result is not None, "Expected definition results, got None"
         locations = result if isinstance(result, list) else [result]
@@ -94,10 +93,9 @@ class TestDefinition:
         target_name_part = gt_td["target_name_contains"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            result = await lang.client.request_type_definition(
-                file_path, Position(*lang.find_after("greeter_var", "greeter"))
-            )
+        result = await lang.client.request_type_definition(
+            file_path, Position(*lang.find_after("greeter_var", "greeter"))
+        )
 
         assert result is not None, (
             f"type_definition returned None for greeter_var in {lang.name}"

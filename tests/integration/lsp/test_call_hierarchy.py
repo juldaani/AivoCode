@@ -28,10 +28,9 @@ class TestCallHierarchy:
         must_include = gt["call_hierarchy"]["full_def"]["must_include_callees"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            outgoing = await lang.client.request_call_hierarchy_outgoing_call(
-                file_path, Position(*lang.pos("full_def"))
-            )
+        outgoing = await lang.client.request_call_hierarchy_outgoing_call(
+            file_path, Position(*lang.pos("full_def"))
+        )
 
         assert outgoing is not None, (
             f"Expected call hierarchy results for full_def in {lang.name}, got None"
@@ -54,10 +53,9 @@ class TestCallHierarchy:
         must_include = gt["call_hierarchy"]["create_def"]["must_include_callees"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            outgoing = await lang.client.request_call_hierarchy_outgoing_call(
-                file_path, Position(*lang.pos("create_def"))
-            )
+        outgoing = await lang.client.request_call_hierarchy_outgoing_call(
+            file_path, Position(*lang.pos("create_def"))
+        )
 
         assert outgoing is not None, (
             f"Expected call hierarchy results for create_def in {lang.name}, got None"

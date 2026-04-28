@@ -14,8 +14,7 @@ How to use
     configs = load_config(Path("lsp_config.toml"))
     for entry in configs:
         async with LspClient(lang_entry=entry, workspace=Path.cwd()) as client:
-            async with client.open_files(my_file):
-                symbols = await client.request_document_symbol_list(my_file)
+            symbols = await client.request_document_symbol_list(my_file)
 
 See Also
 - lsp.client for the full module documentation.

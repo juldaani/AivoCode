@@ -95,8 +95,7 @@ async def phase1_symbols(client: LspClient) -> bool:
     print("Phase 1: Document symbols for utils.py")
     print("=" * 60)
 
-    async with client.open_files(UTILS_FILE):
-        symbols = await client.request_document_symbol_list(UTILS_FILE)
+    symbols = await client.request_document_symbol_list(UTILS_FILE)
 
     if symbols is None:
         print("[symbols] ERROR: server returned None")
@@ -248,8 +247,7 @@ async def phase3_bridge(client: LspClient) -> bool:
 
     # Now ask the server for symbols — if the bridge worked, it knows the file.
     print("[bridge] requesting documentSymbol for new file ...")
-    async with client.open_files(new_file):
-        symbols = await client.request_document_symbol_list(new_file)
+    symbols = await client.request_document_symbol_list(new_file)
 
     if symbols is None:
         print("[bridge] ERROR: server returned None for new file")

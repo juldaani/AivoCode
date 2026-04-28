@@ -49,10 +49,9 @@ class TestFileChangesPython:
                 [_file_event(new_file.as_uri(), lsp_type.FileChangeType.Created)]
             )
 
-            async with python_client_isolated.open_files(new_file):
-                symbols = await python_client_isolated.request_document_symbol_list(
-                    new_file
-                )
+            symbols = await python_client_isolated.request_document_symbol_list(
+                new_file
+            )
 
             assert symbols is not None
             names = {sym.name for sym in symbols}
@@ -75,12 +74,11 @@ class TestFileChangesPython:
 
         try:
             # Verify symbol doesn't exist yet
-            async with python_client_isolated.open_files(utils_file):
-                symbols_before = (
-                    await python_client_isolated.request_document_symbol_list(
-                        utils_file
-                    )
+            symbols_before = (
+                await python_client_isolated.request_document_symbol_list(
+                    utils_file
                 )
+            )
             assert symbols_before is not None
             names_before = {sym.name for sym in symbols_before}
             assert "brand_new_func" not in names_before
@@ -97,13 +95,12 @@ class TestFileChangesPython:
                 )]
             )
 
-            # Re-open and verify
-            async with python_client_isolated.open_files(utils_file):
-                symbols_after = (
-                    await python_client_isolated.request_document_symbol_list(
-                        utils_file
-                    )
+            # Re-verify
+            symbols_after = (
+                await python_client_isolated.request_document_symbol_list(
+                    utils_file
                 )
+            )
             assert symbols_after is not None
             names_after = {sym.name for sym in symbols_after}
             assert "brand_new_func" in names_after
@@ -132,10 +129,9 @@ class TestFileChangesPython:
             [_file_event(new_file.as_uri(), lsp_type.FileChangeType.Created)]
         )
 
-        async with python_client_isolated.open_files(new_file):
-            symbols = await python_client_isolated.request_document_symbol_list(
-                new_file
-            )
+        symbols = await python_client_isolated.request_document_symbol_list(
+            new_file
+        )
         assert symbols is not None
         assert "deleted_func" in {sym.name for sym in symbols}
 
@@ -147,10 +143,9 @@ class TestFileChangesPython:
 
         # Server should still work for other files
         existing = python_workspace_isolated / "mock_pkg" / "utils.py"
-        async with python_client_isolated.open_files(existing):
-            symbols = await python_client_isolated.request_document_symbol_list(
-                existing
-            )
+        symbols = await python_client_isolated.request_document_symbol_list(
+            existing
+        )
         assert symbols is not None
         assert len(symbols) > 0
 
@@ -178,18 +173,16 @@ class TestFileChangesPython:
                 ]
             )
 
-            async with python_client_isolated.open_files(file_a):
-                symbols_a = (
-                    await python_client_isolated.request_document_symbol_list(
-                        file_a
-                    )
+            symbols_a = (
+                await python_client_isolated.request_document_symbol_list(
+                    file_a
                 )
-            async with python_client_isolated.open_files(file_b):
-                symbols_b = (
-                    await python_client_isolated.request_document_symbol_list(
-                        file_b
-                    )
+            )
+            symbols_b = (
+                await python_client_isolated.request_document_symbol_list(
+                    file_b
                 )
+            )
 
             assert symbols_a is not None
             assert "func_a" in {s.name for s in symbols_a}

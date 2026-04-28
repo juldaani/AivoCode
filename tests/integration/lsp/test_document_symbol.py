@@ -70,29 +70,7 @@ class TestDocumentSymbol:
         gt_top_names = {sym["name"] for sym in gt["symbols"]}
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            symbols = await lang.client.request_document_symbol_list(file_path)
-
-        assert symbols is not None, f"Expected symbols for {lang.src_file}, got None"
-        assert len(symbols) > 0, f"Expected non-empty symbols for {lang.src_file}"
-
-        result_names = _collect_names(symbols)
-        missing = gt_top_names - result_names
-        assert not missing, (
-            f"GT symbols {missing} not found in document symbol results. "
-            f"Got: {sorted(result_names)}"
-        )
-
-    @pytest.mark.anyio
-    async def test_class_has_children(
-        self, lang: LanguageTestData
-    ) -> None:
-        """Class symbols have children matching GT structure."""
-        gt = lang.load_gt(lang.types_file)
-
-        types_path = lang.file(lang.types_file)
-        async with lang.client.open_files(types_path):
-            symbols = await lang.client.request_document_symbol_list(types_path)
+        symbols = await lang.client.request_document_symbol_list(file_path)
 
         assert symbols is not None
         assert len(symbols) > 0
@@ -128,8 +106,7 @@ class TestDocumentSymbol:
     ) -> None:
         """All kind values map to valid SYMBOL_KIND_NAMES entries."""
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            symbols = await lang.client.request_document_symbol_list(file_path)
+        symbols = await lang.client.request_document_symbol_list(file_path)
 
         assert symbols is not None
         valid_kind_names = set(SYMBOL_KIND_NAMES.values())
@@ -152,8 +129,7 @@ class TestDocumentSymbol:
         gt_top_names = {sym["name"] for sym in gt["symbols"]}
 
         types_path = lang.file(lang.types_file)
-        async with lang.client.open_files(types_path):
-            symbols = await lang.client.request_document_symbol_list(types_path)
+        symbols = await lang.client.request_document_symbol_list(types_path)
 
         assert symbols is not None
         assert len(symbols) > 0

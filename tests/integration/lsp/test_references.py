@@ -33,12 +33,11 @@ class TestReferences:
         min_count = gt_refs["min_count"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            refs = await lang.client.request_references(
-                file_path,
-                Position(*lang.pos("create_def")),
-                include_declaration=True,
-            )
+        refs = await lang.client.request_references(
+            file_path,
+            Position(*lang.pos("create_def")),
+            include_declaration=True,
+        )
 
         assert refs is not None, (
             "Expected references for create_def, got None"
@@ -65,12 +64,11 @@ class TestReferences:
         min_count = gt_refs["min_count"]
 
         types_path = lang.file(lang.types_file)
-        async with lang.client.open_files(types_path):
-            refs = await lang.client.request_references(
-                types_path,
-                Position(*lang.pos("greet_def")),
-                include_declaration=True,
-            )
+        refs = await lang.client.request_references(
+            types_path,
+            Position(*lang.pos("greet_def")),
+            include_declaration=True,
+        )
 
         assert refs is not None, (
             "Expected references for greet_def, got None"

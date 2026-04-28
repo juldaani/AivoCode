@@ -123,9 +123,8 @@ async def main() -> None:
         print(f"Server capabilities: {type(client.server_capabilities).__name__}")
         print()
 
-        async with client.open_files(TARGET_FILE):
-            print("File opened. Requesting documentSymbol...\n")
-            symbols = await client.request_document_symbol_list(TARGET_FILE)
+        print("Requesting documentSymbol...\n")
+        symbols = await client.request_document_symbol_list(TARGET_FILE)
 
         if symbols is None:
             print("No symbols returned (server returned None).")

@@ -30,8 +30,7 @@ async def main() -> None:
     )
 
     async with LspClient(lang_entry=entry, workspace=WORKSPACE) as client:
-        async with client.open_files(FILE):
-            symbols = await client.request_document_symbol_list(FILE)
+        symbols = await client.request_document_symbol_list(FILE)
 
         for s in symbols or []:
             print(f"[lsp] {s.name} [{s.kind}]")

@@ -81,12 +81,11 @@ class TestRename:
         min_edits = gt_rename["min_edits"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            result = await lang.client.request_rename_edits(
-                file_path,
-                Position(*lang.pos("create_def")),
-                new_name,
-            )
+        result = await lang.client.request_rename_edits(
+            file_path,
+            Position(*lang.pos("create_def")),
+            new_name,
+        )
 
         assert result is not None, (
             f"Expected rename result for {lang.name}, got None"
@@ -115,12 +114,11 @@ class TestRename:
         must_edit_files = gt_rename.get("must_edit_files", [])
 
         types_path = lang.file(lang.types_file)
-        async with lang.client.open_files(types_path):
-            result = await lang.client.request_rename_edits(
-                types_path,
-                Position(*lang.pos("greet_def")),
-                new_name,
-            )
+        result = await lang.client.request_rename_edits(
+            types_path,
+            Position(*lang.pos("greet_def")),
+            new_name,
+        )
 
         assert result is not None, (
             f"Expected rename result for {lang.name}, got None"

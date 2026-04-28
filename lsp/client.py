@@ -10,9 +10,8 @@ How to use
 
     entry = LanguageEntry(name="python", suffixes=[".py"], ...)
     async with LspClient(lang_entry=entry, workspace=Path.cwd()) as client:
-        # Query methods (require open_files context for document-scoped requests)
-        async with client.open_files(my_file):
-            symbols = await client.request_document_symbol_list(my_file)
+        # Query methods (auto-open/close files internally)
+        symbols = await client.request_document_symbol_list(my_file)
 
         # Capability check before exposing a tool
         if client.supports("definition_provider"):

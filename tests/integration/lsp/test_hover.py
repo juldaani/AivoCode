@@ -41,10 +41,9 @@ class TestHover:
         must_contain = gt["hover"]["class_def"]["must_contain"]
 
         types_path = lang.file(lang.types_file)
-        async with lang.client.open_files(types_path):
-            result = await lang.client.request_hover(
-                types_path, Position(*lang.pos("class_def"))
-            )
+        result = await lang.client.request_hover(
+            types_path, Position(*lang.pos("class_def"))
+        )
 
         text = _extract_text(result)
         assert len(text) > 0, "Hover on class_def returned empty text"
@@ -62,10 +61,9 @@ class TestHover:
         must_contain = gt["hover"]["greet_call"]["must_contain"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            result = await lang.client.request_hover(
-                file_path, Position(*lang.find_after("greet_call", "greet"))
-            )
+        result = await lang.client.request_hover(
+            file_path, Position(*lang.find_after("greet_call", "greet"))
+        )
 
         assert result is not None, "Hover on greet_call returned None"
         text = _extract_text(result)
@@ -84,10 +82,9 @@ class TestHover:
         must_contain = gt["hover"]["create_def"]["must_contain"]
 
         file_path = lang.file(lang.src_file)
-        async with lang.client.open_files(file_path):
-            result = await lang.client.request_hover(
-                file_path, Position(*lang.pos("create_def"))
-            )
+        result = await lang.client.request_hover(
+            file_path, Position(*lang.pos("create_def"))
+        )
 
         assert result is not None, (
             f"Hover returned None for function definition in {lang.name}"

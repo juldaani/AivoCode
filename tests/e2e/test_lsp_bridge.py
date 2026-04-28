@@ -79,8 +79,7 @@ class TestLspBridge:
             await anyio.sleep(0.3)
 
             # Verify server knows about the new file
-            async with client.open_files(new_file):
-                symbols = await client.request_document_symbol_list(new_file)
+            symbols = await client.request_document_symbol_list(new_file)
 
             assert symbols is not None, "Expected symbols for new_module.py"
             names = {sym.name for sym in symbols}
@@ -147,8 +146,7 @@ class TestLspBridge:
             await anyio.sleep(0.3)
 
             # Python file should be known
-            async with client.open_files(py_file):
-                symbols = await client.request_document_symbol_list(py_file)
+            symbols = await client.request_document_symbol_list(py_file)
             assert symbols is not None, "Expected symbols for script.py"
             assert "py_func" in {sym.name for sym in symbols}
 
