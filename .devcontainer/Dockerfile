@@ -14,7 +14,7 @@ RUN mamba env create -f /tmp/environment.yml -y && \
 RUN micromamba run -n env-aivocode crawl4ai-setup && \
     micromamba run -n env-aivocode crawl4ai-doctor
 
-# Install Node.js (needed for TypeScript language server)
+# Install Node.js (needed for TypeScript LSP server)
 # Download and install nvm:
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
 RUN \. "$HOME/.nvm/nvm.sh" && \
@@ -22,9 +22,17 @@ RUN \. "$HOME/.nvm/nvm.sh" && \
     node -v && \
     npm -v
 
-# Install TypeScript language server globally
+# Make node and npm available in all shells (login, non-interactive, SSH)
+# nvm only works in interactive bash; symlinks ensure PATH availability
 RUN \. "$HOME/.nvm/nvm.sh" && \
-    npm install -g typescript-language-server typescript
+    ln -s "$(which node)" /usr/local/bin/node && \
+    ln -s "$(which npm)" /usr/local/bin/npm && \
+    ln -s "$(which npx)" /usr/local/bin/npx
+
+# Install vtsls TypeScript language server globally
+RUN \. "$HOME/.nvm/nvm.sh" && \
+    npm install -g @vtsls/language-server && \
+    ln -s "$(which vtsls)" /usr/local/bin/vtsls
 
 # Auto-activate env-aivocode in all shells
 RUN micromamba shell init -s bash --root-prefix /opt/conda && \

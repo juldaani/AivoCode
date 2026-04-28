@@ -4,7 +4,7 @@
     "dockerfile": "Dockerfile"
   },
   "postCreateCommand": "mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null && /usr/local/bin/sync-rclone.sh init",
-  "postStartCommand": "nohup supervisord -c /etc/supervisor/conf.d/supervisord.conf &",
+  "postStartCommand": "nohup supervisord -c /etc/supervisor/conf.d/supervisord.conf & sleep 2 && supervisorctl start opencode-server",
   "customizations": {
     "vscode": {
       "extensions": [
