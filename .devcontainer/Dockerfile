@@ -15,14 +15,16 @@ RUN micromamba run -n env-aivocode crawl4ai-setup && \
     micromamba run -n env-aivocode crawl4ai-doctor
 
 # Install Node.js (needed for TypeScript language server)
-# Using NodeSource script — faster, fewer deps, modern LTS vs apt's nodejs/npm
-RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Download and install nvm:
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+RUN \. "$HOME/.nvm/nvm.sh" && \
+    nvm install 24 && \
+    node -v && \
+    npm -v
 
 # Install TypeScript language server globally
-RUN npm install -g typescript-language-server typescript
+RUN \. "$HOME/.nvm/nvm.sh" && \
+    npm install -g typescript-language-server typescript
 
 # Auto-activate env-aivocode in all shells
 RUN micromamba shell init -s bash --root-prefix /opt/conda && \
