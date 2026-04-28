@@ -1,0 +1,8 @@
+{
+  "schema_version": 3,
+  "source": "mock_pkg/errors.ts",
+  "diagnostics": {
+    "min_errors": 3,
+    "must_include_message_patterns": ["not assignable to type 'number'", "Cannot find name"]
+  }
+}

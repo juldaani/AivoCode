@@ -1,14 +1,9 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "source": "mock_pkg/types.ts",
-  "kind_legend": {
-    "Class": [5],
-    "Method": [6],
-    "Function": [12]
-  },
   "symbols": [
     {
-      "name": "Greeter",
+      "name": "TypeGreeter",
       "kind_category": "Class",
       "children": [
         {
@@ -19,7 +14,7 @@
       ]
     },
     {
-      "name": "GreeterFactory",
+      "name": "TypeGreeterFactory",
       "kind_category": "Class",
       "children": [
         {
@@ -34,5 +29,15 @@
       "kind_category": "Function",
       "children": []
     }
-  ]
+  ],
+  "hover": {
+    "class_def": { "must_contain": ["TypeGreeter"] },
+    "greet_def": { "must_contain": ["greet"] }
+  },
+  "references": {
+    "greet_def": { "min_count": 2 }
+  },
+  "rename": {
+    "greet_def": { "new_name": "greet_renamed", "min_edits": 1, "must_edit_files": ["types.ts"] }
+  }
 }

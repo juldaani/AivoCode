@@ -82,7 +82,7 @@ class TestLspBridge:
             async with client.open_files(new_file):
                 symbols = await client.request_document_symbol_list(new_file)
 
-            assert symbols is not None
+            assert symbols is not None, "Expected symbols for new_module.py"
             names = {sym.name for sym in symbols}
             assert "bridge_func" in names, f"Expected bridge_func in {names}"
 
@@ -149,7 +149,7 @@ class TestLspBridge:
             # Python file should be known
             async with client.open_files(py_file):
                 symbols = await client.request_document_symbol_list(py_file)
-            assert symbols is not None
+            assert symbols is not None, "Expected symbols for script.py"
             assert "py_func" in {sym.name for sym in symbols}
 
         finally:

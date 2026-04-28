@@ -1,11 +1,6 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "source": "mock_pkg/helpers.ts",
-  "kind_legend": {
-    "Class": [5],
-    "Method": [6],
-    "Function": [12]
-  },
   "symbols": [
     {
       "name": "welcomeUser",

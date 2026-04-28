@@ -1,20 +1,6 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "source": "mock_pkg/utils.py",
-  "kind_legend": {
-    "Class": [
-      5
-    ],
-    "Method": [
-      6
-    ],
-    "Function": [
-      12
-    ],
-    "Constant": [
-      14
-    ]
-  },
   "symbols": [
     {
       "name": "Greeter",
@@ -125,5 +111,26 @@
       "kind_category": "Constant",
       "children": []
     }
-  ]
+  ],
+  "hover": {
+    "create_def": { "must_contain": ["create_and_greet"] },
+    "greet_call": { "must_contain": ["greet"] },
+    "full_def": { "must_contain": ["full_greeting"] }
+  },
+  "call_hierarchy": {
+    "full_def": { "must_include_callees": ["create_and_greet", "process_greeting"] },
+    "create_def": { "must_include_callees": ["create"] }
+  },
+  "references": {
+    "create_def": { "min_count": 2 }
+  },
+  "definitions": {
+    "greet_call": { "target_file": "types.py", "target_name_contains": "greet" }
+  },
+  "type_definitions": {
+    "greeter_var": { "target_file": "types.py", "target_name_contains": "TypeGreeter" }
+  },
+  "rename": {
+    "create_def": { "new_name": "renamed_create_and_greet", "min_edits": 2 }
+  }
 }

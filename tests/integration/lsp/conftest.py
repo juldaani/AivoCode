@@ -3,25 +3,28 @@
 What this file provides
 - Session cleanup of leftover temp workspaces.
 - lang fixture: class-scoped, parametrized by language. Provides client,
-  workspace, and parsed markers for universal tests.
+  workspace, parsed markers, and ground-truth data loading for universal tests.
 - Isolated fixtures for mutation tests (test_file_changes.py).
 
 Config
 - Language definitions loaded from tests/lsp_test.toml.
 - Test positions loaded from MARK comments in mock source files.
+- Ground-truth (GT) data loaded from ``*_tests_gt.json`` files alongside
+  mock source files. Tests assert against GT data instead of magic numbers.
 - Auto-skips tests if the configured language server is not on PATH.
 """
 
 from __future__ import annotations
 
 import glob
+import json
 import re
 import shutil
 import tempfile
 from builtins import ExceptionGroup
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import pytest
 import tomllib
@@ -105,6 +108,8 @@ class LanguageConfig:
     server_args: tuple[str, ...]
     suffix: str
     mock_repo: str
+    gt_suffix: str
+    skip_tests: tuple[str, ...] = ()
 
 
 def _load_languages() -> list[LanguageConfig]:
@@ -119,6 +124,8 @@ def _load_languages() -> list[LanguageConfig]:
             server_args=tuple(entry["server_args"]),
             suffix=entry["suffix"],
             mock_repo=entry["mock_repo"],
+            gt_suffix=entry["gt_suffix"],
+            skip_tests=tuple(entry.get("skip_tests", [])),
         )
         for entry in data["language"]
     ]
@@ -175,6 +182,8 @@ class LanguageTestData:
     src_file: str  # "utils.py" or "index.ts"
     types_file: str  # "types.py" or "types.ts"
     errors_file: str  # "errors.py" or "errors.ts"
+    gt_suffix: str  # "basedpyright" or "vtsls"
+    skip_tests: tuple[str, ...] = ()  # test names to skip for this server
 
     def pos(self, marker: str, *, offset: int = 0) -> tuple[int, int]:
         """Get (line, char) for a named marker, optionally with char offset."""
@@ -197,6 +206,38 @@ class LanguageTestData:
     def file(self, name: str) -> Path:
         """Get path to a file in the mock_pkg directory."""
         return self.workspace / "mock_pkg" / name
+
+    def load_gt(self, source_file: str) -> dict[str, Any]:
+        """Load ground-truth JSON for a source file in the mock_pkg.
+
+        The GT file is named ``{stem}_tests_gt_{gt_suffix}.json`` where
+        ``gt_suffix`` comes from the language configuration in lsp_test.toml
+        (e.g. "basedpyright" or "vtsls"). This ensures each language server
+        gets its own GT data, since different servers may return different
+        results for the same source code.
+
+        Parameters
+        ----------
+        source_file : str
+            Source file name, e.g. "utils.py" or "index.ts".
+            The GT file is resolved as
+            ``{stem}_tests_gt_{gt_suffix}.json`` in the mock_pkg directory.
+
+        Returns
+        -------
+        dict
+            Parsed GT data containing "symbols", "hover", "call_hierarchy",
+            "references", etc.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no GT file exists for the given source file and server.
+        """
+        stem = Path(source_file).stem  # e.g. "utils" or "index"
+        gt_name = f"{stem}_tests_gt_{self.gt_suffix}.json"
+        gt_path = self.file(gt_name)
+        return json.loads(gt_path.read_text(encoding="utf-8"))
 
     def supports(self, capability: str) -> bool:
         """Check if the connected server supports a capability."""
@@ -237,6 +278,8 @@ def _make_language_test_data(
         src_file=src_name,
         types_file=types_name,
         errors_file=errors_name,
+        gt_suffix=cfg.gt_suffix,
+        skip_tests=cfg.skip_tests,
     )
 
 
@@ -255,7 +298,10 @@ async def lang(request) -> AsyncGenerator[LanguageTestData, None]:
 
     # Check server availability
     if shutil.which(cfg.server) is None:
-        pytest.skip(f"{cfg.server} not found on PATH")
+        pytest.fail(
+            f"{cfg.server} not found on PATH — "
+            f"install it or set AIVOCODE_LSP_SKIP_MISSING=1 to skip"
+        )
 
     # Create workspace
     workspace = _make_workspace(cfg.mock_repo, f"lsp_{cfg.name}_")
@@ -275,7 +321,10 @@ async def lang(request) -> AsyncGenerator[LanguageTestData, None]:
     except BaseException as exc:
         shutil.rmtree(workspace.parent, ignore_errors=True)
         if isinstance(exc, ExceptionGroup):
-            pytest.skip(f"{cfg.server} failed to start: {exc}")
+            pytest.fail(
+                f"{cfg.server} failed to start: {exc} — "
+                f"server is on PATH but crashed during initialization"
+            )
         raise
 
     test_data = _make_language_test_data(cfg, client, workspace)
@@ -317,7 +366,10 @@ async def python_client_isolated(
 ) -> AsyncGenerator[LspClient, None]:
     """Fresh LspClient per test class with its own workspace."""
     if shutil.which(python_language_entry.server) is None:
-        pytest.skip(f"{python_language_entry.server} not found on PATH")
+        pytest.fail(
+            f"{python_language_entry.server} not found on PATH — "
+            f"install it or set AIVOCODE_LSP_SKIP_MISSING=1 to skip"
+        )
 
     try:
         client = LspClient(
@@ -327,7 +379,10 @@ async def python_client_isolated(
         await client.__aenter__()
     except BaseException as exc:
         if isinstance(exc, ExceptionGroup):
-            pytest.skip(f"basedpyright-langserver failed to start: {exc}")
+            pytest.fail(
+                f"basedpyright-langserver failed to start: {exc} — "
+                f"server is on PATH but crashed during initialization"
+            )
         raise
     yield client
     await client.shutdown()

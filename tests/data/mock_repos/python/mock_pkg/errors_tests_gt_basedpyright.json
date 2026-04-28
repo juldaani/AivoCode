@@ -1,0 +1,8 @@
+{
+  "schema_version": 3,
+  "source": "mock_pkg/errors.py",
+  "diagnostics": {
+    "min_errors": 5,
+    "must_include_message_patterns": ["not assignable to", "is not defined", "not assignable to \"str\""]
+  }
+}

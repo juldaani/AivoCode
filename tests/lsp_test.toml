@@ -4,6 +4,8 @@ server = "basedpyright-langserver"
 server_args = ["--stdio"]
 suffix = ".py"
 mock_repo = "python"
+gt_suffix = "basedpyright"
+skip_tests = []
 
 [[language]]
 name = "typescript"
@@ -11,3 +13,11 @@ server = "vtsls"
 server_args = ["--stdio"]
 suffix = ".ts"
 mock_repo = "typescript"
+gt_suffix = "vtsls"
+# workspace/symbol is skipped for vtsls because it only indexes files that
+# have been explicitly opened via textDocument/didOpen. Unlike basedpyright,
+# which pre-indexes the entire workspace on init, vtsls returns empty results
+# unless the queried symbols happen to be in an already-open file. This makes
+# workspace/symbol tests unreliable — opening one file only indexes that file,
+# not the whole project, so cross-file symbol queries return incomplete results.
+skip_tests = ["workspace_symbol"]

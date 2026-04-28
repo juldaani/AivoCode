@@ -1,13 +1,6 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "source": "mock_pkg/index.ts",
-  "kind_legend": {
-    "Interface": [11],
-    "Class": [5],
-    "Method": [6],
-    "Function": [12],
-    "Constant": [14]
-  },
   "symbols": [
     {
       "name": "MAX_ITEMS",
@@ -67,5 +60,26 @@
       "kind_category": "Function",
       "children": []
     }
-  ]
+  ],
+  "hover": {
+    "create_def": { "must_contain": ["createAndGreet"] },
+    "greet_call": { "must_contain": ["greet"] },
+    "full_def": { "must_contain": ["fullGreeting"] }
+  },
+  "call_hierarchy": {
+    "full_def": { "must_include_callees": ["createAndGreet", "processGreeting"] },
+    "create_def": { "must_include_callees": ["create"] }
+  },
+  "references": {
+    "create_def": { "min_count": 2 }
+  },
+  "definitions": {
+    "greet_call": { "target_file": "types.ts", "target_name_contains": "greet" }
+  },
+  "type_definitions": {
+    "greeter_var": { "target_file": "types.ts", "target_name_contains": "TypeGreeter" }
+  },
+  "rename": {
+    "create_def": { "new_name": "renamedCreateAndGreet", "min_edits": 2 }
+  }
 }
