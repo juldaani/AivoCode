@@ -16,7 +16,7 @@ dependencies:
   - faiss-cpu=1.9.0
   - watchfiles=1.1.1
   - pip:
-    - mcp==1.26.0
+    - fastapi-mcp==0.4.0
     - pytest==9.0.2
     - basedpyright==1.38.1
     - lsp-client==0.3.9
