@@ -20,5 +20,5 @@ dependencies:
     - pytest==9.0.2
     - basedpyright==1.38.1
     - lsp-client==0.3.9
-    - hindsight-client==0.4.18
     - crawl4ai==0.8.6
+    - cloakbrowser==0.3.29
