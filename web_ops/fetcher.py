@@ -105,7 +105,7 @@ _DEFAULT_OUTPUT_FORMAT: _OutputFormat = "fit"
 
 # Pruning threshold (0–1). Higher = more aggressive removal.
 # 0.48 is the Crawl4AI default — empirically good for most pages.
-_PRUNING_THRESHOLD: float = 0.48
+_PRUNING_THRESHOLD: float = 0.28
 
 # Maximum retry attempts for transient failures.
 _MAX_RETRIES: int = 2
@@ -262,11 +262,19 @@ async def _fetch_once(
             )
 
         # Extract structured links for fit mode (raw already has them inline).
+        # Keep only href and text — the other Crawl4AI fields (base_domain,
+        # scores, head_data) are noise for agent consumption.
         links: dict[str, list[dict[str, Any]]] | None = None
         if output_format == "fit" and result.links:
             links = {
-                "internal": result.links.get("internal", []),
-                "external": result.links.get("external", []),
+                "internal": [
+                    {"href": link["href"], "text": link["text"]}
+                    for link in result.links.get("internal", [])
+                ],
+                "external": [
+                    {"href": link["href"], "text": link["text"]}
+                    for link in result.links.get("external", [])
+                ],
             }
 
         return FetchResult(
