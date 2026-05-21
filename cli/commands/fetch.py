@@ -77,6 +77,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=False,
         help="Include extracted page links (internal/external) in the result.",
     )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        default=False,
+        help="Show status messages to stderr (default: silent, JSON only).",
+    )
     parser.set_defaults(func=handle)
 
 
@@ -148,49 +154,51 @@ def handle(args: argparse.Namespace) -> int:
     has_multi = len(headings) + len(indices) + len(line_ranges) > 1
 
     # Status message.
-    status_parts = [f"Fetching {args.url}"]
-    if args.js_render:
-        status_parts.append("(JS render)")
-    if headings:
-        status_parts.append(f"(headings: {', '.join(headings)})")
-    if indices:
-        status_parts.append(f"(indices: {', '.join(str(i) for i in indices)})")
-    if line_ranges:
-        status_parts.append(f"(ranges: {', '.join(line_ranges)})")
-    if args.refresh_cache:
-        status_parts.append("(refreshing cache)")
-    print(" ".join(status_parts) + " ...", file=sys.stderr, flush=True)
+    if args.verbose:
+        status_parts = [f"Fetching {args.url}"]
+        if args.js_render:
+            status_parts.append("(JS render)")
+        if headings:
+            status_parts.append(f"(headings: {', '.join(headings)})")
+        if indices:
+            status_parts.append(f"(indices: {', '.join(str(i) for i in indices)})")
+        if line_ranges:
+            status_parts.append(f"(ranges: {', '.join(line_ranges)})")
+        if args.refresh_cache:
+            status_parts.append("(refreshing cache)")
+        print(" ".join(status_parts) + " ...", file=sys.stderr, flush=True)
 
-    if has_multi:
-        # Multiple sections: fetch once, extract all, merge.
-        successes, errors = asyncio.run(
-            _fetch_multi(
-                args.url,
-                wait_until=wait_until,
-                headings=headings,
-                indices=indices,
-                line_ranges=line_ranges,
-                refresh_cache=args.refresh_cache,
+        if has_multi:
+            # Multiple sections: fetch once, extract all, merge.
+            successes, errors = asyncio.run(
+                _fetch_multi(
+                    args.url,
+                    wait_until=wait_until,
+                    headings=headings,
+                    indices=indices,
+                    line_ranges=line_ranges,
+                    refresh_cache=args.refresh_cache,
+                )
             )
-        )
-        combined = "\n\n---\n\n".join(successes) if successes else ""
-        output: dict = {
-            "success": bool(successes),
-            "status_code": None,
-            "error": "; ".join(errors) if errors else None,
-            "markdown": combined,
-            "navigation": None,
-            "toc": None,
-            "total_chars": len(combined),
-        }
-        print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
-        print(
-            f"Done. {len(successes)} sections extracted ({', '.join(errors)})" if errors
-            else f"Done. {len(successes)} sections extracted.",
-            file=sys.stderr,
-            flush=True,
-        )
-        return 0 if successes else 1
+            combined = "\n\n---\n\n".join(successes) if successes else ""
+            output: dict = {
+                "success": bool(successes),
+                "status_code": None,
+                "error": "; ".join(errors) if errors else None,
+                "markdown": combined,
+                "navigation": None,
+                "toc": None,
+                "total_chars": len(combined),
+            }
+            print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
+            if args.verbose:
+                print(
+                    f"Done. {len(successes)} sections extracted ({', '.join(errors)})" if errors
+                    else f"Done. {len(successes)} sections extracted.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            return 0 if successes else 1
 
     # Single-selector or full-page path.
     heading_arg = headings[0] if headings else None
@@ -220,27 +228,28 @@ def handle(args: argparse.Namespace) -> int:
     }
     print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
 
-    if result.success:
-        if result.toc:
-            print(
-                f"Done. {result.total_chars} chars total, "
-                f"{len(result.toc)} ToC entries.",
-                file=sys.stderr, flush=True,
-            )
-        else:
+    if args.verbose:
+        if result.success:
             nav_info = ""
             if result.navigation:
                 n_int = len(result.navigation.get("internal", []))
                 n_ext = len(result.navigation.get("external", []))
                 nav_info = f" ({n_int} internal, {n_ext} external links)"
+            if result.toc:
+                print(
+                    f"Done. {result.total_chars} chars total, "
+                    f"{len(result.toc)} ToC entries{nav_info}.",
+                    file=sys.stderr, flush=True,
+                )
+            else:
+                print(
+                    f"Done. {len(result.markdown)} chars{nav_info}.",
+                    file=sys.stderr, flush=True,
+                )
+        else:
             print(
-                f"Done. {len(result.markdown)} chars{nav_info}.",
+                f"Error: fetch failed (error={result.error}, status={result.status_code})",
                 file=sys.stderr, flush=True,
             )
-    else:
-        print(
-            f"Error: fetch failed (error={result.error}, status={result.status_code})",
-            file=sys.stderr, flush=True,
-        )
 
     return 0 if result.success else 1

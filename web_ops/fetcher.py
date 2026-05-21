@@ -442,18 +442,21 @@ async def _fetch_once(
     Navigation links are always extracted and persisted alongside the markdown
     cache so ``--navigation`` works on cache hits too.
     """
-    browser = await launch_async(
-        headless=True,
-        args=[
-            f"--remote-debugging-port={_CDP_PORT}",
-            "--remote-debugging-address=127.0.0.1",
-        ],
-    )
+    # All third-party noise (cloakbrowser upgrade nag, crawl4ai logging) is
+    # redirected into the buffer so nothing leaks to stderr.
+    buf = io.StringIO()
+    browser = None
 
     try:
-        buf = io.StringIO()
-
         with redirect_stdout(buf), redirect_stderr(buf):
+            browser = await launch_async(
+                headless=True,
+                args=[
+                    f"--remote-debugging-port={_CDP_PORT}",
+                    "--remote-debugging-address=127.0.0.1",
+                ],
+            )
+
             browser_config = BrowserConfig(
                 browser_mode="cdp",
                 cdp_url=f"http://127.0.0.1:{_CDP_PORT}",
@@ -519,7 +522,8 @@ async def _fetch_once(
         )
 
     finally:
-        await browser.close()
+        if browser is not None:
+            await browser.close()
 
 
 def _truncation_message(total_chars: int) -> str:
