@@ -45,16 +45,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
              "Use for SPAs or pages that fetch content dynamically.",
     )
     parser.add_argument(
-        "--output-format",
-        type=str,
-        choices=("fit", "raw"),
-        default="fit",
-        help=(
-            "Content format for the extracted markdown. "
-            "'fit' (default) strips boilerplate. 'raw' returns full page."
-        ),
-    )
-    parser.add_argument(
         "--refresh-cache",
         action="store_true",
         default=False,
@@ -93,7 +83,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
 async def _fetch_multi(
     url: str,
     wait_until: str,
-    output_format: str,
     headings: list[str],
     indices: list[int],
     line_ranges: list[str],
@@ -113,7 +102,6 @@ async def _fetch_multi(
     cache_seed = await fetch_url(
         url,
         wait_until=wait_until,
-        output_format=output_format,
         refresh_cache=refresh_cache,
     )
     if not cache_seed.success:
@@ -122,7 +110,7 @@ async def _fetch_multi(
     # Extract each section from the now-fresh cache.
     for heading in headings:
         r = await fetch_url(
-            url, wait_until=wait_until, output_format=output_format, heading=heading,
+            url, wait_until=wait_until, heading=heading,
         )
         if r.success and r.markdown:
             successes.append(f"[heading: {heading}]\n\n{r.markdown}")
@@ -131,7 +119,7 @@ async def _fetch_multi(
 
     for idx in indices:
         r = await fetch_url(
-            url, wait_until=wait_until, output_format=output_format, index=idx,
+            url, wait_until=wait_until, index=idx,
         )
         if r.success and r.markdown:
             successes.append(f"[index: {idx}]\n\n{r.markdown}")
@@ -140,7 +128,7 @@ async def _fetch_multi(
 
     for lr in line_ranges:
         r = await fetch_url(
-            url, wait_until=wait_until, output_format=output_format, line_range=lr,
+            url, wait_until=wait_until, line_range=lr,
         )
         if r.success and r.markdown:
             successes.append(f"[lines: {lr}]\n\n{r.markdown}")
@@ -179,7 +167,6 @@ def handle(args: argparse.Namespace) -> int:
             _fetch_multi(
                 args.url,
                 wait_until=wait_until,
-                output_format=args.output_format,
                 headings=headings,
                 indices=indices,
                 line_ranges=line_ranges,
@@ -214,7 +201,6 @@ def handle(args: argparse.Namespace) -> int:
         fetch_url(
             args.url,
             wait_until=wait_until,
-            output_format=args.output_format,
             heading=heading_arg,
             index=index_arg,
             line_range=range_arg,

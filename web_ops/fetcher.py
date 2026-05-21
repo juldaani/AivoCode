@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 import re
 import time
@@ -28,8 +29,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
-from crawl4ai.content_filter_strategy import PruningContentFilter
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from cloakbrowser import launch_async
 
 # ---------------------------------------------------------------------------
@@ -38,9 +37,6 @@ from cloakbrowser import launch_async
 
 _WAIT_UNTIL_CHOICES: tuple[str, ...] = ("domcontentloaded", "load", "networkidle")
 _WaitUntil = Literal["domcontentloaded", "load", "networkidle"]
-
-_OUTPUT_FORMAT_CHOICES: tuple[str, ...] = ("fit", "raw")
-_OutputFormat = Literal["fit", "raw"]
 
 
 @dataclass
@@ -86,8 +82,6 @@ _PAGE_TIMEOUT_MS: int = 10_000
 # use ``--js-render`` (networkidle) instead.
 _DELAY_BEFORE_RETURN_HTML_S: float = 0.0
 _DEFAULT_WAIT_UNTIL: _WaitUntil = "load"
-_DEFAULT_OUTPUT_FORMAT: _OutputFormat = "fit"
-_PRUNING_THRESHOLD: float = 0.35
 # Character threshold above which content is truncated and replaced with a
 # table of contents.  Full content is always saved to cache for later retrieval.
 _TRUNCATION_THRESHOLD: int = 5_000
@@ -177,24 +171,62 @@ def _write_cache(url: str, content: str) -> None:
     _evict_if_needed()
 
 
+# ---------------------------------------------------------------------------
+# Navigation companion cache
+# ---------------------------------------------------------------------------
+# Navigation links (internal/external) are extracted during the live crawl
+# and persisted alongside the markdown cache so cache hits also have access
+# to them.  The companion file uses the same cache key with a ``.nav.json``
+# extension and is evicted together with the markdown cache.
+
+
+def _nav_cache_path(url: str) -> Path:
+    """Derive the companion navigation cache path for a URL."""
+    return _CACHE_DIR / (_cache_key(url).replace(".md", ".nav.json"))
+
+
+def _write_nav_cache(
+    url: str, navigation: dict[str, list[dict[str, Any]]],
+) -> None:
+    """Persist extracted navigation links alongside the markdown cache."""
+    path = _nav_cache_path(url)
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(navigation, ensure_ascii=False, indent=None),
+        encoding="utf-8",
+    )
+
+
+def _read_nav_cache(url: str) -> dict[str, list[dict[str, Any]]] | None:
+    """Read cached navigation links for a URL, or ``None`` if not available."""
+    path = _nav_cache_path(url)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _evict_if_needed() -> None:
     """Remove oldest cache files if count exceeds ``_CACHE_MAX_FILES``.
 
-    Files are sorted by modification time (oldest first) and surplus entries
-    are deleted.  This runs after every cache write so the limit is a hard cap.
+    Both markdown (``.md``) and navigation companion (``.nav.json``) files
+    are sorted by modification time (oldest first); surplus entries are
+    deleted.  This runs after every cache write so the limit is a hard cap.
     """
     try:
-        files = sorted(
-            _CACHE_DIR.glob("*.md"),
+        all_files = sorted(
+            list(_CACHE_DIR.glob("*.md")) + list(_CACHE_DIR.glob("*.nav.json")),
             key=lambda p: os.path.getmtime(str(p)),
         )
     except OSError:
         return  # Directory doesn't exist or isn't readable — ignore.
 
-    if len(files) <= _CACHE_MAX_FILES:
+    if len(all_files) <= _CACHE_MAX_FILES:
         return
 
-    for old_file in files[: len(files) - _CACHE_MAX_FILES]:
+    for old_file in all_files[: len(all_files) - _CACHE_MAX_FILES]:
         try:
             old_file.unlink()
         except OSError:
@@ -401,10 +433,15 @@ def _extract_by_toc_entry(
 async def _fetch_once(
     url: str,
     wait_until: _WaitUntil,
-    output_format: _OutputFormat,
-    include_navigation: bool = False,
 ) -> FetchResult:
-    """Perform a single fetch attempt (no caching, no truncation logic)."""
+    """Perform a single fetch attempt (no caching, no truncation logic).
+
+    Always uses the raw (unfiltered) Crawl4AI config so the cached content
+    is stable across calls — section extraction via ``--heading`` / ``--index``
+    / ``--line-range`` relies on consistent line numbers from the raw markdown.
+    Navigation links are always extracted and persisted alongside the markdown
+    cache so ``--navigation`` works on cache hits too.
+    """
     browser = await launch_async(
         headless=True,
         args=[
@@ -422,23 +459,11 @@ async def _fetch_once(
                 cdp_url=f"http://127.0.0.1:{_CDP_PORT}",
             )
 
-            if output_format == "fit":
-                run_config = CrawlerRunConfig(
-                    wait_until=wait_until,
-                    page_timeout=_PAGE_TIMEOUT_MS,
-                    delay_before_return_html=_DELAY_BEFORE_RETURN_HTML_S,
-                    markdown_generator=DefaultMarkdownGenerator(
-                        content_filter=PruningContentFilter(
-                            threshold=_PRUNING_THRESHOLD,
-                        ),
-                    ),
-                )
-            else:
-                run_config = CrawlerRunConfig(
-                    wait_until=wait_until,
-                    page_timeout=_PAGE_TIMEOUT_MS,
-                    delay_before_return_html=_DELAY_BEFORE_RETURN_HTML_S,
-                )
+            run_config = CrawlerRunConfig(
+                wait_until=wait_until,
+                page_timeout=_PAGE_TIMEOUT_MS,
+                delay_before_return_html=_DELAY_BEFORE_RETURN_HTML_S,
+            )
 
             async with AsyncWebCrawler(config=browser_config) as crawler:
                 result = await crawler.arun(url, config=run_config)
@@ -456,21 +481,12 @@ async def _fetch_once(
                 error=_parse_error(buf.getvalue()),
             )
 
-        # Extract markdown.
-        if output_format == "fit":
-            md_obj = result.markdown
-            if hasattr(md_obj, "fit_markdown") and md_obj.fit_markdown:
-                markdown = md_obj.fit_markdown
-            elif hasattr(md_obj, "raw_markdown") and md_obj.raw_markdown:
-                markdown = md_obj.raw_markdown
-            else:
-                markdown = str(md_obj) if md_obj else ""
+        # Extract raw markdown (the full page, unfiltered).
+        md_obj = result.markdown
+        if hasattr(md_obj, "raw_markdown") and md_obj.raw_markdown:
+            markdown = md_obj.raw_markdown
         else:
-            md_obj = result.markdown
-            if hasattr(md_obj, "raw_markdown") and md_obj.raw_markdown:
-                markdown = md_obj.raw_markdown
-            else:
-                markdown = str(md_obj) if md_obj else ""
+            markdown = str(md_obj) if md_obj else ""
 
         if not markdown:
             return FetchResult(
@@ -480,9 +496,9 @@ async def _fetch_once(
                 error="empty",
             )
 
-        # Extract structured navigation links when requested.
+        # Always extract structured navigation links for caching.
         navigation: dict[str, list[dict[str, Any]]] | None = None
-        if include_navigation and output_format == "fit" and result.links:
+        if result.links:
             navigation = {
                 "internal": [
                     {"href": link["href"], "text": link["text"]}
@@ -525,7 +541,6 @@ async def fetch_url(
     url: str,
     *,
     wait_until: _WaitUntil = _DEFAULT_WAIT_UNTIL,
-    output_format: _OutputFormat = _DEFAULT_OUTPUT_FORMAT,
     heading: str | None = None,
     index: int | None = None,
     line_range: str | None = None,
@@ -534,29 +549,39 @@ async def fetch_url(
 ) -> FetchResult:
     """Fetch a URL via CloakBrowser + Crawl4AI and return structured results.
 
+    Uses raw (unfiltered) markdown for caching — section extraction via
+    ``heading`` / ``index`` / ``line_range`` always operates on consistent
+    content regardless of flags used on previous calls.
+
     When content exceeds the truncation threshold (5000 chars), the full
     content is saved to a disk cache and the result includes a table of
     contents with section previews instead of the raw markdown.  Agents can
     then retrieve specific sections via ``heading``, ``index``, or
     ``line_range`` parameters — which read directly from cache.
 
+    Navigation links (internal/external) are extracted during every fresh
+    crawl and persisted alongside the markdown cache.  When
+    ``include_navigation=True``, they are returned on cache hits too.
+
     Args:
         url: The URL to fetch.
         wait_until: Playwright navigation event to wait for.
-        output_format: ``"fit"`` (default) or ``"raw"``.
         heading: Exact heading text to extract from cache (case-insensitive).
         index: ToC index to extract from cache.
         line_range: ``"start-end"`` line range to extract from cache
             (1-based, max 100 lines).
         refresh_cache: If ``True``, always refetch from the web, ignoring any
             cached content.
+        include_navigation: If ``True``, include extracted page links
+            (internal/external) in the result.
 
     Returns:
         ``FetchResult`` — never ``None``.
 
     Side effects:
         Launches/takes down a CloakBrowser subprocess per fresh fetch.
-        Writes/reads markdown files to ``tmp/aivocode/cache/``.
+        Writes/reads markdown and navigation companion files to
+        ``tmp/aivocode/cache/``.
     """
     # ── Section extraction from cache (no fetch needed if fresh) ──────────
     wants_section = heading is not None or index is not None or line_range is not None
@@ -582,16 +607,25 @@ async def fetch_url(
     if not wants_section and not refresh_cache and _cache_is_fresh(_cache_path(url)):
         cached = _read_cache(url)
         if cached is not None:
-            return _result_with_truncation(cached)
+            # Restore navigation from companion cache when requested.
+            nav = _read_nav_cache(url) if include_navigation else None
+            # If navigation was requested but companion cache is missing
+            # (page was originally cached before nav caching was added),
+            # fall through to a fresh fetch so the caller gets links.
+            if nav is not None or not include_navigation:
+                return _result_with_truncation(cached, navigation=nav)
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
-    result = await _fetch_once(url, wait_until, output_format, include_navigation)
+    result = await _fetch_once(url, wait_until)
     if not result.success:
         return result
 
     # Persist to cache.
     full_markdown = result.markdown
     _write_cache(url, full_markdown)
+    # Persist navigation companion cache so cache hits also get links.
+    if result.navigation is not None:
+        _write_nav_cache(url, result.navigation)
 
     # If a section was requested, extract it from the fresh content.
     if wants_section:
@@ -604,13 +638,16 @@ async def fetch_url(
         return FetchResult(
             success=err is None,
             markdown=md,
-            navigation=result.navigation,
+            navigation=result.navigation if include_navigation else None,
             error=err,
             total_chars=len(md),
         )
 
     # Full result — apply truncation if needed.
-    return _result_with_truncation(full_markdown, navigation=result.navigation)
+    return _result_with_truncation(
+        full_markdown,
+        navigation=result.navigation if include_navigation else None,
+    )
 
 
 def _result_with_truncation(
