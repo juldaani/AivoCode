@@ -79,7 +79,11 @@ class FetchResult:
 
 _CDP_PORT: int = 9243
 _PAGE_TIMEOUT_MS: int = 10_000
-_DELAY_BEFORE_RETURN_HTML_S: float = 2.0
+# Extra delay (seconds) after wait conditions are satisfied before capturing.
+# Kept at zero because ``load`` already guarantees scripts are executed;
+# frameworks that fetch data after hydration (SPAs with API calls) should
+# use ``--js-render`` (networkidle) instead.
+_DELAY_BEFORE_RETURN_HTML_S: float = 0.0
 _DEFAULT_WAIT_UNTIL: _WaitUntil = "load"
 _DEFAULT_OUTPUT_FORMAT: _OutputFormat = "fit"
 _PRUNING_THRESHOLD: float = 0.35
