@@ -30,11 +30,19 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--wait-until",
         type=str,
         choices=("domcontentloaded", "load", "networkidle"),
-        default="networkidle",
+        default="load",
         help=(
             "When to consider the page ready for capture. "
-            "'networkidle' (default) waits for no network activity for 500 ms."
+            "'load' (default) waits for all resources to load. "
+            "Use 'networkidle' or --js-render for JS-heavy SPAs."
         ),
+    )
+    parser.add_argument(
+        "--js-render",
+        action="store_true",
+        default=False,
+        help="Enable full JavaScript rendering (alias for --wait-until networkidle). "
+             "Use for SPAs or pages that fetch content dynamically.",
     )
     parser.add_argument(
         "--output-format",
@@ -141,11 +149,14 @@ def handle(args: argparse.Namespace) -> int:
     headings = args.heading or []
     indices = [i for i in (args.index or []) if i is not None]
     line_ranges = args.line_range or []
+    wait_until = "networkidle" if args.js_render else args.wait_until
 
     has_multi = len(headings) + len(indices) + len(line_ranges) > 1
 
     # Status message.
     status_parts = [f"Fetching {args.url}"]
+    if args.js_render:
+        status_parts.append("(JS render)")
     if headings:
         status_parts.append(f"(headings: {', '.join(headings)})")
     if indices:
@@ -161,7 +172,7 @@ def handle(args: argparse.Namespace) -> int:
         successes, errors = asyncio.run(
             _fetch_multi(
                 args.url,
-                wait_until=args.wait_until,
+                wait_until=wait_until,
                 output_format=args.output_format,
                 headings=headings,
                 indices=indices,
@@ -196,7 +207,7 @@ def handle(args: argparse.Namespace) -> int:
     result = asyncio.run(
         fetch_url(
             args.url,
-            wait_until=args.wait_until,
+            wait_until=wait_until,
             output_format=args.output_format,
             heading=heading_arg,
             index=index_arg,

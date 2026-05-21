@@ -17,7 +17,6 @@ Why this exists
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import io
 import os
@@ -81,12 +80,9 @@ class FetchResult:
 _CDP_PORT: int = 9243
 _PAGE_TIMEOUT_MS: int = 10_000
 _DELAY_BEFORE_RETURN_HTML_S: float = 2.0
-_DEFAULT_WAIT_UNTIL: _WaitUntil = "networkidle"
+_DEFAULT_WAIT_UNTIL: _WaitUntil = "load"
 _DEFAULT_OUTPUT_FORMAT: _OutputFormat = "fit"
 _PRUNING_THRESHOLD: float = 0.35
-_MAX_RETRIES: int = 2
-_RETRY_DELAY_S: float = 0.5
-
 # Character threshold above which content is truncated and replaced with a
 # table of contents.  Full content is always saved to cache for later retrieval.
 _TRUNCATION_THRESHOLD: int = 5_000
@@ -133,14 +129,6 @@ def _parse_error(buf_text: str) -> str:
     if "Timeout" in buf_text and "ms exceeded" in buf_text:
         return "Timeout waiting for page to load"
     return "Crawl failed"
-
-
-def _is_transient_failure(result: FetchResult) -> bool:
-    if result.status_code is None:
-        return True
-    if result.status_code >= 500:
-        return True
-    return False
 
 
 # ---------------------------------------------------------------------------
@@ -580,21 +568,12 @@ async def fetch_url(
             return _result_with_truncation(cached)
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
-    last_result = FetchResult(success=False, error="No attempts made")
-    for attempt in range(1, _MAX_RETRIES + 1):
-        last_result = await _fetch_once(url, wait_until, output_format)
-        if last_result.success:
-            break
-        if not _is_transient_failure(last_result):
-            break
-        if attempt < _MAX_RETRIES:
-            await asyncio.sleep(_RETRY_DELAY_S)
-
-    if not last_result.success:
-        return last_result
+    result = await _fetch_once(url, wait_until, output_format)
+    if not result.success:
+        return result
 
     # Persist to cache.
-    full_markdown = last_result.markdown
+    full_markdown = result.markdown
     _write_cache(url, full_markdown)
 
     # If a section was requested, extract it from the fresh content.
@@ -608,13 +587,13 @@ async def fetch_url(
         return FetchResult(
             success=err is None,
             markdown=md,
-            links=last_result.links,
+            links=result.links,
             error=err,
             total_chars=len(md),
         )
 
     # Full result — apply truncation if needed.
-    return _result_with_truncation(full_markdown, links=last_result.links)
+    return _result_with_truncation(full_markdown, links=result.links)
 
 
 def _result_with_truncation(
