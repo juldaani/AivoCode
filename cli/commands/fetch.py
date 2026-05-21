@@ -62,38 +62,134 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--index",
         type=int,
+        action="append",
         default=None,
-        help="Extract a section by ToC index number.",
+        help="Extract a section by ToC index number. Repeatable.",
     )
     parser.add_argument(
         "--line-range",
         type=str,
+        action="append",
         default=None,
-        help="Extract lines from the cached page (1-based, 'start-end', max 100 lines).",
+        help="Extract lines from the cached page (1-based, 'start-end', max 100 lines). Repeatable.",
     )
     parser.set_defaults(func=handle)
 
 
-def handle(args: argparse.Namespace) -> int:
-    """Execute the fetch command and return an exit code.
+async def _fetch_multi(
+    url: str,
+    wait_until: str,
+    output_format: str,
+    headings: list[str],
+    indices: list[int],
+    line_ranges: list[str],
+    refresh_cache: bool,
+) -> tuple[list[str], list[str]]:
+    """Extract multiple sections, fetching the page once if needed.
 
-    Returns:
-        0 on success, 1 on fetch failure.
+    Ensures the page is cached first so subsequent section extractions
+    are instant cache reads rather than repeated browser launches.
     """
-    # Take the first heading if multiple were passed.
-    # For multiple headings, the agent should make multiple calls.
-    heading_arg = args.heading[0] if args.heading else None
+    successes: list[str] = []
+    errors: list[str] = []
 
+    # Ensure the page is cached — fetch once (or use existing cache).
+    cache_seed = await fetch_url(
+        url,
+        wait_until=wait_until,
+        output_format=output_format,
+        refresh_cache=refresh_cache,
+    )
+    if not cache_seed.success:
+        return [], [f"Failed to fetch {url}: {cache_seed.error}"]
+
+    # Extract each section from the now-fresh cache.
+    for heading in headings:
+        r = await fetch_url(
+            url, wait_until=wait_until, output_format=output_format, heading=heading,
+        )
+        if r.success and r.markdown:
+            successes.append(r.markdown)
+        else:
+            errors.append(f"heading '{heading}': {r.error or 'no content'}")
+
+    for idx in indices:
+        r = await fetch_url(
+            url, wait_until=wait_until, output_format=output_format, index=idx,
+        )
+        if r.success and r.markdown:
+            successes.append(r.markdown)
+        else:
+            errors.append(f"index {idx}: {r.error or 'no content'}")
+
+    for lr in line_ranges:
+        r = await fetch_url(
+            url, wait_until=wait_until, output_format=output_format, line_range=lr,
+        )
+        if r.success and r.markdown:
+            successes.append(r.markdown)
+        else:
+            errors.append(f"line-range '{lr}': {r.error or 'no content'}")
+
+    return successes, errors
+
+
+def handle(args: argparse.Namespace) -> int:
+    """Execute the fetch command and return an exit code."""
+    headings = args.heading or []
+    indices = [i for i in (args.index or []) if i is not None]
+    line_ranges = args.line_range or []
+
+    has_multi = len(headings) + len(indices) + len(line_ranges) > 1
+
+    # Status message.
     status_parts = [f"Fetching {args.url}"]
-    if heading_arg:
-        status_parts.append(f"(heading: {heading_arg})")
-    if args.index is not None:
-        status_parts.append(f"(index: {args.index})")
-    if args.line_range:
-        status_parts.append(f"(line-range: {args.line_range})")
+    if headings:
+        status_parts.append(f"(headings: {', '.join(headings)})")
+    if indices:
+        status_parts.append(f"(indices: {', '.join(str(i) for i in indices)})")
+    if line_ranges:
+        status_parts.append(f"(ranges: {', '.join(line_ranges)})")
     if args.refresh_cache:
         status_parts.append("(refreshing cache)")
     print(" ".join(status_parts) + " ...", file=sys.stderr, flush=True)
+
+    if has_multi:
+        # Multiple sections: fetch once, extract all, merge.
+        successes, errors = asyncio.run(
+            _fetch_multi(
+                args.url,
+                wait_until=args.wait_until,
+                output_format=args.output_format,
+                headings=headings,
+                indices=indices,
+                line_ranges=line_ranges,
+                refresh_cache=args.refresh_cache,
+            )
+        )
+        combined = "\n\n".join(successes) if successes else ""
+        output: dict = {
+            "success": bool(successes),
+            "status_code": None,
+            "error": "; ".join(errors) if errors else None,
+            "markdown": combined,
+            "links": None,
+            "toc": None,
+            "total_chars": len(combined),
+        }
+        print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
+        print(
+            f"Done. {len(successes)} sections extracted ({', '.join(errors)})" if errors
+            else f"Done. {len(successes)} sections extracted.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 0 if successes else 1
+
+    # Single-selector or full-page path.
+    heading_arg = headings[0] if headings else None
+    index_arg = indices[0] if indices else None
+    range_arg = line_ranges[0] if line_ranges else None
 
     result = asyncio.run(
         fetch_url(
@@ -101,13 +197,13 @@ def handle(args: argparse.Namespace) -> int:
             wait_until=args.wait_until,
             output_format=args.output_format,
             heading=heading_arg,
-            index=args.index,
-            line_range=args.line_range,
+            index=index_arg,
+            line_range=range_arg,
             refresh_cache=args.refresh_cache,
         )
     )
 
-    output: dict = {
+    output = {
         "success": result.success,
         "status_code": result.status_code,
         "error": result.error,
@@ -116,17 +212,14 @@ def handle(args: argparse.Namespace) -> int:
         "toc": result.toc,
         "total_chars": result.total_chars,
     }
-
     print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
 
-    # Human-readable summary to stderr.
     if result.success:
         if result.toc:
             print(
                 f"Done. {result.total_chars} chars total, "
                 f"{len(result.toc)} ToC entries.",
-                file=sys.stderr,
-                flush=True,
+                file=sys.stderr, flush=True,
             )
         else:
             link_info = ""
@@ -136,14 +229,12 @@ def handle(args: argparse.Namespace) -> int:
                 link_info = f" ({n_int} internal, {n_ext} external links)"
             print(
                 f"Done. {len(result.markdown)} chars{link_info}.",
-                file=sys.stderr,
-                flush=True,
+                file=sys.stderr, flush=True,
             )
     else:
         print(
             f"Error: fetch failed (error={result.error}, status={result.status_code})",
-            file=sys.stderr,
-            flush=True,
+            file=sys.stderr, flush=True,
         )
 
     return 0 if result.success else 1
