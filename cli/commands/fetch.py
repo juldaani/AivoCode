@@ -89,6 +89,8 @@ async def _fetch_multi(
 
     Ensures the page is cached first so subsequent section extractions
     are instant cache reads rather than repeated browser launches.
+
+    Each success string is annotated with its selector.
     """
     successes: list[str] = []
     errors: list[str] = []
@@ -109,7 +111,7 @@ async def _fetch_multi(
             url, wait_until=wait_until, output_format=output_format, heading=heading,
         )
         if r.success and r.markdown:
-            successes.append(r.markdown)
+            successes.append(f"[heading: {heading}]\n\n{r.markdown}")
         else:
             errors.append(f"heading '{heading}': {r.error or 'no content'}")
 
@@ -118,7 +120,7 @@ async def _fetch_multi(
             url, wait_until=wait_until, output_format=output_format, index=idx,
         )
         if r.success and r.markdown:
-            successes.append(r.markdown)
+            successes.append(f"[index: {idx}]\n\n{r.markdown}")
         else:
             errors.append(f"index {idx}: {r.error or 'no content'}")
 
@@ -127,7 +129,7 @@ async def _fetch_multi(
             url, wait_until=wait_until, output_format=output_format, line_range=lr,
         )
         if r.success and r.markdown:
-            successes.append(r.markdown)
+            successes.append(f"[lines: {lr}]\n\n{r.markdown}")
         else:
             errors.append(f"line-range '{lr}': {r.error or 'no content'}")
 
@@ -167,7 +169,7 @@ def handle(args: argparse.Namespace) -> int:
                 refresh_cache=args.refresh_cache,
             )
         )
-        combined = "\n\n".join(successes) if successes else ""
+        combined = "\n\n---\n\n".join(successes) if successes else ""
         output: dict = {
             "success": bool(successes),
             "status_code": None,
