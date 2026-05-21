@@ -96,9 +96,13 @@ _TRUNCATION_THRESHOLD: int = 5_000
 _CACHE_DIR: Path = Path("tmp/aivocode/cache")
 
 # Cache TTL in seconds.  After this period the cache is considered stale and
-# a fresh fetch is triggered automatically.  News sites update frequently,
-# so 30 min is a reasonable balance.
-_CACHE_TTL_S: float = 1_800
+# a fresh fetch is triggered automatically.  News sites update frequently;
+# 15 min balances freshness against repeated browser launches.
+_CACHE_TTL_S: float = 900
+
+# Maximum number of cached files.  When exceeded, the oldest files (by
+# modification time) are evicted to keep the cache within bounds.
+_CACHE_MAX_FILES: int = 200
 
 # Maximum number of lines that can be returned via ``line_range`` requests.
 # Prevents agents from pulling the entire page through range queries.
@@ -173,10 +177,35 @@ def _read_cache(url: str) -> str | None:
 
 
 def _write_cache(url: str, content: str) -> None:
-    """Write content to the cache directory."""
+    """Write content to the cache directory and evict old entries if needed."""
     path = _cache_path(url)
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+    _evict_if_needed()
+
+
+def _evict_if_needed() -> None:
+    """Remove oldest cache files if count exceeds ``_CACHE_MAX_FILES``.
+
+    Files are sorted by modification time (oldest first) and surplus entries
+    are deleted.  This runs after every cache write so the limit is a hard cap.
+    """
+    try:
+        files = sorted(
+            _CACHE_DIR.glob("*.md"),
+            key=lambda p: os.path.getmtime(str(p)),
+        )
+    except OSError:
+        return  # Directory doesn't exist or isn't readable — ignore.
+
+    if len(files) <= _CACHE_MAX_FILES:
+        return
+
+    for old_file in files[: len(files) - _CACHE_MAX_FILES]:
+        try:
+            old_file.unlink()
+        except OSError:
+            pass  # Best-effort — don't fail the fetch over cleanup.
 
 
 # ---------------------------------------------------------------------------
