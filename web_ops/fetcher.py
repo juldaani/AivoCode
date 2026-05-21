@@ -79,7 +79,7 @@ _CDP_PORT: int = 9243
 # Kept moderate so that ``networkidle`` does not hang forever on sites with
 # long-polling / WebSocket connections.  On timeout the function retries once
 # automatically, so a transient spike does not cause a permanent failure.
-_PAGE_TIMEOUT_MS: int = 15_000
+_PAGE_TIMEOUT_MS: int = 10_000
 
 # Extra delay (seconds) after ``wait_until`` and ``wait_for`` conditions are
 # satisfied, before capturing the final HTML.  Gives time for late-rendering
