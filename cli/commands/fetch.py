@@ -1,12 +1,15 @@
-"""CLI subcommand: fetch — fetch a URL and print its content as markdown.
+"""CLI subcommand: fetch — fetch a URL and output structured result as JSON.
 
 Uses ``web_ops.fetch_url`` (CloakBrowser + Crawl4AI) under the hood.
+Outputs the full ``FetchResult`` as JSON to stdout — agents parse the
+structured fields (markdown, success, links, error) directly.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 
 from web_ops import fetch_url
@@ -19,8 +22,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``fetch`` command on the given subparser group."""
     parser: argparse.ArgumentParser = subparsers.add_parser(
         "fetch",
-        help="Fetch a URL and print its content as markdown.",
-        description="Fetch a URL via CloakBrowser + Crawl4AI and print the page body as markdown.",
+        help="Fetch a URL and output the result as JSON.",
+        description="Fetch a URL via CloakBrowser + Crawl4AI and output structured result as JSON.",
     )
     parser.add_argument(
         "url",
@@ -45,18 +48,32 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         choices=_OUTPUT_FORMAT_CHOICES,
         default="fit",
         help=(
-            "Output format for the extracted content. "
+            "Content format for the extracted markdown. "
             "'fit' (default) returns the main article body with boilerplate "
-            "(nav, ads, sidebars) stripped — cleaner but links are removed "
-            "from the markdown (available as structured data). "
-            "'raw' returns the full page converted to markdown, links included inline."
+            "(nav, ads, sidebars) stripped — links in the content are removed "
+            "but available as structured links. "
+            "'raw' returns the full page converted to markdown, links inline."
         ),
     )
     parser.set_defaults(func=handle)
 
 
+def _format_links(result) -> dict | None:
+    """Build a compact link summary for stderr, or None if no links."""
+    if not result.links:
+        return None
+    return {
+        "internal": len(result.links.get("internal", [])),
+        "external": len(result.links.get("external", [])),
+    }
+
+
 def handle(args: argparse.Namespace) -> int:
     """Execute the fetch command and return an exit code.
+
+    Prints the full ``FetchResult`` as JSON to stdout — agents parse
+    ``.markdown``, ``.success``, ``.links``, ``.error`` directly.
+    Status messages go to stderr.
 
     Returns:
         0 on success, 1 on fetch failure.
@@ -67,29 +84,30 @@ def handle(args: argparse.Namespace) -> int:
         fetch_url(args.url, wait_until=args.wait_until, output_format=args.output_format)
     )
 
-    if not result.success:
-        details = f"status={result.status_code}" if result.status_code else ""
-        err_info = f" (error: {result.error})" if result.error else ""
-        print(f"Error: fetch failed for {args.url} {details}{err_info}".strip(), file=sys.stderr)
-        return 1
+    # Build a dict with all fields — explicit so the JSON schema is stable.
+    output: dict = {
+        "success": result.success,
+        "status_code": result.status_code,
+        "error": result.error,
+        "markdown": result.markdown,
+        "links": result.links,
+    }
 
-    # Markdown to stdout — clean for piping / redirection.
-    if result.markdown:
-        print(result.markdown, flush=True)
+    # Structured result to stdout — agents parse this.
+    print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
 
-    # Print a link summary to stderr when available (fit mode).
-    if result.links:
-        internal_count = len(result.links.get("internal", []))
-        external_count = len(result.links.get("external", []))
+    # Human-readable summary to stderr.
+    link_summary = _format_links(result)
+    if result.success:
+        parts = [f"Done. {len(result.markdown)} chars of markdown"]
+        if link_summary:
+            parts.append(f"({link_summary['internal']} internal, {link_summary['external']} external links)")
+        print(" ".join(parts), file=sys.stderr, flush=True)
+    else:
         print(
-            f"Links: {internal_count} internal, {external_count} external",
+            f"Error: fetch failed (error={result.error}, status={result.status_code})",
             file=sys.stderr,
             flush=True,
         )
 
-    print(
-        f"Done. {len(result.markdown)} characters of markdown extracted.",
-        file=sys.stderr,
-        flush=True,
-    )
-    return 0
+    return 0 if result.success else 1
