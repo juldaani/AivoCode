@@ -1,8 +1,7 @@
 """CLI subcommand: fetch — fetch a URL and output structured result as JSON.
 
 Uses ``web_ops.fetch_url`` (CloakBrowser + Crawl4AI) under the hood.
-Outputs the full ``FetchResult`` as JSON to stdout — agents parse the
-structured fields (markdown, success, links, error) directly.
+Outputs the full ``FetchResult`` as JSON to stdout.
 """
 
 from __future__ import annotations
@@ -13,9 +12,6 @@ import json
 import sys
 
 from web_ops import fetch_url
-
-_WAIT_UNTIL_CHOICES: tuple[str, ...] = ("domcontentloaded", "load", "networkidle")
-_OUTPUT_FORMAT_CHOICES: tuple[str, ...] = ("fit", "raw")
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
@@ -33,76 +29,116 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--wait-until",
         type=str,
-        choices=_WAIT_UNTIL_CHOICES,
+        choices=("domcontentloaded", "load", "networkidle"),
         default="networkidle",
         help=(
             "When to consider the page ready for capture. "
-            "'networkidle' (default) waits for no network activity for 500 ms — "
-            "correct for SPAs but may hang on long-polling pages. "
-            "Fall back to 'load' or 'domcontentloaded' for those."
+            "'networkidle' (default) waits for no network activity for 500 ms."
         ),
     )
     parser.add_argument(
         "--output-format",
         type=str,
-        choices=_OUTPUT_FORMAT_CHOICES,
+        choices=("fit", "raw"),
         default="fit",
         help=(
             "Content format for the extracted markdown. "
-            "'fit' (default) returns the main article body with boilerplate "
-            "(nav, ads, sidebars) stripped — links in the content are removed "
-            "but available as structured links. "
-            "'raw' returns the full page converted to markdown, links inline."
+            "'fit' (default) strips boilerplate. 'raw' returns full page."
         ),
     )
+    parser.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        default=False,
+        help="Bypass cache and always fetch fresh content from the web.",
+    )
+    parser.add_argument(
+        "--heading",
+        type=str,
+        action="append",
+        default=None,
+        help="Extract a section by heading text (case-insensitive). Repeatable.",
+    )
+    parser.add_argument(
+        "--index",
+        type=int,
+        default=None,
+        help="Extract a section by ToC index number.",
+    )
+    parser.add_argument(
+        "--line-range",
+        type=str,
+        default=None,
+        help="Extract lines from the cached page (1-based, 'start-end', max 100 lines).",
+    )
     parser.set_defaults(func=handle)
-
-
-def _format_links(result) -> dict | None:
-    """Build a compact link summary for stderr, or None if no links."""
-    if not result.links:
-        return None
-    return {
-        "internal": len(result.links.get("internal", [])),
-        "external": len(result.links.get("external", [])),
-    }
 
 
 def handle(args: argparse.Namespace) -> int:
     """Execute the fetch command and return an exit code.
 
-    Prints the full ``FetchResult`` as JSON to stdout — agents parse
-    ``.markdown``, ``.success``, ``.links``, ``.error`` directly.
-    Status messages go to stderr.
-
     Returns:
         0 on success, 1 on fetch failure.
     """
-    print(f"Fetching {args.url} ...", file=sys.stderr, flush=True)
+    # Take the first heading if multiple were passed.
+    # For multiple headings, the agent should make multiple calls.
+    heading_arg = args.heading[0] if args.heading else None
+
+    status_parts = [f"Fetching {args.url}"]
+    if heading_arg:
+        status_parts.append(f"(heading: {heading_arg})")
+    if args.index is not None:
+        status_parts.append(f"(index: {args.index})")
+    if args.line_range:
+        status_parts.append(f"(line-range: {args.line_range})")
+    if args.refresh_cache:
+        status_parts.append("(refreshing cache)")
+    print(" ".join(status_parts) + " ...", file=sys.stderr, flush=True)
 
     result = asyncio.run(
-        fetch_url(args.url, wait_until=args.wait_until, output_format=args.output_format)
+        fetch_url(
+            args.url,
+            wait_until=args.wait_until,
+            output_format=args.output_format,
+            heading=heading_arg,
+            index=args.index,
+            line_range=args.line_range,
+            refresh_cache=args.refresh_cache,
+        )
     )
 
-    # Build a dict with all fields — explicit so the JSON schema is stable.
     output: dict = {
         "success": result.success,
         "status_code": result.status_code,
         "error": result.error,
         "markdown": result.markdown,
         "links": result.links,
+        "toc": result.toc,
+        "total_chars": result.total_chars,
     }
 
-    # Structured result to stdout — agents parse this.
     print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
 
     # Human-readable summary to stderr.
-    link_summary = _format_links(result)
     if result.success:
-        parts = [f"Done. {len(result.markdown)} chars of markdown"]
-        if link_summary:
-            parts.append(f"({link_summary['internal']} internal, {link_summary['external']} external links)")
-        print(" ".join(parts), file=sys.stderr, flush=True)
+        if result.toc:
+            print(
+                f"Done. {result.total_chars} chars total, "
+                f"{len(result.toc)} ToC entries.",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            link_info = ""
+            if result.links:
+                n_int = len(result.links.get("internal", []))
+                n_ext = len(result.links.get("external", []))
+                link_info = f" ({n_int} internal, {n_ext} external links)"
+            print(
+                f"Done. {len(result.markdown)} chars{link_info}.",
+                file=sys.stderr,
+                flush=True,
+            )
     else:
         print(
             f"Error: fetch failed (error={result.error}, status={result.status_code})",

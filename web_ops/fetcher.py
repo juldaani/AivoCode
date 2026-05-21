@@ -1,42 +1,31 @@
 """Stealth web page fetching library — CloakBrowser + Crawl4AI.
 
 What this module provides
-- FetchResult: dataclass holding markdown, success flag, HTTP status, error details,
-  and optional structured links.
-- fetch_url(): async function that launches a stealth browser via CloakBrowser,
-  connects Crawl4AI via CDP, fetches a URL, and returns structured results.
-  Includes automatic retry for transient failures and configurable output format
-  (raw markdown vs fit markdown with boilerplate removed).
+- FetchResult: dataclass holding markdown, success flag, HTTP status, error,
+  structured links, ToC entries, and truncation metadata.
+- fetch_url(): async function that fetches a URL via CloakBrowser + Crawl4AI
+  with caching, truncation, ToC generation, and section extraction.
 
 Why this exists
-- Single reusable entry point for web fetching — used by CLI, Python agents, and
-  future transport layers (FastAPI, MCP) without modification.
-- Separation of concerns: this module handles browser lifecycle, fetching,
-  library log suppression, retry logic, and content format; callers own I/O.
-
-How to use
-- Importable API::
-
-    from web_ops import fetch_url, FetchResult
-
-    # Fit markdown (default) — main content with boilerplate stripped.
-    result = await fetch_url("https://example.com")
-    print(result.markdown)
-
-    # Raw markdown — full page converted to markdown, links included inline.
-    result = await fetch_url("https://example.com", output_format="raw")
-
-See Also
-- web_ops.tst_web_fetch for the reference implementation this was extracted from.
+- Single entry point for web fetching — used by CLI, Python agents, and
+  future transport layers without modification.
+- Content-aware: large pages (> 5000 chars) are automatically truncated to a
+  table of contents with section previews, preventing agents from pulling
+  huge pages into context.  Full content is cached on disk for section-level
+  retrieval on demand.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
+import os
 import re
+import time
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
@@ -48,11 +37,9 @@ from cloakbrowser import launch_async
 # Types
 # ---------------------------------------------------------------------------
 
-# Allowed values for wait_until, mapped to Playwright navigation events.
 _WAIT_UNTIL_CHOICES: tuple[str, ...] = ("domcontentloaded", "load", "networkidle")
 _WaitUntil = Literal["domcontentloaded", "load", "networkidle"]
 
-# Allowed values for the output format parameter.
 _OUTPUT_FORMAT_CHOICES: tuple[str, ...] = ("fit", "raw")
 _OutputFormat = Literal["fit", "raw"]
 
@@ -62,19 +49,20 @@ class FetchResult:
     """Result of a ``fetch_url()`` call.
 
     Fields:
-        markdown: Page body as markdown.  Always safe to use — empty string on
-            failure.  For ``"fit"`` format this is the main content with
-            boilerplate removed (nav, ads, sidebars stripped).  For ``"raw"``
-            format this is the full page converted to markdown.
+        markdown: Page body as markdown.  When content exceeds the truncation
+            threshold, this contains a human-readable message explaining that
+            the full content was saved and a table of contents follows.
+            On failure, empty string.
         success: ``True`` if the crawl completed and content was extracted.
-        status_code: HTTP status from the final response.  ``None`` if the
-            fetch never reached a server (timeout, DNS failure, CDP error).
-        error: Human-readable error label.  ``None`` on success.  Common values:
-            ``"Timeout waiting for page to load"``, ``"DNS resolution failed"``,
-            ``"Connection refused"``, ``"empty"``.
-        links: Structured link data (internal/external) populated only when
-            ``output_format="fit"``, since raw markdown already contains links
-            inline.  ``None`` otherwise.
+        status_code: HTTP status.  ``None`` if the server was never reached.
+        error: Error label.  ``None`` on success.
+        links: Structured links (internal/external).  Populated only for
+            ``output_format="fit"``.  ``None`` otherwise.
+        toc: Table of contents entries when content is truncated.  ``None``
+            when content fits under the threshold or a specific section was
+            requested via ``heading`` / ``index`` / ``line_range``.
+        total_chars: Total character count of the full original content.
+            ``0`` on failure or when a section was extracted.
     """
 
     markdown: str = ""
@@ -82,52 +70,48 @@ class FetchResult:
     status_code: int | None = None
     error: str | None = field(default=None, compare=False)
     links: dict[str, list[dict[str, Any]]] | None = None
-    # compare=False for error because it's diagnostic, not identity.
+    toc: list[dict[str, Any]] | None = None
+    total_chars: int = 0
 
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-# Default CDP port used to bridge CloakBrowser and Crawl4AI.
 _CDP_PORT: int = 9243
-
-# Time limit (ms) for each individual page load attempt.
 _PAGE_TIMEOUT_MS: int = 10_000
-
-# Extra delay (seconds) after wait conditions are satisfied before capturing.
 _DELAY_BEFORE_RETURN_HTML_S: float = 2.0
-
 _DEFAULT_WAIT_UNTIL: _WaitUntil = "networkidle"
-
-# Default output format: "fit" strips boilerplate for cleaner agent input.
 _DEFAULT_OUTPUT_FORMAT: _OutputFormat = "fit"
-
-# Pruning threshold (0–1). Higher = more aggressive removal.
-# 0.48 is the Crawl4AI default — empirically good for most pages.
-_PRUNING_THRESHOLD: float = 0.28
-
-# Maximum retry attempts for transient failures.
+_PRUNING_THRESHOLD: float = 0.35
 _MAX_RETRIES: int = 2
-
-# Delay between retry attempts (seconds).
 _RETRY_DELAY_S: float = 0.5
+
+# Character threshold above which content is truncated and replaced with a
+# table of contents.  Full content is always saved to cache for later retrieval.
+_TRUNCATION_THRESHOLD: int = 5_000
+
+# Directory where fetched page content is cached on disk.
+# Relative to the workspace root.
+_CACHE_DIR: Path = Path("tmp/aivocode/cache")
+
+# Cache TTL in seconds.  After this period the cache is considered stale and
+# a fresh fetch is triggered automatically.  News sites update frequently,
+# so 30 min is a reasonable balance.
+_CACHE_TTL_S: float = 1_800
+
+# Maximum number of lines that can be returned via ``line_range`` requests.
+# Prevents agents from pulling the entire page through range queries.
+_LINE_RANGE_MAX: int = 100
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 
 def _parse_error(buf_text: str) -> str:
-    """Extract a concise error message from verbose Crawl4AI / browser output.
-
-    Args:
-        buf_text: The captured output from a single fetch attempt.
-
-    Returns:
-        A short error label, or ``"Crawl failed"`` if no known pattern matches.
-    """
+    """Extract a concise error message from verbose Crawl4AI output."""
     if "ERR_NAME_NOT_RESOLVED" in buf_text:
         return "DNS resolution failed"
     if "ERR_CONNECTION_REFUSED" in buf_text:
@@ -148,7 +132,6 @@ def _parse_error(buf_text: str) -> str:
 
 
 def _is_transient_failure(result: FetchResult) -> bool:
-    """Return ``True`` if the failure looks transient and worth retrying."""
     if result.status_code is None:
         return True
     if result.status_code >= 500:
@@ -156,30 +139,239 @@ def _is_transient_failure(result: FetchResult) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+
+
+def _cache_key(url: str) -> str:
+    """Derive a short, stable filename from a URL."""
+    return hashlib.sha256(url.encode()).hexdigest()[:16] + ".md"
+
+
+def _cache_path(url: str) -> Path:
+    return _CACHE_DIR / _cache_key(url)
+
+
+def _cache_is_fresh(path: Path) -> bool:
+    """Return True if the cache file exists and is within the TTL."""
+    if not path.exists():
+        return False
+    age = time.time() - os.path.getmtime(str(path))
+    return age < _CACHE_TTL_S
+
+
+def _read_cache(url: str) -> str | None:
+    """Read cached content, or None if not available."""
+    path = _cache_path(url)
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _write_cache(url: str, content: str) -> None:
+    """Write content to the cache directory."""
+    path = _cache_path(url)
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Table of Contents
+# ---------------------------------------------------------------------------
+
+
+def _build_toc(markdown: str) -> list[dict[str, Any]]:
+    """Parse markdown into a table of contents with section previews.
+
+    Scans for ``#``, ``##``, ``###`` headings.  Each ToC entry includes the
+    heading text, nesting level, line range, and a short preview of the
+    section body.  Content before the first heading gets a virtual
+    ``[Overview]`` entry at level 0.
+
+    Args:
+        markdown: The full markdown content.
+
+    Returns:
+        List of ToC entries, each with ``idx``, ``heading``, ``level``,
+        ``line_range`` (1-based), and ``preview``.
+    """
+    lines = markdown.splitlines()
+    # Find all heading positions.
+    headings: list[dict[str, Any]] = []
+    for i, line in enumerate(lines):
+        m = re.match(r"^(#{1,3})\s+(.+)", line)
+        if m:
+            headings.append({
+                "level": len(m.group(1)),
+                "heading": m.group(2).strip(),
+                "line": i + 1,  # 1-based
+            })
+
+    if not headings:
+        # No headings at all — treat the whole thing as one entry.
+        return [{
+            "idx": 0,
+            "heading": "[Overview]",
+            "level": 0,
+            "line_range": [1, len(lines)],
+            "preview": _preview_lines(lines, 0, len(lines)),
+        }]
+
+    toc: list[dict[str, Any]] = []
+
+    # Before the first heading: [Overview].
+    if headings[0]["line"] > 1:
+        preview = _preview_lines(lines, 0, headings[0]["line"] - 1)
+        if preview:
+            toc.append({
+                "idx": 0,
+                "heading": "[Overview]",
+                "level": 0,
+                "line_range": [1, headings[0]["line"] - 1],
+                "preview": preview,
+            })
+
+    # Sections between headings.
+    for i, h in enumerate(headings):
+        start = h["line"]
+        end = headings[i + 1]["line"] - 1 if i + 1 < len(headings) else len(lines)
+        preview = _preview_lines(lines, start, end + 1)
+        toc.append({
+            "idx": len(toc),
+            "heading": h["heading"],
+            "level": h["level"],
+            "line_range": [start, end],
+            "preview": preview,
+        })
+
+    return toc
+
+
+def _preview_lines(lines: list[str], start: int, end: int) -> str:
+    """Extract the first meaningful ~120 chars from a section of lines.
+
+    Skips blank lines and heading lines (which start with #).
+    Returns up to 120 characters of the first content line, or empty string
+    if the section has no body text.
+    """
+    for i in range(start, min(end, len(lines))):
+        stripped = lines[i].strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith("!["):
+            continue  # image
+        if stripped.startswith("|"):
+            continue  # table
+        return stripped[:120]
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Section extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_section(
+    content: str,
+    *,
+    heading: str | None = None,
+    index: int | None = None,
+    line_range: str | None = None,
+) -> tuple[str, str | None]:
+    """Extract a section from cached content.
+
+    Returns ``(markdown, error)`` — error is ``None`` on success.
+
+    Args:
+        content: Full cached markdown content.
+        heading: Exact heading text to match (e.g. ``"Tuoreimmat"``).
+        index: ToC index number to extract.
+        line_range: ``"start-end"`` line range (1-based, max 100 lines).
+
+    Raises:
+        Never — errors are returned as the second tuple element.
+    """
+    if line_range is not None:
+        return _extract_line_range(content, line_range)
+
+    toc = _build_toc(content)
+
+    if index is not None:
+        if index < 0 or index >= len(toc):
+            return "", f"Index {index} out of range (0-{len(toc) - 1})"
+        return _extract_by_toc_entry(content, toc[index])
+
+    if heading is not None:
+        matches = [e for e in toc if e["heading"].lower() == heading.lower()]
+        if not matches:
+            return "", f"Heading '{heading}' not found in table of contents"
+        # If multiple headings with same text exist, return the first.
+        # Caller can use --index for disambiguation.
+        return _extract_by_toc_entry(content, matches[0])
+
+    return "", "No section selector provided"
+
+
+def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]:
+    """Extract lines from a 1-based range string like ``"10-30"``.
+
+    If the requested range exceeds ``_LINE_RANGE_MAX``, the content is
+    silently truncated and no error is set — the caller can compare the
+    returned line count against the request to detect truncation.
+    """
+    try:
+        parts = line_range.split("-")
+        if len(parts) != 2:
+            return "", f"Invalid line range format: '{line_range}' — use 'start-end'"
+        start = int(parts[0])
+        end = int(parts[1])
+    except ValueError:
+        return "", f"Invalid line range: '{line_range}'"
+
+    lines = content.splitlines()
+    if start < 1:
+        start = 1
+    if start > len(lines):
+        return "", f"Line range start {start} exceeds file length ({len(lines)} lines)"
+
+    requested_count = end - start + 1
+    if requested_count > _LINE_RANGE_MAX:
+        end = start + _LINE_RANGE_MAX - 1
+
+    end = min(end, len(lines))
+    return "\n".join(lines[start - 1:end]), None
+
+
+def _extract_by_toc_entry(
+    content: str,
+    entry: dict[str, Any],
+) -> tuple[str, str | None]:
+    """Extract lines covered by a ToC entry."""
+    ls, le = entry["line_range"]
+    lines = content.splitlines()
+    # Clamp to content bounds.
+    ls = max(1, ls)
+    le = min(len(lines), le)
+    return "\n".join(lines[ls - 1:le]), None
+
+
+# ---------------------------------------------------------------------------
+# Fetching
+# ---------------------------------------------------------------------------
+
+
 async def _fetch_once(
     url: str,
     wait_until: _WaitUntil,
     output_format: _OutputFormat,
 ) -> FetchResult:
-    """Perform a single fetch attempt, suppressing library output.
-
-    Lifecycle
-      1. Launch CloakBrowser with CDP remote debugging enabled.
-      2. Redirect stdout/stderr to a buffer so library diagnostic output does
-         not leak into the agent's markdown stream.
-      3. Connect Crawl4AI to the CDP endpoint, run, and capture the result.
-      4. Close the browser (always, even on failure).
-      5. On failure, parse the captured buffer for a concise error label.
-
-    Args:
-        url: The fully-qualified URL to fetch.
-        wait_until: Playwright navigation event to wait for.
-        output_format: ``"fit"`` for main-content-only markdown with structured
-            link data; ``"raw"`` for full-page markdown (no link extraction).
-
-    Returns:
-        ``FetchResult`` — never ``None``.
-    """
+    """Perform a single fetch attempt (no caching, no truncation logic)."""
     browser = await launch_async(
         headless=True,
         args=[
@@ -197,7 +389,6 @@ async def _fetch_once(
                 cdp_url=f"http://127.0.0.1:{_CDP_PORT}",
             )
 
-            # Build the run config based on output format.
             if output_format == "fit":
                 run_config = CrawlerRunConfig(
                     wait_until=wait_until,
@@ -219,8 +410,6 @@ async def _fetch_once(
             async with AsyncWebCrawler(config=browser_config) as crawler:
                 result = await crawler.arun(url, config=run_config)
 
-        # --- translate Crawl4AI result → FetchResult -----------------------
-
         if result is None:
             return FetchResult(
                 success=False,
@@ -234,10 +423,8 @@ async def _fetch_once(
                 error=_parse_error(buf.getvalue()),
             )
 
-        # Extract markdown — priority depends on format.
+        # Extract markdown.
         if output_format == "fit":
-            # Try fit_markdown first, fall back to raw_markdown if filter
-            # produces nothing, fall back to the top-level markdown string.
             md_obj = result.markdown
             if hasattr(md_obj, "fit_markdown") and md_obj.fit_markdown:
                 markdown = md_obj.fit_markdown
@@ -246,7 +433,6 @@ async def _fetch_once(
             else:
                 markdown = str(md_obj) if md_obj else ""
         else:
-            # Raw: use the top-level markdown string or raw_markdown.
             md_obj = result.markdown
             if hasattr(md_obj, "raw_markdown") and md_obj.raw_markdown:
                 markdown = md_obj.raw_markdown
@@ -261,9 +447,7 @@ async def _fetch_once(
                 error="empty",
             )
 
-        # Extract structured links for fit mode (raw already has them inline).
-        # Keep only href and text — the other Crawl4AI fields (base_domain,
-        # scores, head_data) are noise for agent consumption.
+        # Extract structured links for fit mode.
         links: dict[str, list[dict[str, Any]]] | None = None
         if output_format == "fit" and result.links:
             links = {
@@ -282,10 +466,21 @@ async def _fetch_once(
             status_code=result.status_code,
             markdown=markdown,
             links=links,
+            total_chars=len(markdown),
         )
 
     finally:
         await browser.close()
+
+
+def _truncation_message(total_chars: int) -> str:
+    """Explain to the agent why content was truncated."""
+    return (
+        f"Content exceeds the {_TRUNCATION_THRESHOLD} character limit "
+        f"({total_chars} chars total). Full content saved to cache. "
+        f"Use --heading, --index, or --line-range to fetch specific sections. "
+        f"Table of contents follows (see toc field)."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -298,56 +493,120 @@ async def fetch_url(
     *,
     wait_until: _WaitUntil = _DEFAULT_WAIT_UNTIL,
     output_format: _OutputFormat = _DEFAULT_OUTPUT_FORMAT,
+    heading: str | None = None,
+    index: int | None = None,
+    line_range: str | None = None,
+    refresh_cache: bool = False,
 ) -> FetchResult:
     """Fetch a URL via CloakBrowser + Crawl4AI and return structured results.
 
-    Automatically retries once (2 total attempts) for transient failures such
-    as timeouts and network errors.  Deterministic failures (4xx HTTP responses)
-    are returned immediately without retrying.
-
-    Lifecycle
-      1. Attempt the fetch via ``_fetch_once()``.
-      2. If it fails with a transient error, wait briefly and retry once.
-      3. Return the best available result.
+    When content exceeds the truncation threshold (5000 chars), the full
+    content is saved to a disk cache and the result includes a table of
+    contents with section previews instead of the raw markdown.  Agents can
+    then retrieve specific sections via ``heading``, ``index``, or
+    ``line_range`` parameters — which read directly from cache.
 
     Args:
-        url: The fully-qualified URL to fetch (e.g. ``https://example.com``).
-        wait_until: Playwright navigation event to wait for before capturing HTML.
-            - ``"networkidle"`` (default): no network activity for 500 ms.
-            - ``"load"``: page load event fired (JS has run, resources loaded).
-            - ``"domcontentloaded"``: DOM ready, JS may not have executed yet.
-        output_format: Desired output format.
-            - ``"fit"`` (default): main content with boilerplate stripped (nav,
-              ads, sidebars removed). Includes structured ``.links`` field.
-            - ``"raw"``: full page HTML converted to markdown. Links are
-              included inline in the markdown; ``.links`` is ``None``.
+        url: The URL to fetch.
+        wait_until: Playwright navigation event to wait for.
+        output_format: ``"fit"`` (default) or ``"raw"``.
+        heading: Exact heading text to extract from cache (case-insensitive).
+        index: ToC index to extract from cache.
+        line_range: ``"start-end"`` line range to extract from cache
+            (1-based, max 100 lines).
+        refresh_cache: If ``True``, always refetch from the web, ignoring any
+            cached content.
 
     Returns:
-        ``FetchResult`` with ``.markdown``, ``.success``, ``.status_code``,
-        ``.error``, and optionally ``.links`` populated.  On failure,
-        ``.success`` is ``False`` and ``.markdown`` is ``""`` — the caller
-        never receives ``None``.
-
-    Raises:
-        Only unrecoverable programming errors — e.g. CloakBrowser binary not
-        found, broken CDP handshake.  Runtime failures (HTTP errors, timeouts,
-        empty responses) are returned as ``FetchResult(success=False)``.
+        ``FetchResult`` — never ``None``.
 
     Side effects:
-        Launches and tears down a CloakBrowser subprocess per attempt.
+        Launches/takes down a CloakBrowser subprocess per fresh fetch.
+        Writes/reads markdown files to ``tmp/aivocode/cache/``.
     """
-    last_result = FetchResult(success=False, error="No attempts made")
+    # ── Section extraction from cache (no fetch needed if fresh) ──────────
+    wants_section = heading is not None or index is not None or line_range is not None
 
+    if wants_section and not refresh_cache:
+        cached = _read_cache(url)
+        if cached is not None and _cache_is_fresh(_cache_path(url)):
+            md, err = _extract_section(
+                cached,
+                heading=heading,
+                index=index,
+                line_range=line_range,
+            )
+            return FetchResult(
+                success=err is None,
+                markdown=md,
+                error=err,
+                total_chars=len(md),
+            )
+        # Cache missing or stale — fetch first, then extract from result.
+
+    # ── Cache hit (no section requested, not refreshing) ─────────────────
+    if not wants_section and not refresh_cache and _cache_is_fresh(_cache_path(url)):
+        cached = _read_cache(url)
+        if cached is not None:
+            return _result_with_truncation(cached)
+
+    # ── Fresh fetch ──────────────────────────────────────────────────────
+    last_result = FetchResult(success=False, error="No attempts made")
     for attempt in range(1, _MAX_RETRIES + 1):
         last_result = await _fetch_once(url, wait_until, output_format)
-
         if last_result.success:
-            return last_result
-
+            break
         if not _is_transient_failure(last_result):
             break
-
         if attempt < _MAX_RETRIES:
             await asyncio.sleep(_RETRY_DELAY_S)
 
-    return last_result
+    if not last_result.success:
+        return last_result
+
+    # Persist to cache.
+    full_markdown = last_result.markdown
+    _write_cache(url, full_markdown)
+
+    # If a section was requested, extract it from the fresh content.
+    if wants_section:
+        md, err = _extract_section(
+            full_markdown,
+            heading=heading,
+            index=index,
+            line_range=line_range,
+        )
+        return FetchResult(
+            success=err is None,
+            markdown=md,
+            links=last_result.links,
+            error=err,
+            total_chars=len(md),
+        )
+
+    # Full result — apply truncation if needed.
+    return _result_with_truncation(full_markdown, links=last_result.links)
+
+
+def _result_with_truncation(
+    markdown: str,
+    links: dict[str, list[dict[str, Any]]] | None = None,
+) -> FetchResult:
+    """Build a FetchResult with optional truncation + ToC."""
+    total_chars = len(markdown)
+    if total_chars <= _TRUNCATION_THRESHOLD:
+        return FetchResult(
+            success=True,
+            markdown=markdown,
+            links=links,
+            total_chars=total_chars,
+        )
+    # Truncate — replace markdown with explanatory message + ToC.
+    toc = _build_toc(markdown)
+    return FetchResult(
+        success=True,
+        markdown=_truncation_message(total_chars),
+        links=links,
+        toc=toc,
+        total_chars=total_chars,
+    )
