@@ -12,6 +12,7 @@ import sys
 from web_ops import fetch_url
 
 _WAIT_UNTIL_CHOICES: tuple[str, ...] = ("domcontentloaded", "load", "networkidle")
+_OUTPUT_FORMAT_CHOICES: tuple[str, ...] = ("fit", "raw")
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
@@ -38,6 +39,19 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
             "Fall back to 'load' or 'domcontentloaded' for those."
         ),
     )
+    parser.add_argument(
+        "--output-format",
+        type=str,
+        choices=_OUTPUT_FORMAT_CHOICES,
+        default="fit",
+        help=(
+            "Output format for the extracted content. "
+            "'fit' (default) returns the main article body with boilerplate "
+            "(nav, ads, sidebars) stripped — cleaner but links are removed "
+            "from the markdown (available as structured data). "
+            "'raw' returns the full page converted to markdown, links included inline."
+        ),
+    )
     parser.set_defaults(func=handle)
 
 
@@ -49,7 +63,9 @@ def handle(args: argparse.Namespace) -> int:
     """
     print(f"Fetching {args.url} ...", file=sys.stderr, flush=True)
 
-    result = asyncio.run(fetch_url(args.url, wait_until=args.wait_until))
+    result = asyncio.run(
+        fetch_url(args.url, wait_until=args.wait_until, output_format=args.output_format)
+    )
 
     if not result.success:
         details = f"status={result.status_code}" if result.status_code else ""
@@ -60,6 +76,16 @@ def handle(args: argparse.Namespace) -> int:
     # Markdown to stdout — clean for piping / redirection.
     if result.markdown:
         print(result.markdown, flush=True)
+
+    # Print a link summary to stderr when available (fit mode).
+    if result.links:
+        internal_count = len(result.links.get("internal", []))
+        external_count = len(result.links.get("external", []))
+        print(
+            f"Links: {internal_count} internal, {external_count} external",
+            file=sys.stderr,
+            flush=True,
+        )
 
     print(
         f"Done. {len(result.markdown)} characters of markdown extracted.",
