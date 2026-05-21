@@ -81,6 +81,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Extract lines from the cached page (1-based, 'start-end', max 100 lines). Repeatable.",
     )
+    parser.add_argument(
+        "--navigation",
+        action="store_true",
+        default=False,
+        help="Include extracted page links (internal/external) in the result.",
+    )
     parser.set_defaults(func=handle)
 
 
@@ -186,7 +192,7 @@ def handle(args: argparse.Namespace) -> int:
             "status_code": None,
             "error": "; ".join(errors) if errors else None,
             "markdown": combined,
-            "links": None,
+            "navigation": None,
             "toc": None,
             "total_chars": len(combined),
         }
@@ -213,6 +219,7 @@ def handle(args: argparse.Namespace) -> int:
             index=index_arg,
             line_range=range_arg,
             refresh_cache=args.refresh_cache,
+            include_navigation=args.navigation,
         )
     )
 
@@ -221,7 +228,7 @@ def handle(args: argparse.Namespace) -> int:
         "status_code": result.status_code,
         "error": result.error,
         "markdown": result.markdown,
-        "links": result.links,
+        "navigation": result.navigation,
         "toc": result.toc,
         "total_chars": result.total_chars,
     }
@@ -235,13 +242,13 @@ def handle(args: argparse.Namespace) -> int:
                 file=sys.stderr, flush=True,
             )
         else:
-            link_info = ""
-            if result.links:
-                n_int = len(result.links.get("internal", []))
-                n_ext = len(result.links.get("external", []))
-                link_info = f" ({n_int} internal, {n_ext} external links)"
+            nav_info = ""
+            if result.navigation:
+                n_int = len(result.navigation.get("internal", []))
+                n_ext = len(result.navigation.get("external", []))
+                nav_info = f" ({n_int} internal, {n_ext} external links)"
             print(
-                f"Done. {len(result.markdown)} chars{link_info}.",
+                f"Done. {len(result.markdown)} chars{nav_info}.",
                 file=sys.stderr, flush=True,
             )
     else:

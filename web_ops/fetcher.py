@@ -55,8 +55,9 @@ class FetchResult:
         success: ``True`` if the crawl completed and content was extracted.
         status_code: HTTP status.  ``None`` if the server was never reached.
         error: Error label.  ``None`` on success.
-        links: Structured links (internal/external).  Populated only for
-            ``output_format="fit"``.  ``None`` otherwise.
+        navigation: Structured navigation links (internal/external).  Populated
+            only when ``include_navigation=True`` is passed to ``fetch_url()``.
+            ``None`` otherwise.
         toc: Table of contents entries when content is truncated.  ``None``
             when content fits under the threshold or a specific section was
             requested via ``heading`` / ``index`` / ``line_range``.
@@ -68,7 +69,7 @@ class FetchResult:
     success: bool = False
     status_code: int | None = None
     error: str | None = field(default=None, compare=False)
-    links: dict[str, list[dict[str, Any]]] | None = None
+    navigation: dict[str, list[dict[str, Any]]] | None = None
     toc: list[dict[str, Any]] | None = None
     total_chars: int = 0
 
@@ -343,8 +344,8 @@ def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]
     """Extract lines from a 1-based range string like ``"10-30"``.
 
     If the requested range exceeds ``_LINE_RANGE_MAX``, the content is
-    silently truncated and no error is set — the caller can compare the
-    returned line count against the request to detect truncation.
+    truncated and a note is appended to the markdown so the caller knows
+    the result is incomplete.
     """
     try:
         parts = line_range.split("-")
@@ -362,11 +363,21 @@ def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]
         return "", f"Line range start {start} exceeds file length ({len(lines)} lines)"
 
     requested_count = end - start + 1
-    if requested_count > _LINE_RANGE_MAX:
+    truncated = requested_count > _LINE_RANGE_MAX
+    if truncated:
         end = start + _LINE_RANGE_MAX - 1
 
     end = min(end, len(lines))
-    return "\n".join(lines[start - 1:end]), None
+    markdown = "\n".join(lines[start - 1:end])
+
+    if truncated:
+        note = (
+            f"\n\n[Content truncated: requested {requested_count} lines "
+            f"but limit is {_LINE_RANGE_MAX}. Showing first {_LINE_RANGE_MAX} lines.]"
+        )
+        markdown += note
+
+    return markdown, None
 
 
 def _extract_by_toc_entry(
@@ -391,6 +402,7 @@ async def _fetch_once(
     url: str,
     wait_until: _WaitUntil,
     output_format: _OutputFormat,
+    include_navigation: bool = False,
 ) -> FetchResult:
     """Perform a single fetch attempt (no caching, no truncation logic)."""
     browser = await launch_async(
@@ -468,10 +480,10 @@ async def _fetch_once(
                 error="empty",
             )
 
-        # Extract structured links for fit mode.
-        links: dict[str, list[dict[str, Any]]] | None = None
-        if output_format == "fit" and result.links:
-            links = {
+        # Extract structured navigation links when requested.
+        navigation: dict[str, list[dict[str, Any]]] | None = None
+        if include_navigation and output_format == "fit" and result.links:
+            navigation = {
                 "internal": [
                     {"href": link["href"], "text": link["text"]}
                     for link in result.links.get("internal", [])
@@ -486,7 +498,7 @@ async def _fetch_once(
             success=True,
             status_code=result.status_code,
             markdown=markdown,
-            links=links,
+            navigation=navigation,
             total_chars=len(markdown),
         )
 
@@ -518,6 +530,7 @@ async def fetch_url(
     index: int | None = None,
     line_range: str | None = None,
     refresh_cache: bool = False,
+    include_navigation: bool = False,
 ) -> FetchResult:
     """Fetch a URL via CloakBrowser + Crawl4AI and return structured results.
 
@@ -572,7 +585,7 @@ async def fetch_url(
             return _result_with_truncation(cached)
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
-    result = await _fetch_once(url, wait_until, output_format)
+    result = await _fetch_once(url, wait_until, output_format, include_navigation)
     if not result.success:
         return result
 
@@ -591,18 +604,18 @@ async def fetch_url(
         return FetchResult(
             success=err is None,
             markdown=md,
-            links=result.links,
+            navigation=result.navigation,
             error=err,
             total_chars=len(md),
         )
 
     # Full result — apply truncation if needed.
-    return _result_with_truncation(full_markdown, links=result.links)
+    return _result_with_truncation(full_markdown, navigation=result.navigation)
 
 
 def _result_with_truncation(
     markdown: str,
-    links: dict[str, list[dict[str, Any]]] | None = None,
+    navigation: dict[str, list[dict[str, Any]]] | None = None,
 ) -> FetchResult:
     """Build a FetchResult with optional truncation + ToC."""
     total_chars = len(markdown)
@@ -610,7 +623,7 @@ def _result_with_truncation(
         return FetchResult(
             success=True,
             markdown=markdown,
-            links=links,
+            navigation=navigation,
             total_chars=total_chars,
         )
     # Truncate — replace markdown with explanatory message + ToC.
@@ -618,7 +631,7 @@ def _result_with_truncation(
     return FetchResult(
         success=True,
         markdown=_truncation_message(total_chars),
-        links=links,
+        navigation=navigation,
         toc=toc,
         total_chars=total_chars,
     )
