@@ -9,10 +9,10 @@ What this module provides
 Why this exists
 - Single entry point for web fetching — used by CLI, Python agents, and
   future transport layers without modification.
-- Content-aware: large pages (> 5000 chars) are automatically truncated to a
+- Content-aware: large pages (> 10 000 chars) are automatically truncated to a
   table of contents with section previews, preventing agents from pulling
   huge pages into context.  Full content is cached on disk for section-level
-  retrieval on demand.
+  retrieval on demand (also capped at 10 000 chars).
 """
 
 from __future__ import annotations
@@ -90,7 +90,13 @@ _DELAY_BEFORE_RETURN_HTML_S: float = 0.0
 _DEFAULT_WAIT_UNTIL: _WaitUntil = "load"
 # Character threshold above which content is truncated and replaced with a
 # table of contents.  Full content is always saved to cache for later retrieval.
-_TRUNCATION_THRESHOLD: int = 5_000
+_TRUNCATION_THRESHOLD: int = 10_000
+
+# Maximum number of text-chunk previews to include per section/node in the
+# compact ToC delivered to agents.  Excess chunks are replaced by a sentinel
+# entry with a line range covering all skipped chunks and a message telling
+# the agent how to expand that section.
+_TOC_MAX_CHUNKS_PER_SECTION: int = 10
 
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
@@ -104,10 +110,6 @@ _CACHE_TTL_S: float = 900
 # Maximum number of cached files.  When exceeded, the oldest files (by
 # modification time) are evicted to keep the cache within bounds.
 _CACHE_MAX_FILES: int = 200
-
-# Maximum number of lines that can be returned via ``line_range`` requests.
-# Prevents agents from pulling the entire page through range queries.
-_LINE_RANGE_MAX: int = 100
 
 
 # ---------------------------------------------------------------------------
@@ -308,13 +310,32 @@ def _chunked_to_toc(tree: dict[str, Any]) -> list[Any]:
 
 
 def _section_to_toc(node: dict[str, Any]) -> list[Any]:
-    """Recursively convert a single node to ToC array entries."""
-    result: list[Any] = []
+    """Recursively convert a single node to ToC array entries.
 
-    # Chunks → [line_start, line_end, "preview"] triples.
-    for chunk in node.get("chunks", []):
+    Caps text-chunk previews at ``_TOC_MAX_CHUNKS_PER_SECTION`` per node
+    to prevent context bloat on pages with many short paragraphs (e.g.
+    GitHub commit histories).  Skipped chunks are summarised by a sentinel
+    triple whose line range spans all of them.
+    """
+    result: list[Any] = []
+    chunks: list[dict[str, Any]] = node.get("chunks", [])
+
+    # Emit up to N chunk previews — cap with sentinel if there are more.
+    for i, chunk in enumerate(chunks):
+        if i >= _TOC_MAX_CHUNKS_PER_SECTION:
+            break
         ls, le = chunk["lines"]
         result.append([ls, le, chunk["preview"]])
+
+    if len(chunks) > _TOC_MAX_CHUNKS_PER_SECTION:
+        skipped = len(chunks) - _TOC_MAX_CHUNKS_PER_SECTION
+        first = chunks[_TOC_MAX_CHUNKS_PER_SECTION]["lines"][0]
+        last = chunks[-1]["lines"][1]
+        msg = (
+            f"… {skipped} more chunks — use --heading to expand all, "
+            f"or --line-range to read selectively"
+        )
+        result.append([first, last, msg])
 
     # Subsections — deduplicate heading names within this level.
     seen: dict[str, int] = {}
@@ -533,6 +554,7 @@ def _render_section(section: dict[str, Any]) -> tuple[str, str | None]:
 
     Walks the section subtree and emits heading lines + chunk text in
     document order so the caller receives a contiguous markdown fragment.
+    The result is capped at ``_TRUNCATION_THRESHOLD`` characters.
     """
     lines: list[str] = []
 
@@ -549,15 +571,25 @@ def _render_section(section: dict[str, Any]) -> tuple[str, str | None]:
             _walk(sub)
 
     _walk(section)
-    return "\n".join(lines).rstrip(), None
+    markdown = "\n".join(lines).rstrip()
+
+    if len(markdown) > _TRUNCATION_THRESHOLD:
+        markdown = markdown[:_TRUNCATION_THRESHOLD]
+        markdown += (
+            f"\n\n[Content truncated at {_TRUNCATION_THRESHOLD} characters. "
+            f"Use --heading on a narrower subsection to retrieve less content.]"
+        )
+
+    return markdown, None
 
 
 def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]:
     """Extract lines from a 1-based range string like ``"10-30"``.
 
-    If the requested range exceeds ``_LINE_RANGE_MAX``, the content is
-    truncated and a note is appended to the markdown so the caller knows
-    the result is incomplete.
+    The result is capped at ``_TRUNCATION_THRESHOLD`` characters — if the
+    requested range produces more content, the text is hard-truncated at
+    the char boundary and a note is appended so the caller knows the
+    result is incomplete.
     """
     try:
         parts = line_range.split("-")
@@ -574,20 +606,15 @@ def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]
     if start > len(lines):
         return "", f"Line range start {start} exceeds file length ({len(lines)} lines)"
 
-    requested_count = end - start + 1
-    truncated = requested_count > _LINE_RANGE_MAX
-    if truncated:
-        end = start + _LINE_RANGE_MAX - 1
-
     end = min(end, len(lines))
     markdown = "\n".join(lines[start - 1:end])
 
-    if truncated:
-        note = (
-            f"\n\n[Content truncated: requested {requested_count} lines "
-            f"but limit is {_LINE_RANGE_MAX}. Showing first {_LINE_RANGE_MAX} lines.]"
+    if len(markdown) > _TRUNCATION_THRESHOLD:
+        markdown = markdown[:_TRUNCATION_THRESHOLD]
+        markdown += (
+            f"\n\n[Content truncated at {_TRUNCATION_THRESHOLD} characters. "
+            f"Use a narrower --line-range to retrieve a smaller slice.]"
         )
-        markdown += note
 
     return markdown, None
 
@@ -709,9 +736,9 @@ def _truncation_message(total_chars: int) -> str:
         f"  {{\"Heading Name\": [...]}}            — section with nested content\n"
         f"  Duplicate headings get \"(N)\" suffix (e.g. \"FAQ (2)\")\n"
         f"\n"
-        f"Retrieve content on demand:\n"
-        f"  --heading \"Heading Name\"  →  full section from cache\n"
-        f"  --line-range \"8-9\"        →  specific lines from cache"
+        f"Retrieve content on demand (capped at {_TRUNCATION_THRESHOLD} chars):\n"
+        f"  --heading \"Heading Name\"  →  section from cache\n"
+        f"  --line-range \"8-9\"        →  lines from cache"
     )
 
 
@@ -735,12 +762,12 @@ async def fetch_url(
     ``heading`` / ``line_range`` always operates on consistent content
     regardless of flags used on previous calls.
 
-    When content exceeds the truncation threshold (5000 chars), the full
+    When content exceeds the truncation threshold (10 000 chars), the full
     content is saved to a disk cache and the result includes a compact
     table of contents (chunk triples + nested section objects) instead
     of the raw markdown.  Agents can then retrieve specific sections via
     ``heading`` or ``line_range`` parameters — which read directly from
-    cache.
+    cache.  Retrieved content is also capped at the same threshold.
 
     Navigation links (internal/external) are extracted during every fresh
     crawl and persisted in the same cache file.  When
@@ -752,7 +779,8 @@ async def fetch_url(
         heading: Exact heading text to extract from cache (case-insensitive).
             Dedup suffix ``" (N)"`` is stripped before lookup.
         line_range: ``"start-end"`` line range to extract from cache
-            (1-based, max 100 lines).
+            (1-based).  Content is capped at ``_TRUNCATION_THRESHOLD``
+            characters.
         refresh_cache: If ``True``, always refetch from the web, ignoring any
             cached content.
         include_navigation: If ``True``, include extracted page links

@@ -64,7 +64,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Extract lines from the cached page "
-            "(1-based, 'start-end', max 100 lines). Repeatable."
+            "(1-based, 'start-end'). Repeatable."
         ),
     )
     parser.add_argument(
