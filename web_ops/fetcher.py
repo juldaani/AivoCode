@@ -124,7 +124,7 @@ _CACHE_MAX_FILES: int = 200
 # ---------------------------------------------------------------------------
 
 
-def _chunk_preview(text: str, n: int = 100) -> str:
+def _chunk_preview(text: str, n: int = 60) -> str:
     """First *n* chars of *text*, URLs stripped, leading whitespace removed,
     hard-cut.
 
@@ -803,8 +803,9 @@ def _truncation_info(total_chars: int, markdown: str = "") -> str:
     )
     if markdown and _is_feed_page(markdown):
         msg += (
-            " Note: this page may be a feed/directory — the ToC may be "
-            "limited. Try --navigation for structured link extraction."
+            " WARNING: this page may be a feed/directory — the ToC parsing "
+            "may be misleading/incomplete. Try --navigation for structured "
+            "link extraction or --line-range for partial reading."
         )
     return msg
 
