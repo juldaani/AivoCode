@@ -815,15 +815,15 @@ def _is_feed_page(markdown: str) -> bool:
     News sites and link directories often render as long link streams
     with few ``\\n\\n`` separators — the chunked-tree ToC is less useful
     on these pages.  Returns ``True`` when both conditions hold:
-    - blank-line rate < 5 % of total lines
-    - link rate > 50 % of total lines
+    - blank-line rate < 10 % of total lines
+    - link rate > 30 % of total lines
     """
     total_lines = markdown.count("\n") + 1
     if total_lines == 0:
         return False
     nl_rate = markdown.count("\n\n") / total_lines
     link_rate = markdown.count("](http") / total_lines
-    return nl_rate < 0.05 and link_rate > 0.5
+    return nl_rate < 0.1 and link_rate > 0.3
 
 
 # ---------------------------------------------------------------------------
