@@ -137,7 +137,7 @@ def _parse_error(buf_text: str) -> str:
 
 def _cache_key(url: str) -> str:
     """Derive a short, stable filename from a URL."""
-    return hashlib.sha256(url.encode()).hexdigest()[:16] + ".md"
+    return hashlib.sha256(url.encode()).hexdigest()[:16] + ".json"
 
 
 def _cache_path(url: str) -> Path:
@@ -152,72 +152,62 @@ def _cache_is_fresh(path: Path) -> bool:
     return age < _CACHE_TTL_S
 
 
-def _read_cache(url: str) -> str | None:
-    """Read cached content, or None if not available."""
+def _read_cache_markdown(url: str) -> str | None:
+    """Read cached markdown from the unified JSON cache, or ``None``."""
     path = _cache_path(url)
     if not path.exists():
         return None
     try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-
-def _write_cache(url: str, content: str) -> None:
-    """Write content to the cache directory and evict old entries if needed."""
-    path = _cache_path(url)
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-    _evict_if_needed()
-
-
-# ---------------------------------------------------------------------------
-# Navigation companion cache
-# ---------------------------------------------------------------------------
-# Navigation links (internal/external) are extracted during the live crawl
-# and persisted alongside the markdown cache so cache hits also have access
-# to them.  The companion file uses the same cache key with a ``.nav.json``
-# extension and is evicted together with the markdown cache.
-
-
-def _nav_cache_path(url: str) -> Path:
-    """Derive the companion navigation cache path for a URL."""
-    return _CACHE_DIR / (_cache_key(url).replace(".md", ".nav.json"))
-
-
-def _write_nav_cache(
-    url: str, navigation: dict[str, list[dict[str, Any]]],
-) -> None:
-    """Persist extracted navigation links alongside the markdown cache."""
-    path = _nav_cache_path(url)
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(navigation, ensure_ascii=False, indent=None),
-        encoding="utf-8",
-    )
-
-
-def _read_nav_cache(url: str) -> dict[str, list[dict[str, Any]]] | None:
-    """Read cached navigation links for a URL, or ``None`` if not available."""
-    path = _nav_cache_path(url)
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("markdown")
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def _read_cache_links(
+    url: str,
+) -> dict[str, list[dict[str, Any]]] | None:
+    """Read cached navigation links from the unified JSON cache, or ``None``."""
+    path = _cache_path(url)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("links")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _write_cache(
+    url: str,
+    markdown: str,
+    links: dict[str, list[dict[str, Any]]] | None = None,
+) -> None:
+    """Write markdown and optional links to a unified JSON cache file.
+
+    Each cached entry is a single ``<hash>.json`` file with keys ``markdown``
+    and (optionally) ``links``.  Additional keys (e.g. ``metadata``, ``tables``)
+    can be added later without a format migration.
+    """
+    data: dict[str, Any] = {"markdown": markdown}
+    if links is not None:
+        data["links"] = links
+    path = _cache_path(url)
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    _evict_if_needed()
 
 
 def _evict_if_needed() -> None:
     """Remove oldest cache files if count exceeds ``_CACHE_MAX_FILES``.
 
-    Both markdown (``.md``) and navigation companion (``.nav.json``) files
-    are sorted by modification time (oldest first); surplus entries are
-    deleted.  This runs after every cache write so the limit is a hard cap.
+    Files are sorted by modification time (oldest first); surplus entries
+    are deleted.  This runs after every cache write so the limit is a hard
+    cap.
     """
     try:
         all_files = sorted(
-            list(_CACHE_DIR.glob("*.md")) + list(_CACHE_DIR.glob("*.nav.json")),
+            _CACHE_DIR.glob("*.json"),
             key=lambda p: os.path.getmtime(str(p)),
         )
     except OSError:
@@ -564,7 +554,7 @@ async def fetch_url(
     ``line_range`` parameters — which read directly from cache.
 
     Navigation links (internal/external) are extracted during every fresh
-    crawl and persisted alongside the markdown cache.  When
+    crawl and persisted in the same cache file.  When
     ``include_navigation=True``, they are returned on cache hits too.
 
     Args:
@@ -584,14 +574,13 @@ async def fetch_url(
 
     Side effects:
         Launches/takes down a CloakBrowser subprocess per fresh fetch.
-        Writes/reads markdown and navigation companion files to
-        ``tmp/aivocode/cache/``.
+        Writes/reads unified JSON cache files to ``tmp/aivocode/cache/``.
     """
     # ── Section extraction from cache (no fetch needed if fresh) ──────────
     wants_section = heading is not None or index is not None or line_range is not None
 
     if wants_section and not refresh_cache:
-        cached = _read_cache(url)
+        cached = _read_cache_markdown(url)
         if cached is not None and _cache_is_fresh(_cache_path(url)):
             md, err = _extract_section(
                 cached,
@@ -609,13 +598,13 @@ async def fetch_url(
 
     # ── Cache hit (no section requested, not refreshing) ─────────────────
     if not wants_section and not refresh_cache and _cache_is_fresh(_cache_path(url)):
-        cached = _read_cache(url)
+        cached = _read_cache_markdown(url)
         if cached is not None:
-            # Restore navigation from companion cache when requested.
-            nav = _read_nav_cache(url) if include_navigation else None
-            # If navigation was requested but companion cache is missing
-            # (page was originally cached before nav caching was added),
-            # fall through to a fresh fetch so the caller gets links.
+            # Restore navigation from the unified cache when requested.
+            nav = _read_cache_links(url) if include_navigation else None
+            # If navigation was requested but the cache has no links
+            # (page was cached before links were stored in the unified
+            # format), fall through to a fresh fetch.
             if nav is not None or not include_navigation:
                 return _result_with_truncation(cached, navigation=nav)
 
@@ -624,12 +613,9 @@ async def fetch_url(
     if not result.success:
         return result
 
-    # Persist to cache.
+    # Persist to unified JSON cache.
     full_markdown = result.markdown
-    _write_cache(url, full_markdown)
-    # Persist navigation companion cache so cache hits also get links.
-    if result.navigation is not None:
-        _write_nav_cache(url, result.navigation)
+    _write_cache(url, full_markdown, links=result.navigation)
 
     # If a section was requested, extract it from the fresh content.
     if wants_section:
