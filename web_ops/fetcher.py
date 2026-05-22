@@ -73,6 +73,7 @@ class FetchResult:
     navigation: dict[str, list[dict[str, Any]]] | None = None
     toc: list[Any] | None = None
     chunked: dict[str, Any] | None = None
+    info: str | None = None
     total_chars: int = 0
 
 
@@ -498,16 +499,18 @@ def _extract_section(
     *,
     heading: str | None = None,
     line_range: str | None = None,
-) -> tuple[str, str | None]:
+) -> tuple[str, str | None, str | None]:
     """Extract a section from cached content using the chunked tree.
 
-    Returns ``(markdown, error)`` — error is ``None`` on success.
+    Returns ``(markdown, error, info)`` — *error* and *info* are ``None``
+    on success without truncation.  *info* carries a human-readable
+    truncation note when the result was capped.
 
     Args:
         content: Full cached markdown content.
         heading: Exact heading text to match (e.g. ``"Tuoreimmat"``).
             Trailing ``" (N)"`` dedup suffixes are stripped for lookup.
-        line_range: ``"start-end"`` line range (1-based, max 100 lines).
+        line_range: ``"start-end"`` line range (1-based).
 
     Raises:
         Never — errors are returned as the second tuple element.
@@ -521,10 +524,10 @@ def _extract_section(
         lookup = re.sub(r"\s+\(\d+\)\s*$", "", heading.strip())
         matched_section = _find_section_by_heading(content, lookup)
         if matched_section is None:
-            return "", f"Heading '{lookup}' not found on page"
+            return "", f"Heading '{lookup}' not found on page", None
         return _render_section(matched_section)
 
-    return "", "No section selector provided"
+    return "", "No section selector provided", None
 
 
 def _find_section_by_heading(
@@ -549,12 +552,17 @@ def _find_section_by_heading(
     return _search(tree)
 
 
-def _render_section(section: dict[str, Any]) -> tuple[str, str | None]:
+def _render_section(
+    section: dict[str, Any],
+) -> tuple[str, str | None, str | None]:
     """Render a chunked-tree section (and its subsections) back to markdown.
+
+    Returns ``(markdown, error, info)``.  *info* is a human-readable
+    truncation note when the result exceeds ``_TRUNCATION_THRESHOLD``
+    characters, or ``None``.
 
     Walks the section subtree and emits heading lines + chunk text in
     document order so the caller receives a contiguous markdown fragment.
-    The result is capped at ``_TRUNCATION_THRESHOLD`` characters.
     """
     lines: list[str] = []
 
@@ -574,49 +582,56 @@ def _render_section(section: dict[str, Any]) -> tuple[str, str | None]:
     markdown = "\n".join(lines).rstrip()
 
     if len(markdown) > _TRUNCATION_THRESHOLD:
-        markdown = markdown[:_TRUNCATION_THRESHOLD]
-        markdown += (
-            f"\n\n[Content truncated at {_TRUNCATION_THRESHOLD} characters. "
-            f"Use --heading on a narrower subsection to retrieve less content.]"
+        info = (
+            f"Content truncated at {_TRUNCATION_THRESHOLD} characters. "
+            f"Use --heading on a narrower subsection to retrieve less content."
         )
+        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ..."
+        return markdown, None, info
 
-    return markdown, None
+    return markdown, None, None
 
 
-def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]:
+def _extract_line_range(
+    content: str, line_range: str,
+) -> tuple[str, str | None, str | None]:
     """Extract lines from a 1-based range string like ``"10-30"``.
 
-    The result is capped at ``_TRUNCATION_THRESHOLD`` characters — if the
-    requested range produces more content, the text is hard-truncated at
-    the char boundary and a note is appended so the caller knows the
-    result is incomplete.
+    Returns ``(markdown, error, info)``.  *info* is a human-readable
+    truncation note when the result exceeds ``_TRUNCATION_THRESHOLD``
+    characters, or ``None``.
     """
     try:
         parts = line_range.split("-")
         if len(parts) != 2:
-            return "", f"Invalid line range format: '{line_range}' — use 'start-end'"
+            return "", f"Invalid line range format: '{line_range}' — use 'start-end'", None
         start = int(parts[0])
         end = int(parts[1])
     except ValueError:
-        return "", f"Invalid line range: '{line_range}'"
+        return "", f"Invalid line range: '{line_range}'", None
 
     lines = content.splitlines()
     if start < 1:
         start = 1
     if start > len(lines):
-        return "", f"Line range start {start} exceeds file length ({len(lines)} lines)"
+        return (
+            "",
+            f"Line range start {start} exceeds file length ({len(lines)} lines)",
+            None,
+        )
 
     end = min(end, len(lines))
     markdown = "\n".join(lines[start - 1:end])
 
     if len(markdown) > _TRUNCATION_THRESHOLD:
-        markdown = markdown[:_TRUNCATION_THRESHOLD]
-        markdown += (
-            f"\n\n[Content truncated at {_TRUNCATION_THRESHOLD} characters. "
-            f"Use a narrower --line-range to retrieve a smaller slice.]"
+        info = (
+            f"Content truncated at {_TRUNCATION_THRESHOLD} characters. "
+            f"Use a narrower --line-range to retrieve a smaller slice."
         )
+        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ..."
+        return markdown, None, info
 
-    return markdown, None
+    return markdown, None, None
 
 
 # ---------------------------------------------------------------------------
@@ -726,19 +741,22 @@ async def _fetch_once(
 
 
 def _truncation_message(total_chars: int) -> str:
-    """Explain to the agent why content was truncated and how to use the ToC."""
+    """Minimal markdown placeholder when content exceeds the threshold.
+
+    The explanatory message lives in ``FetchResult.info`` so the
+    ``markdown`` field stays clean (just `` ...``).
+    """
+    return " ..."
+
+
+def _truncation_info(total_chars: int) -> str:
+    """Explain truncation so the agent knows what happened and what to do."""
     return (
         f"Content exceeds the {_TRUNCATION_THRESHOLD} character limit "
-        f"({total_chars} chars total). Full content stored in cache.\n"
-        f"\n"
-        f"The `toc` field contains a structured overview:\n"
-        f"  [line_start, line_end, \"preview\"]  — text chunk (100-char preview)\n"
-        f"  {{\"Heading Name\": [...]}}            — section with nested content\n"
-        f"  Duplicate headings get \"(N)\" suffix (e.g. \"FAQ (2)\")\n"
-        f"\n"
-        f"Retrieve content on demand (capped at {_TRUNCATION_THRESHOLD} chars):\n"
-        f"  --heading \"Heading Name\"  →  section from cache\n"
-        f"  --line-range \"8-9\"        →  lines from cache"
+        f"({total_chars} chars total). Full content stored in cache. "
+        f"Use `toc` for navigation, or --heading / --line-range "
+        f"to retrieve specific content (capped at "
+        f"{_TRUNCATION_THRESHOLD} chars)."
     )
 
 
@@ -799,7 +817,7 @@ async def fetch_url(
     if wants_section and not refresh_cache:
         cached = _read_cache_markdown(url)
         if cached is not None and _cache_is_fresh(_cache_path(url)):
-            md, err = _extract_section(
+            md, err, info = _extract_section(
                 cached,
                 heading=heading,
                 line_range=line_range,
@@ -808,6 +826,7 @@ async def fetch_url(
                 success=err is None,
                 markdown=md,
                 error=err,
+                info=info,
                 total_chars=len(md),
             )
         # Cache missing or stale — fetch first, then extract from result.
@@ -843,7 +862,7 @@ async def fetch_url(
 
     # If a section was requested, extract it from the fresh content.
     if wants_section:
-        md, err = _extract_section(
+        md, err, info = _extract_section(
             full_markdown,
             heading=heading,
             line_range=line_range,
@@ -853,6 +872,7 @@ async def fetch_url(
             markdown=md,
             navigation=result.navigation if include_navigation else None,
             error=err,
+            info=info,
             total_chars=len(md),
         )
 
@@ -893,5 +913,6 @@ def _result_with_truncation(
         markdown=_truncation_message(total_chars),
         navigation=navigation,
         toc=toc,
+        info=_truncation_info(total_chars),
         total_chars=total_chars,
     )

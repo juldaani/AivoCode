@@ -204,6 +204,7 @@ def handle(args: argparse.Namespace) -> int:
         "success": result.success,
         "status_code": result.status_code,
         "error": result.error,
+        "info": result.info,
         "toc_n_chars": toc_n_chars,
         "markdown": result.markdown,
         "navigation": result.navigation,
