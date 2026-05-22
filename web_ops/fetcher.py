@@ -584,9 +584,9 @@ def _render_section(
     if len(markdown) > _TRUNCATION_THRESHOLD:
         info = (
             f"Content truncated at {_TRUNCATION_THRESHOLD} characters. "
-            f"Use --heading on a narrower subsection to retrieve less content."
+            f"Use --heading or --line-range to retrieve specific content."
         )
-        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ..."
+        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ... " + info
         return markdown, None, info
 
     return markdown, None, None
@@ -626,9 +626,9 @@ def _extract_line_range(
     if len(markdown) > _TRUNCATION_THRESHOLD:
         info = (
             f"Content truncated at {_TRUNCATION_THRESHOLD} characters. "
-            f"Use a narrower --line-range to retrieve a smaller slice."
+            f"Use --heading or --line-range to retrieve specific content."
         )
-        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ..."
+        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ... " + info
         return markdown, None, info
 
     return markdown, None, None
@@ -741,12 +741,8 @@ async def _fetch_once(
 
 
 def _truncation_message(total_chars: int) -> str:
-    """Minimal markdown placeholder when content exceeds the threshold.
-
-    The explanatory message lives in ``FetchResult.info`` so the
-    ``markdown`` field stays clean (just `` ...``).
-    """
-    return " ..."
+    """Minimal markdown placeholder + info when content exceeds the threshold."""
+    return " ... " + _truncation_info(total_chars)
 
 
 def _truncation_info(total_chars: int) -> str:
