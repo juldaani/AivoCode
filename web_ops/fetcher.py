@@ -103,7 +103,7 @@ _TOC_MAX_CHUNKS_PER_SECTION: int = 10
 # included in the compact ToC.  Chunks below this are typically pure
 # boilerplate (e.g. a single bare URL).  Code blocks are excluded from
 # this filter.
-_MIN_CHUNK_PREVIEW_CHARS: int = 15
+_MIN_CHUNK_PREVIEW_CHARS: int = 20
 
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
@@ -372,8 +372,13 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
         result.append([first, last, msg])
 
     # Subsections — deduplicate heading names within this level.
+    # Skip sections whose entire content was filtered out (e.g. empty
+    # "Stars" or "Watchers" sections on a GitHub sidebar).
     seen: dict[str, int] = {}
     for subsection in node.get("sections", []):
+        child = _section_to_toc(subsection)
+        if not child:
+            continue
         clean_heading = _strip_urls(subsection["heading"])
         seen[clean_heading] = seen.get(clean_heading, 0) + 1
 
@@ -382,7 +387,7 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
             if seen[clean_heading] == 1
             else f"{clean_heading} ({seen[clean_heading]})"
         )
-        result.append({key: _section_to_toc(subsection)})
+        result.append({key: child})
 
     return result
 
