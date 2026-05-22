@@ -119,13 +119,14 @@ _CACHE_MAX_FILES: int = 200
 
 
 def _chunk_preview(text: str, n: int = 100) -> str:
-    """First *n* chars of *text*, leading whitespace stripped, hard-cut.
+    """First *n* chars of *text*, URLs stripped, leading whitespace removed,
+    hard-cut.
 
-    Used to produce the ``preview`` field on every chunk in the cached
-    chunked tree.  Hard-cut (no word-boundary awareness) keeps the function
-    simple and predictable — agents see the exact first 100 printable chars.
+    Strips markdown link syntax and bare URLs so the preview (used in both
+    the cached chunked tree and the compact ToC) carries real information
+    rather than URL cruft.
     """
-    return text.lstrip()[:n]
+    return _strip_urls(text)[:n]
 
 
 # ---------------------------------------------------------------------------
@@ -345,11 +346,7 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
         if i >= _TOC_MAX_CHUNKS_PER_SECTION:
             break
         ls, le = chunk["lines"]
-        # Strip URLs from the full text, then take first 100 chars as preview.
-        # (chunk["preview"] may have truncated a URL mid-way, breaking the
-        # regex — stripping the full text first avoids that.)
-        clean = _strip_urls(chunk["text"])
-        result.append([ls, le, clean[:100]])
+        result.append([ls, le, chunk["preview"]])
 
     if len(chunks) > _TOC_MAX_CHUNKS_PER_SECTION:
         skipped = len(chunks) - _TOC_MAX_CHUNKS_PER_SECTION
