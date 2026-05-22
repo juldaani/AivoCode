@@ -296,6 +296,25 @@ def _emit_chunk(
 # ---------------------------------------------------------------------------
 
 
+def _strip_urls(text: str) -> str:
+    """Remove URLs from *text*, keeping link/image alt-text only.
+
+    Strips markdown ``[text](url)``, ``![alt](url)``, bare ``https?://``
+    URLs, and orphaned ``](url)`` fragments.  Applied to heading keys and
+    chunk previews in the compact ToC to keep the information density high.
+    """
+    # Markdown images: ![alt](url) → alt
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    # Markdown links: [text](url) → text
+    text = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    # Bare URLs
+    text = re.sub(r"https?://\S+", "", text)
+    # Orphaned closing-link fragments
+    text = re.sub(r"\]\([^)]+\)", "", text)
+    # Collapse whitespace
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _chunked_to_toc(tree: dict[str, Any]) -> list[Any]:
     """Project the verbose cached chunked tree into a compact ToC.
 
@@ -326,7 +345,11 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
         if i >= _TOC_MAX_CHUNKS_PER_SECTION:
             break
         ls, le = chunk["lines"]
-        result.append([ls, le, chunk["preview"]])
+        # Strip URLs from the full text, then take first 100 chars as preview.
+        # (chunk["preview"] may have truncated a URL mid-way, breaking the
+        # regex — stripping the full text first avoids that.)
+        clean = _strip_urls(chunk["text"])
+        result.append([ls, le, clean[:100]])
 
     if len(chunks) > _TOC_MAX_CHUNKS_PER_SECTION:
         skipped = len(chunks) - _TOC_MAX_CHUNKS_PER_SECTION
@@ -341,10 +364,14 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
     # Subsections — deduplicate heading names within this level.
     seen: dict[str, int] = {}
     for subsection in node.get("sections", []):
-        heading = subsection["heading"]
-        seen[heading] = seen.get(heading, 0) + 1
+        clean_heading = _strip_urls(subsection["heading"])
+        seen[clean_heading] = seen.get(clean_heading, 0) + 1
 
-        key = heading if seen[heading] == 1 else f"{heading} ({seen[heading]})"
+        key = (
+            clean_heading
+            if seen[clean_heading] == 1
+            else f"{clean_heading} ({seen[clean_heading]})"
+        )
         result.append({key: _section_to_toc(subsection)})
 
     return result
