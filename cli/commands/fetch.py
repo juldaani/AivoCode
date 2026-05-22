@@ -165,13 +165,11 @@ def handle(args: argparse.Namespace) -> int:
         combined = "\n\n---\n\n".join(successes) if successes else ""
         output: dict = {
             "success": bool(successes),
-            "status_code": None,
             "error": "; ".join(errors) if errors else None,
-            "toc_n_chars": 0,
             "markdown": combined,
-            "navigation": None,
-            "toc": None,
         }
+        # Strip None / null fields.
+        output = {k: v for k, v in output.items() if v is not None}
         print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
         if args.verbose:
             print(
@@ -200,7 +198,7 @@ def handle(args: argparse.Namespace) -> int:
     toc_n_chars = (
         len(json.dumps(result.toc, ensure_ascii=False))
         if result.toc is not None
-        else 0
+        else None
     )
     output = {
         "success": result.success,
@@ -211,6 +209,8 @@ def handle(args: argparse.Namespace) -> int:
         "navigation": result.navigation,
         "toc": result.toc,
     }
+    # Strip None / null fields so the agent sees only meaningful keys.
+    output = {k: v for k, v in output.items() if v is not None}
     print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
 
     if args.verbose:
