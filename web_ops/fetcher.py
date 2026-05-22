@@ -103,7 +103,7 @@ _TOC_MAX_CHUNKS_PER_SECTION: int = 10
 # included in the compact ToC.  Chunks below this are typically pure
 # boilerplate (e.g. a single bare URL).  Code blocks are excluded from
 # this filter.
-_MIN_CHUNK_PREVIEW_CHARS: int = 20
+_MIN_CHUNK_PREVIEW_CHARS: int = 15
 
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
@@ -782,20 +782,48 @@ async def _fetch_once(
             await browser.close()
 
 
-def _truncation_message(total_chars: int) -> str:
+def _truncation_message(total_chars: int, markdown: str = "") -> str:
     """Minimal markdown placeholder + info when content exceeds the threshold."""
-    return " ... " + _truncation_info(total_chars)
+    return " ... " + _truncation_info(total_chars, markdown)
 
 
-def _truncation_info(total_chars: int) -> str:
-    """Explain truncation so the agent knows what happened and what to do."""
-    return (
+def _truncation_info(total_chars: int, markdown: str = "") -> str:
+    """Explain truncation so the agent knows what happened and what to do.
+
+    Appends a feed-page warning when the markdown has very few blank lines
+    and a high density of links — typical of news feed / link-directory
+    pages where the chunked ToC may be unreliable.
+    """
+    msg = (
         f"Content exceeds the {_TRUNCATION_THRESHOLD} character limit "
         f"({total_chars} chars total). Full content stored in cache. "
         f"Use `toc` for navigation, or --heading / --line-range "
         f"to retrieve specific content (capped at "
         f"{_TRUNCATION_THRESHOLD} chars)."
     )
+    if markdown and _is_feed_page(markdown):
+        msg += (
+            " Note: this page may be a feed/directory — the ToC may be "
+            "limited. Try --navigation for structured link extraction."
+        )
+    return msg
+
+
+def _is_feed_page(markdown: str) -> bool:
+    """Detect feed-style pages (dense links, few paragraph breaks).
+
+    News sites and link directories often render as long link streams
+    with few ``\\n\\n`` separators — the chunked-tree ToC is less useful
+    on these pages.  Returns ``True`` when both conditions hold:
+    - blank-line rate < 0.1 % of total chars
+    - link rate > 0.3 % of total chars
+    """
+    total = len(markdown)
+    if total == 0:
+        return False
+    nl_rate = markdown.count("\n\n") / total
+    link_rate = markdown.count("](http") / total
+    return nl_rate < 0.001 and link_rate > 0.003
 
 
 # ---------------------------------------------------------------------------
@@ -948,9 +976,9 @@ def _result_with_truncation(
     toc = _chunked_to_toc(chunked)
     return FetchResult(
         success=True,
-        markdown=_truncation_message(total_chars),
+        markdown=_truncation_message(total_chars, markdown),
         navigation=navigation,
         toc=toc,
-        info=_truncation_info(total_chars),
+        info=_truncation_info(total_chars, markdown),
         total_chars=total_chars,
     )
