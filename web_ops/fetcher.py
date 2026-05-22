@@ -99,6 +99,12 @@ _TRUNCATION_THRESHOLD: int = 10_000
 # the agent how to expand that section.
 _TOC_MAX_CHUNKS_PER_SECTION: int = 10
 
+# Minimum character count a chunk must have (after URL stripping) to be
+# included in the compact ToC.  Chunks below this are typically pure
+# boilerplate (e.g. a single bare URL).  Code blocks are excluded from
+# this filter.
+_MIN_CHUNK_PREVIEW_CHARS: int = 15
+
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
 _CACHE_DIR: Path = Path("tmp/aivocode/cache")
@@ -342,9 +348,16 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
     chunks: list[dict[str, Any]] = node.get("chunks", [])
 
     # Emit up to N chunk previews — cap with sentinel if there are more.
+    # Skip trivially-short non-code chunks whose content was mostly URLs.
     for i, chunk in enumerate(chunks):
         if i >= _TOC_MAX_CHUNKS_PER_SECTION:
             break
+
+        text = chunk["text"].strip()
+        if not text.startswith("```"):
+            if len(_strip_urls(chunk["text"])) < _MIN_CHUNK_PREVIEW_CHARS:
+                continue
+
         ls, le = chunk["lines"]
         result.append([ls, le, chunk["preview"]])
 
