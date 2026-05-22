@@ -54,9 +54,14 @@ class FetchResult:
         navigation: Structured navigation links (internal/external).  Populated
             only when ``include_navigation=True`` is passed to ``fetch_url()``.
             ``None`` otherwise.
-        toc: Table of contents entries when content is truncated.  ``None``
-            when content fits under the threshold or a specific section was
-            requested via ``heading`` / ``index`` / ``line_range``.
+        toc: Compact table of contents (ordered array of chunk triples and
+            ``{"Heading": [...]}`` section objects) when content is truncated.
+            ``None`` when content fits under the threshold or a specific
+            section was requested via ``heading`` / ``line_range``.
+        chunked: Full verbose chunked tree (with ``text``, ``preview``,
+            ``lines``) when content is truncated.  ``None`` otherwise.
+            Available for programmatic consumers; the ``toc`` field carries
+            the agent-facing compact projection.
         total_chars: Total character count of the full original content.
             ``0`` on failure or when a section was extracted.
     """
@@ -66,7 +71,8 @@ class FetchResult:
     status_code: int | None = None
     error: str | None = field(default=None, compare=False)
     navigation: dict[str, list[dict[str, Any]]] | None = None
-    toc: list[dict[str, Any]] | None = None
+    toc: list[Any] | None = None
+    chunked: dict[str, Any] | None = None
     total_chars: int = 0
 
 
@@ -107,6 +113,219 @@ _LINE_RANGE_MAX: int = 100
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _chunk_preview(text: str, n: int = 100) -> str:
+    """First *n* chars of *text*, leading whitespace stripped, hard-cut.
+
+    Used to produce the ``preview`` field on every chunk in the cached
+    chunked tree.  Hard-cut (no word-boundary awareness) keeps the function
+    simple and predictable — agents see the exact first 100 printable chars.
+    """
+    return text.lstrip()[:n]
+
+
+# ---------------------------------------------------------------------------
+# Markdown chunked-tree parser
+# ---------------------------------------------------------------------------
+
+
+def _parse_chunked(markdown: str) -> dict[str, Any]:
+    """Parse raw markdown into a nested chunked tree.
+
+    Builds a recursive tree from ATX headings (``#``..``######``), treating
+    content between them as text chunks.  Code fences (`` ``` `` at line
+    start) are recognised so that blank lines inside code blocks do **not**
+    split chunks.  Outside code blocks, blank lines and horizontal rules
+    (``---``, ``***``, ``___``) act as chunk boundaries.
+
+    Returns a verbose tree ready for caching — not the compact ToC format
+    (see ``_chunked_to_toc`` for that projection).
+
+    Args:
+        markdown: Raw markdown string (as produced by Crawl4AI).
+
+    Returns:
+        A ``dict`` with keys ``type``, ``heading``, ``level``, ``chunks``
+        (list of ``{text, preview, lines}`` dicts), and ``sections``
+        (recursive list of the same shape).  The root node has
+        ``type="root"`` / ``heading=None`` / ``level=0``.
+    """
+    lines = markdown.splitlines()
+    _HR_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})\s*$")
+
+    # Root node — level 0, no heading.
+    root: dict[str, Any] = {
+        "type": "root",
+        "heading": None,
+        "level": 0,
+        "chunks": [],
+        "sections": [],
+    }
+    # Stack of parent nodes (root is always at index 0).
+    stack: list[dict[str, Any]] = [root]
+
+    # Bookkeeping for the chunk currently being accumulated.
+    chunk_lines: list[str] = []
+    chunk_start: int = -1  # 1‑based line number of first content line
+
+    in_code = False
+    total_lines = len(lines)
+
+    for line_idx, raw_line in enumerate(lines):
+        line_num = line_idx + 1  # 1‑based
+
+        # ── Code-fence toggle ──────────────────────────────────────────
+        if re.match(r"^\s*```", raw_line):
+            if not in_code:
+                # Entering code block — flush pending text chunk first.
+                if chunk_lines:
+                    _emit_chunk(
+                        stack[-1], chunk_lines, chunk_start, line_num - 1,
+                    )
+                    chunk_lines = []
+                    chunk_start = -1
+                in_code = True
+                chunk_lines = [raw_line]
+                chunk_start = line_num
+            else:
+                # Exiting code block — include closing fence, then emit.
+                chunk_lines.append(raw_line)
+                _emit_chunk(
+                    stack[-1], chunk_lines, chunk_start, line_num,
+                )
+                chunk_lines = []
+                chunk_start = -1
+                in_code = False
+            continue
+
+        # ── Inside a code block — everything is content ────────────────
+        if in_code:
+            chunk_lines.append(raw_line)
+            continue
+
+        # ── Outside code blocks ────────────────────────────────────────
+        stripped = raw_line.strip()
+
+        # ── ATX heading ────────────────────────────────────────────────
+        heading_match = re.match(r"^(#{1,6})\s+(.+)", raw_line)
+        if heading_match:
+            if chunk_lines:
+                _emit_chunk(
+                    stack[-1], chunk_lines, chunk_start, line_num - 1,
+                )
+                chunk_lines = []
+                chunk_start = -1
+
+            level = len(heading_match.group(1))
+            heading_text = heading_match.group(2).strip()
+
+            # Pop stack to find the parent whose level < this heading's level,
+            # then append a new child section.
+            while stack[-1]["level"] >= level:
+                stack.pop()
+
+            new_sec: dict[str, Any] = {
+                "type": "section",
+                "heading": heading_text,
+                "level": level,
+                "chunks": [],
+                "sections": [],
+            }
+            stack[-1]["sections"].append(new_sec)
+            stack.append(new_sec)
+            continue
+
+        # ── Horizontal rule (acts like a chunk boundary) ────────────────
+        if _HR_RE.match(stripped):
+            if chunk_lines:
+                _emit_chunk(
+                    stack[-1], chunk_lines, chunk_start, line_num - 1,
+                )
+                chunk_lines = []
+                chunk_start = -1
+            # The rule line itself is skipped (no content value).
+            continue
+
+        # ── Blank line (chunk boundary) ─────────────────────────────────
+        if not stripped:
+            if chunk_lines:
+                _emit_chunk(
+                    stack[-1], chunk_lines, chunk_start, line_num - 1,
+                )
+                chunk_lines = []
+                chunk_start = -1
+            continue
+
+        # ── Regular content line ───────────────────────────────────────
+        if not chunk_lines:
+            chunk_start = line_num
+        chunk_lines.append(raw_line)
+
+    # Flush trailing chunk (or dangling code block with no closing fence).
+    if chunk_lines:
+        _emit_chunk(
+            stack[-1], chunk_lines, chunk_start, total_lines,
+        )
+
+    return root
+
+
+def _emit_chunk(
+    parent: dict[str, Any],
+    lines: list[str],
+    start: int,
+    end: int,
+) -> None:
+    """Build a chunk dict from accumulated lines and append to *parent*."""
+    text = "\n".join(lines).rstrip()
+    if not text:
+        return  # Purely blank chunks (shouldn't happen, but safe).
+    parent["chunks"].append({
+        "text": text,
+        "preview": _chunk_preview(text),
+        "lines": [start, end],
+    })
+
+
+# ---------------------------------------------------------------------------
+# ToC projection (compact, agent-facing)
+# ---------------------------------------------------------------------------
+
+
+def _chunked_to_toc(tree: dict[str, Any]) -> list[Any]:
+    """Project the verbose cached chunked tree into a compact ToC.
+
+    The compact format is an ordered array where:
+    - ``[line_start, line_end, "preview"]`` triples are text chunks.
+    - ``{"Heading Name": [...]}`` objects are subsections.
+
+    Duplicate heading names at the same level get a ``" (N)"`` suffix.
+    The root ``type`` / ``level`` keys and full ``text`` values are
+    dropped — only previews and line ranges are retained.
+    """
+    return _section_to_toc(tree)
+
+
+def _section_to_toc(node: dict[str, Any]) -> list[Any]:
+    """Recursively convert a single node to ToC array entries."""
+    result: list[Any] = []
+
+    # Chunks → [line_start, line_end, "preview"] triples.
+    for chunk in node.get("chunks", []):
+        ls, le = chunk["lines"]
+        result.append([ls, le, chunk["preview"]])
+
+    # Subsections — deduplicate heading names within this level.
+    seen: dict[str, int] = {}
+    for subsection in node.get("sections", []):
+        heading = subsection["heading"]
+        seen[heading] = seen.get(heading, 0) + 1
+
+        key = heading if seen[heading] == 1 else f"{heading} ({seen[heading]})"
+        result.append({key: _section_to_toc(subsection)})
+
+    return result
 
 
 def _parse_error(buf_text: str) -> str:
@@ -178,20 +397,37 @@ def _read_cache_links(
         return None
 
 
+def _read_cache_chunked(
+    url: str,
+) -> dict[str, Any] | None:
+    """Read the cached verbose chunked tree, or ``None``."""
+    path = _cache_path(url)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("chunked")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _write_cache(
     url: str,
     markdown: str,
     links: dict[str, list[dict[str, Any]]] | None = None,
+    chunked: dict[str, Any] | None = None,
 ) -> None:
-    """Write markdown and optional links to a unified JSON cache file.
+    """Write markdown, links, and chunked tree to a unified JSON cache file.
 
-    Each cached entry is a single ``<hash>.json`` file with keys ``markdown``
-    and (optionally) ``links``.  Additional keys (e.g. ``metadata``, ``tables``)
-    can be added later without a format migration.
+    Each cached entry is a single ``<hash>.json`` file.  The verbose
+    chunked tree (``chunked`` key) is the source of truth for the compact
+    ToC delivered to agents.
     """
     data: dict[str, Any] = {"markdown": markdown}
     if links is not None:
         data["links"] = links
+    if chunked is not None:
+        data["chunked"] = chunked
     path = _cache_path(url)
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
@@ -224,96 +460,11 @@ def _evict_if_needed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Table of Contents
+# Table of Contents (chunked-tree based)
 # ---------------------------------------------------------------------------
-
-
-def _build_toc(markdown: str) -> list[dict[str, Any]]:
-    """Parse markdown into a table of contents with section previews.
-
-    Scans for ``#``, ``##``, ``###`` headings.  Each ToC entry includes the
-    heading text, nesting level, line range, and a short preview of the
-    section body.  Content before the first heading gets a virtual
-    ``[Overview]`` entry at level 0.
-
-    Args:
-        markdown: The full markdown content.
-
-    Returns:
-        List of ToC entries, each with ``idx``, ``heading``, ``level``,
-        ``line_range`` (1-based), and ``preview``.
-    """
-    lines = markdown.splitlines()
-    # Find all heading positions.
-    headings: list[dict[str, Any]] = []
-    for i, line in enumerate(lines):
-        m = re.match(r"^(#{1,3})\s+(.+)", line)
-        if m:
-            headings.append({
-                "level": len(m.group(1)),
-                "heading": m.group(2).strip(),
-                "line": i + 1,  # 1-based
-            })
-
-    if not headings:
-        # No headings at all — treat the whole thing as one entry.
-        return [{
-            "idx": 0,
-            "heading": "[Overview]",
-            "level": 0,
-            "line_range": [1, len(lines)],
-            "preview": _preview_lines(lines, 0, len(lines)),
-        }]
-
-    toc: list[dict[str, Any]] = []
-
-    # Before the first heading: [Overview].
-    if headings[0]["line"] > 1:
-        preview = _preview_lines(lines, 0, headings[0]["line"] - 1)
-        if preview:
-            toc.append({
-                "idx": 0,
-                "heading": "[Overview]",
-                "level": 0,
-                "line_range": [1, headings[0]["line"] - 1],
-                "preview": preview,
-            })
-
-    # Sections between headings.
-    for i, h in enumerate(headings):
-        start = h["line"]
-        end = headings[i + 1]["line"] - 1 if i + 1 < len(headings) else len(lines)
-        preview = _preview_lines(lines, start, end + 1)
-        toc.append({
-            "idx": len(toc),
-            "heading": h["heading"],
-            "level": h["level"],
-            "line_range": [start, end],
-            "preview": preview,
-        })
-
-    return toc
-
-
-def _preview_lines(lines: list[str], start: int, end: int) -> str:
-    """Extract the first meaningful ~120 chars from a section of lines.
-
-    Skips blank lines and heading lines (which start with #).
-    Returns up to 120 characters of the first content line, or empty string
-    if the section has no body text.
-    """
-    for i in range(start, min(end, len(lines))):
-        stripped = lines[i].strip()
-        if not stripped:
-            continue
-        if stripped.startswith("#"):
-            continue
-        if stripped.startswith("!["):
-            continue  # image
-        if stripped.startswith("|"):
-            continue  # table
-        return stripped[:120]
-    return ""
+# The old flat ``_build_toc`` / ``_preview_lines`` were replaced by
+# ``_parse_chunked`` (full verbose tree) + ``_chunked_to_toc`` (compact
+# agent-facing projection).  See the ``Chunked-tree parser`` section above.
 
 
 # ---------------------------------------------------------------------------
@@ -325,17 +476,16 @@ def _extract_section(
     content: str,
     *,
     heading: str | None = None,
-    index: int | None = None,
     line_range: str | None = None,
 ) -> tuple[str, str | None]:
-    """Extract a section from cached content.
+    """Extract a section from cached content using the chunked tree.
 
     Returns ``(markdown, error)`` — error is ``None`` on success.
 
     Args:
         content: Full cached markdown content.
         heading: Exact heading text to match (e.g. ``"Tuoreimmat"``).
-        index: ToC index number to extract.
+            Trailing ``" (N)"`` dedup suffixes are stripped for lookup.
         line_range: ``"start-end"`` line range (1-based, max 100 lines).
 
     Raises:
@@ -344,22 +494,62 @@ def _extract_section(
     if line_range is not None:
         return _extract_line_range(content, line_range)
 
-    toc = _build_toc(content)
-
-    if index is not None:
-        if index < 0 or index >= len(toc):
-            return "", f"Index {index} out of range (0-{len(toc) - 1})"
-        return _extract_by_toc_entry(content, toc[index])
-
     if heading is not None:
-        matches = [e for e in toc if e["heading"].lower() == heading.lower()]
-        if not matches:
-            return "", f"Heading '{heading}' not found in table of contents"
-        # If multiple headings with same text exist, return the first.
-        # Caller can use --index for disambiguation.
-        return _extract_by_toc_entry(content, matches[0])
+        # Strip optional dedup suffix " (N)" so --heading "Examples (2)"
+        # resolves to the second occurrence of "Examples".
+        lookup = re.sub(r"\s+\(\d+\)\s*$", "", heading.strip())
+        matched_section = _find_section_by_heading(content, lookup)
+        if matched_section is None:
+            return "", f"Heading '{lookup}' not found on page"
+        return _render_section(matched_section)
 
     return "", "No section selector provided"
+
+
+def _find_section_by_heading(
+    content: str,
+    heading: str,
+) -> dict[str, Any] | None:
+    """Walk the chunked tree and return the first section matching *heading*.
+
+    Matching is case-insensitive.  Returns ``None`` if no section is found.
+    """
+    tree = _parse_chunked(content)
+
+    def _search(node: dict[str, Any]) -> dict[str, Any] | None:
+        for section in node.get("sections", []):
+            if section["heading"].lower() == heading.lower():
+                return section
+            found = _search(section)
+            if found:
+                return found
+        return None
+
+    return _search(tree)
+
+
+def _render_section(section: dict[str, Any]) -> tuple[str, str | None]:
+    """Render a chunked-tree section (and its subsections) back to markdown.
+
+    Walks the section subtree and emits heading lines + chunk text in
+    document order so the caller receives a contiguous markdown fragment.
+    """
+    lines: list[str] = []
+
+    def _walk(node: dict[str, Any]) -> None:
+        level = node.get("level", 0)
+        heading = node.get("heading")
+        if heading is not None and level > 0:
+            lines.append("#" * level + " " + heading)
+            lines.append("")
+        for chunk in node.get("chunks", []):
+            lines.append(chunk["text"])
+            lines.append("")
+        for sub in node.get("sections", []):
+            _walk(sub)
+
+    _walk(section)
+    return "\n".join(lines).rstrip(), None
 
 
 def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]:
@@ -402,19 +592,6 @@ def _extract_line_range(content: str, line_range: str) -> tuple[str, str | None]
     return markdown, None
 
 
-def _extract_by_toc_entry(
-    content: str,
-    entry: dict[str, Any],
-) -> tuple[str, str | None]:
-    """Extract lines covered by a ToC entry."""
-    ls, le = entry["line_range"]
-    lines = content.splitlines()
-    # Clamp to content bounds.
-    ls = max(1, ls)
-    le = min(len(lines), le)
-    return "\n".join(lines[ls - 1:le]), None
-
-
 # ---------------------------------------------------------------------------
 # Fetching
 # ---------------------------------------------------------------------------
@@ -427,10 +604,10 @@ async def _fetch_once(
     """Perform a single fetch attempt (no caching, no truncation logic).
 
     Always uses the raw (unfiltered) Crawl4AI config so the cached content
-    is stable across calls — section extraction via ``--heading`` / ``--index``
-    / ``--line-range`` relies on consistent line numbers from the raw markdown.
-    Navigation links are always extracted and persisted alongside the markdown
-    cache so ``--navigation`` works on cache hits too.
+    is stable across calls — section extraction via ``--heading`` /
+    ``--line-range`` relies on consistent line numbers from the raw markdown.
+    Navigation links and the chunked tree are always computed and persisted
+    alongside the markdown cache.
     """
     # All third-party noise (cloakbrowser upgrade nag, crawl4ai logging) is
     # redirected into the buffer so nothing leaks to stderr.
@@ -503,11 +680,16 @@ async def _fetch_once(
                 ],
             }
 
+        # Parse the markdown into a verbose chunked tree — computed once
+        # per fetch so it is available for caching and truncation logic.
+        chunked_tree = _parse_chunked(markdown)
+
         return FetchResult(
             success=True,
             status_code=result.status_code,
             markdown=markdown,
             navigation=navigation,
+            chunked=chunked_tree,
             total_chars=len(markdown),
         )
 
@@ -517,12 +699,19 @@ async def _fetch_once(
 
 
 def _truncation_message(total_chars: int) -> str:
-    """Explain to the agent why content was truncated."""
+    """Explain to the agent why content was truncated and how to use the ToC."""
     return (
         f"Content exceeds the {_TRUNCATION_THRESHOLD} character limit "
-        f"({total_chars} chars total). Full content saved to cache. "
-        f"Use --heading, --index, or --line-range to fetch specific sections. "
-        f"Table of contents follows (see toc field)."
+        f"({total_chars} chars total). Full content stored in cache.\n"
+        f"\n"
+        f"The `toc` field contains a structured overview:\n"
+        f"  [line_start, line_end, \"preview\"]  — text chunk (100-char preview)\n"
+        f"  {{\"Heading Name\": [...]}}            — section with nested content\n"
+        f"  Duplicate headings get \"(N)\" suffix (e.g. \"FAQ (2)\")\n"
+        f"\n"
+        f"Retrieve content on demand:\n"
+        f"  --heading \"Heading Name\"  →  full section from cache\n"
+        f"  --line-range \"8-9\"        →  specific lines from cache"
     )
 
 
@@ -536,7 +725,6 @@ async def fetch_url(
     *,
     wait_until: _WaitUntil = _DEFAULT_WAIT_UNTIL,
     heading: str | None = None,
-    index: int | None = None,
     line_range: str | None = None,
     refresh_cache: bool = False,
     include_navigation: bool = False,
@@ -544,14 +732,15 @@ async def fetch_url(
     """Fetch a URL via CloakBrowser + Crawl4AI and return structured results.
 
     Uses raw (unfiltered) markdown for caching — section extraction via
-    ``heading`` / ``index`` / ``line_range`` always operates on consistent
-    content regardless of flags used on previous calls.
+    ``heading`` / ``line_range`` always operates on consistent content
+    regardless of flags used on previous calls.
 
     When content exceeds the truncation threshold (5000 chars), the full
-    content is saved to a disk cache and the result includes a table of
-    contents with section previews instead of the raw markdown.  Agents can
-    then retrieve specific sections via ``heading``, ``index``, or
-    ``line_range`` parameters — which read directly from cache.
+    content is saved to a disk cache and the result includes a compact
+    table of contents (chunk triples + nested section objects) instead
+    of the raw markdown.  Agents can then retrieve specific sections via
+    ``heading`` or ``line_range`` parameters — which read directly from
+    cache.
 
     Navigation links (internal/external) are extracted during every fresh
     crawl and persisted in the same cache file.  When
@@ -561,7 +750,7 @@ async def fetch_url(
         url: The URL to fetch.
         wait_until: Playwright navigation event to wait for.
         heading: Exact heading text to extract from cache (case-insensitive).
-        index: ToC index to extract from cache.
+            Dedup suffix ``" (N)"`` is stripped before lookup.
         line_range: ``"start-end"`` line range to extract from cache
             (1-based, max 100 lines).
         refresh_cache: If ``True``, always refetch from the web, ignoring any
@@ -577,7 +766,7 @@ async def fetch_url(
         Writes/reads unified JSON cache files to ``tmp/aivocode/cache/``.
     """
     # ── Section extraction from cache (no fetch needed if fresh) ──────────
-    wants_section = heading is not None or index is not None or line_range is not None
+    wants_section = heading is not None or line_range is not None
 
     if wants_section and not refresh_cache:
         cached = _read_cache_markdown(url)
@@ -585,7 +774,6 @@ async def fetch_url(
             md, err = _extract_section(
                 cached,
                 heading=heading,
-                index=index,
                 line_range=line_range,
             )
             return FetchResult(
@@ -598,31 +786,38 @@ async def fetch_url(
 
     # ── Cache hit (no section requested, not refreshing) ─────────────────
     if not wants_section and not refresh_cache and _cache_is_fresh(_cache_path(url)):
-        cached = _read_cache_markdown(url)
-        if cached is not None:
+        cached_md = _read_cache_markdown(url)
+        if cached_md is not None:
             # Restore navigation from the unified cache when requested.
             nav = _read_cache_links(url) if include_navigation else None
             # If navigation was requested but the cache has no links
             # (page was cached before links were stored in the unified
             # format), fall through to a fresh fetch.
             if nav is not None or not include_navigation:
-                return _result_with_truncation(cached, navigation=nav)
+                chunked = _read_cache_chunked(url)
+                return _result_with_truncation(
+                    cached_md, navigation=nav, chunked=chunked,
+                )
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
     result = await _fetch_once(url, wait_until)
     if not result.success:
         return result
 
-    # Persist to unified JSON cache.
+    # Persist to unified JSON cache (markdown + links + chunked tree).
     full_markdown = result.markdown
-    _write_cache(url, full_markdown, links=result.navigation)
+    _write_cache(
+        url,
+        full_markdown,
+        links=result.navigation,
+        chunked=result.chunked,
+    )
 
     # If a section was requested, extract it from the fresh content.
     if wants_section:
         md, err = _extract_section(
             full_markdown,
             heading=heading,
-            index=index,
             line_range=line_range,
         )
         return FetchResult(
@@ -637,14 +832,20 @@ async def fetch_url(
     return _result_with_truncation(
         full_markdown,
         navigation=result.navigation if include_navigation else None,
+        chunked=result.chunked,
     )
 
 
 def _result_with_truncation(
     markdown: str,
     navigation: dict[str, list[dict[str, Any]]] | None = None,
+    chunked: dict[str, Any] | None = None,
 ) -> FetchResult:
-    """Build a FetchResult with optional truncation + ToC."""
+    """Build a FetchResult with optional truncation and compact ToC.
+
+    If *chunked* is ``None`` (old cache without it, or not yet computed),
+    the verbose chunked tree is generated on the fly from *markdown*.
+    """
     total_chars = len(markdown)
     if total_chars <= _TRUNCATION_THRESHOLD:
         return FetchResult(
@@ -653,8 +854,12 @@ def _result_with_truncation(
             navigation=navigation,
             total_chars=total_chars,
         )
-    # Truncate — replace markdown with explanatory message + ToC.
-    toc = _build_toc(markdown)
+
+    # Ensure we have a chunked tree — compute it if missing.
+    if chunked is None:
+        chunked = _parse_chunked(markdown)
+
+    toc = _chunked_to_toc(chunked)
     return FetchResult(
         success=True,
         markdown=_truncation_message(total_chars),
