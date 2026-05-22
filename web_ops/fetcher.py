@@ -97,7 +97,7 @@ _TRUNCATION_THRESHOLD: int = 10_000
 # compact ToC delivered to agents.  Excess chunks are replaced by a sentinel
 # entry with a line range covering all skipped chunks and a message telling
 # the agent how to expand that section.
-_TOC_MAX_CHUNKS_PER_SECTION: int = 10
+_TOC_MAX_CHUNKS_PER_SECTION: int = 15
 
 # Minimum character count a chunk must have (after URL stripping) to be
 # included in the compact ToC.  Chunks below this are typically pure
@@ -146,8 +146,9 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
     Builds a recursive tree from ATX headings (``#``..``######``), treating
     content between them as text chunks.  Code fences (`` ``` `` at line
     start) are recognised so that blank lines inside code blocks do **not**
-    split chunks.  Outside code blocks, blank lines and horizontal rules
-    (``---``, ``***``, ``___``) act as chunk boundaries.
+    split chunks.  Outside code blocks, **any run of one or more blank
+    lines** (i.e. ``\\n{2,}`` in the raw text) acts as a chunk boundary.
+    Horizontal rules (``---``, ``***``, ``___``) are also boundaries.
 
     Returns a verbose tree ready for caching — not the compact ToC format
     (see ``_chunked_to_toc`` for that projection).
@@ -257,7 +258,9 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
             # The rule line itself is skipped (no content value).
             continue
 
-        # ── Blank line (chunk boundary) ─────────────────────────────────
+        # ── Blank line(s) — any run of ≥1 blank lines is a chunk boundary.
+        # Even \n\n\n (2+ blank lines) only emits once; subsequent blanks
+        # are no-ops because chunk_lines is already flushed.
         if not stripped:
             if chunk_lines:
                 _emit_chunk(
@@ -278,7 +281,67 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
             stack[-1], chunk_lines, chunk_start, total_lines,
         )
 
+    # Post-process: split dense sections where \n\n is absent.
+    _split_dense_sections(root)
+
     return root
+
+
+def _split_dense_sections(tree: dict[str, Any]) -> None:
+    """Post-process: split multi-line non-code chunks on ``\\n``, but only
+    when the section *genuinely lacks blank-line boundaries*.
+
+    The main parser splits on ``\\n{2,}`` (one or more blank lines).  When
+    a section still contains multi-line chunks after parsing, it means the
+    parser never encountered a blank line — the content is “dense”.  In
+    that case we split on ``\\n`` to create individual line-based chunks.
+
+    If the section *does* have at least one blank-line boundary (detected
+    as a **gap** between consecutive chunks' line ranges), then the parser
+    already split correctly and we leave multi-line chunks intact — they
+    represent related groups (e.g. Wikipedia sidebar link clusters).
+
+    Applied **in-place** to every node in *tree*, including the root.
+    """
+    # Process sub-sections first (depth-first).
+    for sub in tree.get("sections", []):
+        _split_dense_sections(sub)
+
+    # ── Determine whether this node has blank-line boundaries ───────────
+    # If any two consecutive chunks' line ranges are non-adjacent, the
+    # parser encountered blank lines between them → skip splitting.
+    chunks: list[dict[str, Any]] = tree.get("chunks", [])
+    for i in range(len(chunks) - 1):
+        if chunks[i]["lines"][1] + 1 < chunks[i + 1]["lines"][0]:
+            return  # Gap → blank lines existed → keep multi-line chunks as groups.
+
+    # ── No blank lines — truly dense → split multi-line chunks on \n ───
+    new_chunks: list[dict[str, Any]] = []
+    for chunk in chunks:
+        text: str = chunk["text"]
+
+        # Skip single-line chunks (already fine) and code blocks (fence
+        # lines starting with ``` should never be split).
+        if "\n" not in text or text.lstrip().startswith("```"):
+            new_chunks.append(chunk)
+            continue
+
+        # The chunk spans multiple source lines with no blank-line
+        # boundaries between them — split on \n.
+        sub_lines = text.split("\n")
+        chunk_start = chunk["lines"][0]
+        for i, sub_line in enumerate(sub_lines):
+            sub_line = sub_line.rstrip()
+            if not sub_line:
+                continue
+            line_num = chunk_start + i
+            new_chunks.append({
+                "text": sub_line,
+                "preview": _chunk_preview(sub_line),
+                "lines": [line_num, line_num],
+            })
+
+    tree["chunks"] = new_chunks
 
 
 def _emit_chunk(
@@ -349,10 +412,12 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
 
     # Emit up to N chunk previews — cap with sentinel if there are more.
     # Skip trivially-short non-code chunks whose content was mostly URLs.
+    # Track *emitted* separately from loop index so that short-filtered
+    # chunks don't prematurely exhaust the cap (leaving zero visible
+    # previews followed by a sentinel).
+    emitted = 0
+    i = -1
     for i, chunk in enumerate(chunks):
-        if i >= _TOC_MAX_CHUNKS_PER_SECTION:
-            break
-
         text = chunk["text"].strip()
         if not text.startswith("```"):
             if len(_strip_urls(chunk["text"])) < _MIN_CHUNK_PREVIEW_CHARS:
@@ -360,10 +425,16 @@ def _section_to_toc(node: dict[str, Any]) -> list[Any]:
 
         ls, le = chunk["lines"]
         result.append([ls, le, chunk["preview"]])
+        emitted += 1
 
-    if len(chunks) > _TOC_MAX_CHUNKS_PER_SECTION:
-        skipped = len(chunks) - _TOC_MAX_CHUNKS_PER_SECTION
-        first = chunks[_TOC_MAX_CHUNKS_PER_SECTION]["lines"][0]
+        if emitted >= _TOC_MAX_CHUNKS_PER_SECTION:
+            break
+
+    # Only add sentinel when we stopped early due to the cap — i.e. there
+    # are chunks remaining after the last one we examined.
+    if emitted >= _TOC_MAX_CHUNKS_PER_SECTION and i + 1 < len(chunks):
+        skipped = len(chunks) - (i + 1)
+        first = chunks[i + 1]["lines"][0]
         last = chunks[-1]["lines"][1]
         msg = (
             f"… {skipped} more chunks — use --heading to expand all, "
