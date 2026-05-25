@@ -760,7 +760,10 @@ def _find_section_by_heading(
 
     def _search(node: dict[str, Any]) -> dict[str, Any] | None:
         for section in node.get("sections", []):
-            if section["heading"].lower() == heading.lower():
+            # Strip URLs from the section heading so that headings
+            # stored as markdown links (e.g. "[Used by 3k](url)")
+            # are matched by the link-text alone.
+            if _strip_urls(section["heading"]).lower() == heading.lower():
                 return section
             found = _search(section)
             if found:
