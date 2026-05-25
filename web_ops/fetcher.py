@@ -306,23 +306,51 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
 def _line_kind(raw_line: str) -> str:
     """Classify a source line for grouping purposes during ``\\n`` splitting.
 
-    Returns one of ``"table"``, ``"blockquote"``, ``"code"``, or ``"text"``.
-    Table rows (two or more ``|`` characters) and blockquotes (``> ...``
-    prefix) are recognised so consecutive lines of the same type can be kept
-    as one chunk instead of being split into individual rows.
+    Returns one of ``"table"``, ``"blockquote"``, ``"code"``, ``"text"``,
+    or ``"blank"``.
+
+    Heuristic (checked in order):
+
+    1.  **Blank** — empty after trimming.
+    2.  **Code** — starts with `` ``` `` (code fence).
+    3.  **Blockquote** — starts with ``> `` after trimming.  Checked
+        before table so that quoted table rows (``> | col | val |``) stay
+        grouped with their surrounding blockquote lines.
+    4.  **Table** — starts with ``|`` after trimming.  Catches
+        Wikipedia-style single-pipe infobox rows (``  |`` → ``"|"`` → 1
+        pipe → would be missed by the count‑based check).
+    5.  **Text (list items containing ``|``)** — starts with ``*``,
+        ``-``, ``+``, or ``N.`` (numbered list).  These are parameter
+        descriptions or list items that happen to use ``|`` as a type‑union
+        separator — they must NOT be treated as table rows.
+    6.  **Table (count‑based)** — two or more ``|`` characters.
+    7.  **Text** — everything else.
     """
     s = raw_line.strip()
     if not s:
         return "blank"
     if s.startswith("```"):
         return "code"
-    # Table: at least 2 pipe characters (covers |---|---|---| and | val | val |).
-    # Check before blockquote so quoted tables don't get misclassified.
-    if s.count("|") >= 2:
-        return "table"
+    # Blockquote: check before table so quoted content stays grouped together.
     if s.startswith("> "):
         return "blockquote"
+    # Table: lines that start with a pipe — covers single-pipe Wikipedia
+    # infobox rows like "  |" that would otherwise be missed.
+    if s.startswith("|"):
+        return "table"
+    # List items with | in their body (e.g. parameter docs with type unions)
+    # are NOT table rows — the | is a type separator, not a column divider.
+    if _RE_LIST_ITEM.match(s):
+        return "text"
+    # Count-based table detection: two or more pipe characters.
+    if s.count("|") >= 2:
+        return "table"
     return "text"
+
+
+# Module-level regex for detecting markdown list items (bullet / numbered).
+# Compiled once to avoid per-line re-compilation overhead.
+_RE_LIST_ITEM = re.compile(r"^[\*\-+]|\d+\.")
 
 
 def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
@@ -330,10 +358,10 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
 
     The main ``_parse_chunked`` pass splits on ``\\n{2,}`` (blank lines),
     which works well for most pages.  When a section's chunks are too large
-    on average (detected via ``_DENSITY_CHARS_THRESHOLD``), we split every
-    multi-line non-code chunk on ``\\n`` and then merge consecutive
-    single-line chunks back into logical groups (up to ``_MAX_MERGED_CHARS``
-    per group).
+    — detected via **either** a high average per-chunk size **or** a single
+    outlier that massively exceeds the threshold — we split every multi-line
+    non‑code chunk on ``\\n`` and then merge consecutive single-line chunks
+    back into logical groups (up to ``_MAX_MERGED_CHARS`` per group).
 
     Applied **in-place** to every node in *tree*, depth-first.
     """
@@ -345,17 +373,27 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
     if not chunks:
         return
 
-    # ── Density check: are chunks too large on average? ───────────────
-    total_chars = sum(len(c["text"]) for c in chunks)
+    # ── Density check ─────────────────────────────────────────────────
+    # Two triggers (either is sufficient):
+    #   A. Average chars per chunk exceeds the threshold.
+    #   B. The largest chunk exceeds 2× the threshold — catches outliers
+    #      where many small chunks mask a few giant ones (e.g. Python
+    #      stdlib reference pages with a mix of navigation links and
+    #      4 000‑char parameter‑documentation blocks).
+    char_counts = [len(c["text"]) for c in chunks]
+    total_chars = sum(char_counts)
     avg_chars = total_chars / len(chunks)
-    if avg_chars <= _DENSITY_CHARS_THRESHOLD:
+    max_chars = max(char_counts)
+    if avg_chars <= _DENSITY_CHARS_THRESHOLD and max_chars <= _DENSITY_CHARS_THRESHOLD * 2:
         return  # Well-chunked — leave as-is.
 
     # ── \n split: break multi-line non-code chunks into per-line chunks.
     # Tables (|...| rows) and blockquotes (> lines) are kept together as
-    # single groups — splitting them into individual rows/quotes destroys
-    # their meaning.  Everything else is split on \n and later re-merged
-    # via _merge_consecutive_chunks.
+    # single groups with a size cap — splitting them into individual
+    # rows/quotes destroys their meaning, but an unbounded group (e.g. a
+    # 10 000‑char Wikipedia infobox) is equally useless to an agent.
+    # Everything else is split on \n and later re-merged via
+    # _merge_consecutive_chunks.
     new_chunks: list[dict[str, Any]] = []
     for chunk in chunks:
         text: str = chunk["text"]
@@ -378,18 +416,40 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
             typ = _line_kind(sub_lines[i])
 
             if typ in ("table", "blockquote"):
-                # Collect consecutive same-type lines as one group.
-                j = i + 1
+                # Collect consecutive same-type lines, flushing groups
+                # when they exceed _MAX_MERGED_CHARS (prevents giant
+                # infobox tables from becoming 10 000‑char chunks).
+                j = i
+                group_lines: list[str] = []
+                group_chars = 0
                 while j < len(sub_lines) and _line_kind(sub_lines[j]) == typ:
+                    line_text = sub_lines[j].strip()
+                    if not line_text:
+                        j += 1
+                        continue
+                    # Decide whether to flush before adding this line.
+                    if group_lines and group_chars + len(line_text) + 1 > _MAX_MERGED_CHARS:
+                        # Flush current group, start a new one.
+                        group_text = "\n".join(group_lines)
+                        new_chunks.append({
+                            "text": group_text,
+                            "preview": _chunk_preview(group_text),
+                            "lines": [line_start + i, line_start + j - 1],
+                        })
+                        i = j  # next group starts at this index
+                        group_lines = []
+                        group_chars = 0
+                    group_lines.append(line_text)
+                    group_chars += len(line_text) + (1 if group_lines else 0)
                     j += 1
-                group_text = "\n".join(
-                    line.rstrip() for line in sub_lines[i:j] if line.strip()
-                )
-                new_chunks.append({
-                    "text": group_text,
-                    "preview": _chunk_preview(group_text),
-                    "lines": [line_start + i, line_start + j - 1],
-                })
+                # Emit the final (or only) group.
+                if group_lines:
+                    group_text = "\n".join(group_lines)
+                    new_chunks.append({
+                        "text": group_text,
+                        "preview": _chunk_preview(group_text),
+                        "lines": [line_start + i, line_start + j - 1],
+                    })
                 i = j
             else:
                 # Single-line chunk (may be merged with neighbours later).
