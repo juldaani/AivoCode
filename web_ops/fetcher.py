@@ -105,6 +105,16 @@ _TOC_MAX_CHUNKS_PER_SECTION: int = 15
 # this filter.
 _MIN_CHUNK_PREVIEW_CHARS: int = 15
 
+# Average characters-per-chunk threshold above which a section is considered
+# "dense" — i.e. the \n\n-based parser produced overly-large chunks — and a
+# finer \n-based re-split + consecutive-merge pass is applied.
+_DENSITY_CHARS_THRESHOLD: int = 600
+
+# Maximum combined text length for two chunks that are merged together when
+# they sit on consecutive source lines (no blank-line gap).  Prevents runaway
+# merges on truly dense pages while keeping related paragraphs grouped.
+_MAX_MERGED_CHARS: int = 750
+
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
 _CACHE_DIR: Path = Path("tmp/aivocode/cache")
@@ -149,6 +159,11 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
     split chunks.  Outside code blocks, **any run of one or more blank
     lines** (i.e. ``\\n{2,}`` in the raw text) acts as a chunk boundary.
     Horizontal rules (``---``, ``***``, ``___``) are also boundaries.
+
+    After the initial pass, ``_rechunk_dense_sections`` runs as a
+    post-process to detect sections where the \n\n-based parser produced
+    overly-large chunks and re-split them on ``\\n`` followed by a
+    consecutive-merge pass.
 
     Returns a verbose tree ready for caching — not the compact ToC format
     (see ``_chunked_to_toc`` for that projection).
@@ -281,67 +296,173 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
             stack[-1], chunk_lines, chunk_start, total_lines,
         )
 
-    # Post-process: split dense sections where \n\n is absent.
-    _split_dense_sections(root)
+    # Post-process: detect dense sections (where \n\n split produced
+    # overly-large chunks) and re-split + merge for finer granularity.
+    _rechunk_dense_sections(root)
 
     return root
 
 
-def _split_dense_sections(tree: dict[str, Any]) -> None:
-    """Post-process: split multi-line non-code chunks on ``\\n``, but only
-    when the section *genuinely lacks blank-line boundaries*.
+def _line_kind(raw_line: str) -> str:
+    """Classify a source line for grouping purposes during ``\\n`` splitting.
 
-    The main parser splits on ``\\n{2,}`` (one or more blank lines).  When
-    a section still contains multi-line chunks after parsing, it means the
-    parser never encountered a blank line — the content is “dense”.  In
-    that case we split on ``\\n`` to create individual line-based chunks.
+    Returns one of ``"table"``, ``"blockquote"``, ``"code"``, or ``"text"``.
+    Table rows (two or more ``|`` characters) and blockquotes (``> ...``
+    prefix) are recognised so consecutive lines of the same type can be kept
+    as one chunk instead of being split into individual rows.
+    """
+    s = raw_line.strip()
+    if not s:
+        return "blank"
+    if s.startswith("```"):
+        return "code"
+    # Table: at least 2 pipe characters (covers |---|---|---| and | val | val |).
+    # Check before blockquote so quoted tables don't get misclassified.
+    if s.count("|") >= 2:
+        return "table"
+    if s.startswith("> "):
+        return "blockquote"
+    return "text"
 
-    If the section *does* have at least one blank-line boundary (detected
-    as a **gap** between consecutive chunks' line ranges), then the parser
-    already split correctly and we leave multi-line chunks intact — they
-    represent related groups (e.g. Wikipedia sidebar link clusters).
 
-    Applied **in-place** to every node in *tree*, including the root.
+def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
+    """Post-process: detect sections with overly-large chunks and re-split.
+
+    The main ``_parse_chunked`` pass splits on ``\\n{2,}`` (blank lines),
+    which works well for most pages.  When a section's chunks are too large
+    on average (detected via ``_DENSITY_CHARS_THRESHOLD``), we split every
+    multi-line non-code chunk on ``\\n`` and then merge consecutive
+    single-line chunks back into logical groups (up to ``_MAX_MERGED_CHARS``
+    per group).
+
+    Applied **in-place** to every node in *tree*, depth-first.
     """
     # Process sub-sections first (depth-first).
     for sub in tree.get("sections", []):
-        _split_dense_sections(sub)
+        _rechunk_dense_sections(sub)
 
-    # ── Determine whether this node has blank-line boundaries ───────────
-    # If any two consecutive chunks' line ranges are non-adjacent, the
-    # parser encountered blank lines between them → skip splitting.
     chunks: list[dict[str, Any]] = tree.get("chunks", [])
-    for i in range(len(chunks) - 1):
-        if chunks[i]["lines"][1] + 1 < chunks[i + 1]["lines"][0]:
-            return  # Gap → blank lines existed → keep multi-line chunks as groups.
+    if not chunks:
+        return
 
-    # ── No blank lines — truly dense → split multi-line chunks on \n ───
+    # ── Density check: are chunks too large on average? ───────────────
+    total_chars = sum(len(c["text"]) for c in chunks)
+    avg_chars = total_chars / len(chunks)
+    if avg_chars <= _DENSITY_CHARS_THRESHOLD:
+        return  # Well-chunked — leave as-is.
+
+    # ── \n split: break multi-line non-code chunks into per-line chunks.
+    # Tables (|...| rows) and blockquotes (> lines) are kept together as
+    # single groups — splitting them into individual rows/quotes destroys
+    # their meaning.  Everything else is split on \n and later re-merged
+    # via _merge_consecutive_chunks.
     new_chunks: list[dict[str, Any]] = []
     for chunk in chunks:
         text: str = chunk["text"]
 
-        # Skip single-line chunks (already fine) and code blocks (fence
-        # lines starting with ``` should never be split).
+        # Keep single-line chunks and code blocks intact.
         if "\n" not in text or text.lstrip().startswith("```"):
             new_chunks.append(chunk)
             continue
 
-        # The chunk spans multiple source lines with no blank-line
-        # boundaries between them — split on \n.
         sub_lines = text.split("\n")
-        chunk_start = chunk["lines"][0]
-        for i, sub_line in enumerate(sub_lines):
-            sub_line = sub_line.rstrip()
-            if not sub_line:
-                continue
-            line_num = chunk_start + i
-            new_chunks.append({
-                "text": sub_line,
-                "preview": _chunk_preview(sub_line),
-                "lines": [line_num, line_num],
-            })
+        line_start = chunk["lines"][0]
 
-    tree["chunks"] = new_chunks
+        i = 0
+        while i < len(sub_lines):
+            stripped = sub_lines[i].strip()
+            if not stripped:
+                i += 1
+                continue
+
+            typ = _line_kind(sub_lines[i])
+
+            if typ in ("table", "blockquote"):
+                # Collect consecutive same-type lines as one group.
+                j = i + 1
+                while j < len(sub_lines) and _line_kind(sub_lines[j]) == typ:
+                    j += 1
+                group_text = "\n".join(
+                    line.rstrip() for line in sub_lines[i:j] if line.strip()
+                )
+                new_chunks.append({
+                    "text": group_text,
+                    "preview": _chunk_preview(group_text),
+                    "lines": [line_start + i, line_start + j - 1],
+                })
+                i = j
+            else:
+                # Single-line chunk (may be merged with neighbours later).
+                new_chunks.append({
+                    "text": stripped,
+                    "preview": _chunk_preview(stripped),
+                    "lines": [line_start + i, line_start + i],
+                })
+                i += 1
+
+    # ── Merge consecutive single-line chunks into logical groups ──────
+    tree["chunks"] = _merge_consecutive_chunks(new_chunks, _MAX_MERGED_CHARS)
+
+
+def _merge_consecutive_chunks(
+    chunks: list[dict[str, Any]],
+    max_chars: int,
+) -> list[dict[str, Any]]:
+    """Greedily merge adjacent chunks that sit on consecutive source lines.
+
+    Two chunks merge when all of these hold:
+    - They are on consecutive source lines (``chunk_a.end + 1 == chunk_b.start``).
+    - Neither is a code block (text starts with `` ``` ``).
+    - The combined text length stays at or below *max_chars*.
+
+    Merged chunks are joined with ``\\n`` and the line range spans both.
+    The preview is recomputed from the merged text via ``_chunk_preview``.
+    """
+    if not chunks:
+        return []
+
+    merged: list[dict[str, Any]] = []
+    cur_text = chunks[0]["text"]
+    cur_start = chunks[0]["lines"][0]
+    cur_end = chunks[0]["lines"][1]
+    cur_is_code = cur_text.lstrip().startswith("```")
+
+    for i in range(1, len(chunks)):
+        nxt = chunks[i]
+        nxt_text = nxt["text"]
+        nxt_is_code = nxt_text.lstrip().startswith("```")
+        consecutive = cur_end + 1 == nxt["lines"][0]
+        combined_len = len(cur_text) + 1 + len(nxt_text)  # +1 for the joining \n
+
+        if (
+            consecutive
+            and not cur_is_code
+            and not nxt_is_code
+            and combined_len <= max_chars
+        ):
+            # Merge this chunk into the accumulator.
+            cur_text += "\n" + nxt_text
+            cur_end = nxt["lines"][1]
+        else:
+            # Emit the accumulated chunk and start fresh with nxt.
+            merged.append({
+                "text": cur_text,
+                "preview": _chunk_preview(cur_text),
+                "lines": [cur_start, cur_end],
+            })
+            cur_text = nxt_text
+            cur_start = nxt["lines"][0]
+            cur_end = nxt["lines"][1]
+            cur_is_code = nxt_is_code
+
+    # Emit the trailing accumulated chunk.
+    merged.append({
+        "text": cur_text,
+        "preview": _chunk_preview(cur_text),
+        "lines": [cur_start, cur_end],
+    })
+
+    return merged
 
 
 def _emit_chunk(
@@ -532,37 +653,21 @@ def _read_cache_links(
         return None
 
 
-def _read_cache_chunked(
-    url: str,
-) -> dict[str, Any] | None:
-    """Read the cached verbose chunked tree, or ``None``."""
-    path = _cache_path(url)
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data.get("chunked")
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
 def _write_cache(
     url: str,
     markdown: str,
     links: dict[str, list[dict[str, Any]]] | None = None,
-    chunked: dict[str, Any] | None = None,
 ) -> None:
-    """Write markdown, links, and chunked tree to a unified JSON cache file.
+    """Write markdown and links to a unified JSON cache file.
 
-    Each cached entry is a single ``<hash>.json`` file.  The verbose
-    chunked tree (``chunked`` key) is the source of truth for the compact
-    ToC delivered to agents.
+    Each cached entry is a single ``<hash>.json`` file.  The chunked tree
+    is always recomputed from markdown on read (never cached) so that
+    chunking algorithm changes take effect immediately without cache
+    invalidation.
     """
     data: dict[str, Any] = {"markdown": markdown}
     if links is not None:
         data["links"] = links
-    if chunked is not None:
-        data["chunked"] = chunked
     path = _cache_path(url)
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
@@ -979,9 +1084,11 @@ async def fetch_url(
             # (page was cached before links were stored in the unified
             # format), fall through to a fresh fetch.
             if nav is not None or not include_navigation:
-                chunked = _read_cache_chunked(url)
+                # Always recompute the chunked tree from markdown rather
+                # than trusting a cached version — the chunking algorithm
+                # may have changed since the cache was written.
                 return _result_with_truncation(
-                    cached_md, navigation=nav, chunked=chunked,
+                    cached_md, navigation=nav, chunked=None,
                 )
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
@@ -989,13 +1096,12 @@ async def fetch_url(
     if not result.success:
         return result
 
-    # Persist to unified JSON cache (markdown + links + chunked tree).
+    # Persist to unified JSON cache (markdown + links).
     full_markdown = result.markdown
     _write_cache(
         url,
         full_markdown,
         links=result.navigation,
-        chunked=result.chunked,
     )
 
     # If a section was requested, extract it from the fresh content.
