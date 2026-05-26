@@ -42,13 +42,19 @@ class TestLineKind:
         assert _line_kind(" |") == "table"
         assert _line_kind("|") == "table"
 
-    def test_list_items_with_pipes_are_text(self):
-        """Bullet points containing | (type unions) are NOT table rows."""
-        assert _line_kind("  * `buffer` [<Buffer>] | [<TypedArray>] | ...") == "text"
-        assert _line_kind("* `offset` [<integer>] The location...") == "text"
-        assert _line_kind("- item | value") == "text"
-        assert _line_kind("+ item | value") == "text"
-        assert _line_kind("1. first step | optional") == "text"
+    def test_list_items_with_pipes_are_not_tables(self):
+        """Bullet points containing | (type unions) are list items, not table rows."""
+        assert _line_kind("  * `buffer` [<Buffer>] | [<TypedArray>] | ...") == "list"
+        assert _line_kind("* `offset` [<integer>] The location...") == "list"
+        assert _line_kind("- item | value") == "list"
+        assert _line_kind("+ item | value") == "list"
+        assert _line_kind("1. first step | optional") == "list"
+
+    def test_bold_italic_not_misclassified_as_list(self):
+        """Bold/italic markers (*bold*, _italic_) are NOT list items."""
+        assert _line_kind("*bold text*") == "text"
+        assert _line_kind("-not-a-list") == "text"
+        assert _line_kind("+not-a-list") == "text"
 
     def test_blockquote_lines(self):
         """Lines starting with ``> `` are blockquotes."""
@@ -331,6 +337,165 @@ class TestTableGroupingInRechunk:
         )
         assert first_found, "First table should be grouped"
         assert second_found, "Second table should be grouped"
+
+
+# ============================================================================
+# _rechunk_dense_sections tests — list grouping
+# ============================================================================
+
+
+class TestListGroupingInRechunk:
+    """Indentation-aware list grouping during rechunk."""
+
+    def test_parent_and_children_stay_together(self):
+        """A parent bullet + its children must remain in one chunk."""
+        tree = _make_section([(
+            "* Parent\n"
+            "  * Child 1\n"
+            "  * Child 2\n"
+            "  * Child 3\n"
+            "Other text\n"
+            + ("z\n" * 600)
+        )])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        for c in chunks:
+            if "Parent" in c["text"]:
+                assert "Child 1" in c["text"], "children must be with parent"
+                assert "Child 2" in c["text"], "children must be with parent"
+                assert "Child 3" in c["text"], "children must be with parent"
+                break
+        else:
+            pytest.fail("List not found in any chunk")
+
+    def test_list_cap_enforced_at_boundary(self):
+        """When top-level items exceed the cap, flush at a parent boundary,
+        never split within a parent+children subtree."""
+        # Build 25 top-level items, each with 1 child.
+        lines = []
+        for i in range(25):
+            lines.append("* Parent {}".format(i))
+            lines.append("  * Child {} detail".format(i))
+        tree = _make_section(["\n".join(lines) + "\n" + ("z\n" * 600)])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        list_chunks = [c for c in chunks if "Parent" in c["text"]]
+        assert len(list_chunks) >= 2, "25 items should span ≥2 chunks at cap 20"
+
+        # Every parent+child pair should be intact — no orphan children.
+        for chunk in list_chunks:
+            for i in range(25):
+                parent = "Parent {}".format(i)
+                child = "Child {}".format(i)
+                if parent in chunk["text"]:
+                    assert child in chunk["text"], (
+                        f"{parent} found without {child} in same chunk"
+                    )
+
+    def test_nested_list_levels(self):
+        """Three levels of nesting should all stay together."""
+        tree = _make_section([(
+            "* Level 1\n"
+            "  * Level 2\n"
+            "    * Level 3-a\n"
+            "    * Level 3-b\n"
+            "  * Level 2 sibling\n"
+            + ("z\n" * 600)
+        )])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        for c in chunks:
+            if "Level 1" in c["text"]:
+                assert "Level 2" in c["text"]
+                assert "Level 3-a" in c["text"]
+                assert "Level 3-b" in c["text"]
+                assert "Level 2 sibling" in c["text"]
+                break
+
+    def test_different_bullet_markers_grouped(self):
+        """*, -, +, and numbered list items should group together
+        by indentation, regardless of marker type."""
+        tree = _make_section([(
+            "* Bullet star\n"
+            "- Bullet dash\n"
+            "+ Bullet plus\n"
+            "1. Numbered\n"
+            "  2. Sub-numbered\n"
+            + ("z\n" * 600)
+        )])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        list_text = ""
+        for c in chunks:
+            list_text += c["text"]
+        assert "Bullet star" in list_text
+        assert "Sub-numbered" in list_text
+        # The numbered sub-item should be with the group (not in a separate chunk).
+
+    def test_new_top_level_resets_base_indent(self):
+        """When indent drops back, that's a new top-level item boundary."""
+        tree = _make_section([(
+            "  * Item A (indent 2)\n"
+            "    * Child A1 (indent 4)\n"
+            "  * Item B (indent 2, new top-level)\n"
+            + ("z\n" * 600)
+        )])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        # Both top-level items and their children should be intact.
+        for c in chunks:
+            if "Item A" in c["text"]:
+                assert "Child A1" in c["text"]
+            # Item B might be in the same chunk if cap not reached.
+
+    def test_tab_indentation_equivalent_to_spaces(self):
+        """Tabs count as 4 spaces — same as 4-space indent."""
+        # Use actual tabs in the source.
+        tree = _make_section([(
+            "* Parent\n"
+            "\t* Child with tab\n"
+            "    * Child with 4 spaces\n"
+            + ("z\n" * 600)
+        )])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        for c in chunks:
+            if "Parent" in c["text"]:
+                assert "Child with tab" in c["text"]
+                assert "Child with 4 spaces" in c["text"]
+                break
+        else:
+            pytest.fail("List not found")
+
+    def test_continuation_line_stays_with_parent(self):
+        """A continuation line (indented prose without bullet marker)
+        must stay in the same chunk as its parent list item."""
+        tree = _make_section([(
+            "* Level 1\n"
+            "  * Child with continuation\n"
+            "    continued prose here\n"
+            "  * Next child\n"
+            "* Level 2\n"
+            + ("z\n" * 600)
+        )])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        for c in chunks:
+            if "Level 1" in c["text"]:
+                assert "Child with continuation" in c["text"]
+                assert "continued prose here" in c["text"], (
+                    "continuation line must be with its parent"
+                )
+                break
+        else:
+            pytest.fail("List not found")
 
 
 # ============================================================================

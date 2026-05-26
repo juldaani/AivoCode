@@ -320,8 +320,8 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
 def _line_kind(raw_line: str) -> str:
     """Classify a source line for grouping purposes during ``\\n`` splitting.
 
-    Returns one of ``"table"``, ``"blockquote"``, ``"code"``, ``"text"``,
-    or ``"blank"``.
+    Returns one of ``"table"``, ``"blockquote"``, ``"code"``, ``"list"``,
+    ``"text"``, or ``"blank"``.
 
     Heuristic (checked in order):
 
@@ -333,10 +333,10 @@ def _line_kind(raw_line: str) -> str:
     4.  **Table** — starts with ``|`` after trimming.  Catches
         Wikipedia-style single-pipe infobox rows (``  |`` → ``"|"`` → 1
         pipe → would be missed by the count‑based check).
-    5.  **Text (list items containing ``|``)** — starts with ``*``,
-        ``-``, ``+``, or ``N.`` (numbered list).  These are parameter
-        descriptions or list items that happen to use ``|`` as a type‑union
-        separator — they must NOT be treated as table rows.
+    5.  **List** — starts with ``*``, ``-``, ``+`` (with trailing space)
+        or ``N.`` (numbered list).  These are routed through
+        indentation‑aware grouping during ``\\n``‑split to keep parent‑
+        and‑child items together.
     6.  **Table (count‑based)** — two or more ``|`` characters.
     7.  **Text** — everything else.
     """
@@ -352,10 +352,11 @@ def _line_kind(raw_line: str) -> str:
     # infobox rows like "  |" that would otherwise be missed.
     if s.startswith("|"):
         return "table"
-    # List items with | in their body (e.g. parameter docs with type unions)
-    # are NOT table rows — the | is a type separator, not a column divider.
+    # List items: bullet (*/-/+) or numbered (N.).  Checked before the
+    # count‑based table check so that parameter docs with type‑union pipes
+    # (``* \\`buf\\` | [A] | [B]``) are NOT misclassified as tables.
     if _RE_LIST_ITEM.match(s):
-        return "text"
+        return "list"
     # Count-based table detection: two or more pipe characters.
     if s.count("|") >= 2:
         return "table"
@@ -363,12 +364,32 @@ def _line_kind(raw_line: str) -> str:
 
 
 # Module-level regex for detecting markdown list items (bullet / numbered).
-# Compiled once to avoid per-line re-compilation overhead.
-_RE_LIST_ITEM = re.compile(r"^[\*\-+]|\d+\.")
+# Bullet markers (*/-/+) require trailing whitespace to distinguish from
+# bold/italic (*text*) and horizontal-rule-like lines (---).
+# Numbered lists (1., 42.) match any digit + dot at line start.
+_RE_LIST_ITEM = re.compile(r"^[\*\-+]\s|\d+\.")
 
 # Module-level regex for detecting blank-line runs (2+ consecutive newlines).
 # Used by _is_feed_page to count paragraph-break gaps, not individual \n\n pairs.
 _RE_BLANK_LINE_RUN = re.compile(r"\n{2,}")
+
+
+def _count_leading_spaces(raw_line: str) -> int:
+    """Return the indentation width of *raw_line* in space-equivalents.
+
+    Tabs are expanded to 4 spaces to match common browser rendering.
+    Only leading whitespace is counted; the method ignores any content
+    after the first non-whitespace character.
+    """
+    count = 0
+    for ch in raw_line:
+        if ch == " ":
+            count += 1
+        elif ch == "\t":
+            count += 4
+        else:
+            break
+    return count
 
 
 def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
@@ -480,6 +501,93 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                         "lines": [line_start + i, line_start + j - 1],
                     })
                 i = j
+            elif typ == "list":
+                # Collect all consecutive list lines first, then split into
+                # "subtree" units (top-level item + its children).  Greedy
+                # merge of subtrees by total item count — same pattern as
+                # the char‑based merge for paragraphs, but counting items
+                # instead of characters.
+                j = i
+                raw_lines: list[str] = []
+                while j < len(sub_lines) and _line_kind(sub_lines[j]) == "list":
+                    raw_lines.append(sub_lines[j])
+                    j += 1
+
+                # Slurp continuation lines — indented text that follows a
+                # list item but has no bullet marker (e.g. a wrapped
+                # paragraph inside a list item).  Without this, the
+                # continuation becomes a solo text chunk, breaking the
+                # semantic grouping.
+                while j < len(sub_lines):
+                    tail = sub_lines[j]
+                    if not tail.strip() or tail.strip().startswith("```"):
+                        break  # blank line or code fence → end of list
+                    if _count_leading_spaces(tail) > 0:
+                        raw_lines.append(tail)
+                        j += 1
+                    else:
+                        break  # un-indented line → new content, stop
+
+                # ── Phase 1: split into subtree units ──────────────────
+                subtrees: list[list[str]] = []
+                current: list[str] = []
+                base_indent: int | None = None
+
+                for line in raw_lines:
+                    indent = _count_leading_spaces(line)
+                    if base_indent is None:
+                        base_indent = indent
+                        current = [line]
+                    elif indent <= base_indent + 1:
+                        # New top-level — flush previous subtree.
+                        if current:
+                            subtrees.append(current)
+                        current = [line]
+                    else:
+                        # Child — stay in current subtree.
+                        current.append(line)
+
+                if current:
+                    subtrees.append(current)
+
+                # ── Phase 2: greedy merge with item-count cap ─────────
+                group_lines: list[str] = []
+                group_items: int = 0
+                emitted = 0
+
+                for subtree in subtrees:
+                    n_items = len(subtree)
+                    if group_lines and group_items + n_items > _MAX_TABLE_ROWS_PER_CHUNK:
+                        # Would exceed cap — flush current group first.
+                        group_text = "\n".join(group_lines)
+                        new_chunks.append({
+                            "text": group_text,
+                            "preview": _chunk_preview(group_text),
+                            "lines": [
+                                line_start + i + emitted,
+                                line_start + i + emitted + len(group_lines) - 1,
+                            ],
+                        })
+                        emitted += len(group_lines)
+                        group_lines = []
+                        group_items = 0
+
+                    group_lines.extend(subtree)
+                    group_items += n_items
+
+                # Emit final group.
+                if group_lines:
+                    group_text = "\n".join(group_lines)
+                    new_chunks.append({
+                        "text": group_text,
+                        "preview": _chunk_preview(group_text),
+                        "lines": [
+                            line_start + i + emitted,
+                            line_start + i + emitted + len(group_lines) - 1,
+                        ],
+                    })
+
+                i = j
             else:
                 # Single-line chunk (may be merged with neighbours later).
                 new_chunks.append({
@@ -515,9 +623,12 @@ def _merge_consecutive_chunks(
 ) -> list[dict[str, Any]]:
     """Greedily merge adjacent chunks that sit on consecutive source lines.
 
-    Two chunks merge when all of these hold:
+    Two chunks merge when ALL of these hold:
     - They are on consecutive source lines (``chunk_a.end + 1 == chunk_b.start``).
     - Neither is a code block (text starts with `` ``` ``).
+    - Neither is a pre-formed multi-line group (tables, blockquotes, lists
+      are already grouped inside ``_rechunk_dense_sections`` and should not
+      be re-merged with adjacent text).
     - The combined text length stays at or below *max_chars*.
 
     Merged chunks are joined with ``\\n`` and the line range spans both.
@@ -531,11 +642,13 @@ def _merge_consecutive_chunks(
     cur_start = chunks[0]["lines"][0]
     cur_end = chunks[0]["lines"][1]
     cur_is_code = cur_text.lstrip().startswith("```")
+    cur_is_group = "\n" in cur_text  # table / blockquote / list group
 
     for i in range(1, len(chunks)):
         nxt = chunks[i]
         nxt_text = nxt["text"]
         nxt_is_code = nxt_text.lstrip().startswith("```")
+        nxt_is_group = "\n" in nxt_text
         consecutive = cur_end + 1 == nxt["lines"][0]
         combined_len = len(cur_text) + 1 + len(nxt_text)  # +1 for the joining \n
 
@@ -543,6 +656,8 @@ def _merge_consecutive_chunks(
             consecutive
             and not cur_is_code
             and not nxt_is_code
+            and not cur_is_group
+            and not nxt_is_group
             and combined_len <= max_chars
         ):
             # Merge this chunk into the accumulator.
@@ -559,6 +674,7 @@ def _merge_consecutive_chunks(
             cur_start = nxt["lines"][0]
             cur_end = nxt["lines"][1]
             cur_is_code = nxt_is_code
+            cur_is_group = nxt_is_group
 
     # Emit the trailing accumulated chunk.
     merged.append({
