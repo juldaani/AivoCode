@@ -115,6 +115,20 @@ _DENSITY_CHARS_THRESHOLD: int = 600
 # merges on truly dense pages while keeping related paragraphs grouped.
 _MAX_MERGED_CHARS: int = 750
 
+# Maximum consecutive table rows to keep in one chunk during \n re-split.
+# Tables split on \n produce one chunk per row; this cap floors groups of
+# rows into predictable-size chunks (e.g. 20 rows ≈ 500-800 chars each)
+# instead of char-count-based grouping which varies unpredictably.
+_MAX_TABLE_ROWS_PER_CHUNK: int = 20
+
+# Minimum average chars per text-chunk line (after \n split) for the merge
+# pass to be skipped.  When individual lines exceed this threshold they are
+# self-contained paragraphs (e.g. 400–600‑char prose lines in dense API
+# docs) and merging them would fuse unrelated paragraphs together.
+# Feed‑page / link‑directory lines are typically < 200 chars and DO benefit
+# from grouping — the merge threshold stays in effect for those.
+_DENSE_LINE_CHARS_THRESHOLD: int = 300
+
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
 _CACHE_DIR: Path = Path("tmp/aivocode/cache")
@@ -352,6 +366,10 @@ def _line_kind(raw_line: str) -> str:
 # Compiled once to avoid per-line re-compilation overhead.
 _RE_LIST_ITEM = re.compile(r"^[\*\-+]|\d+\.")
 
+# Module-level regex for detecting blank-line runs (2+ consecutive newlines).
+# Used by _is_feed_page to count paragraph-break gaps, not individual \n\n pairs.
+_RE_BLANK_LINE_RUN = re.compile(r"\n{2,}")
+
 
 def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
     """Post-process: detect sections with overly-large chunks and re-split.
@@ -417,8 +435,9 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
 
             if typ in ("table", "blockquote"):
                 # Collect consecutive same-type lines, flushing groups
-                # when they exceed _MAX_MERGED_CHARS (prevents giant
-                # infobox tables from becoming 10 000‑char chunks).
+                # when they hit the size limit — tables use row count
+                # (predictable, consistent chunk sizes), blockquotes use
+                # character count (no concept of "rows").
                 j = i
                 group_lines: list[str] = []
                 group_chars = 0
@@ -428,7 +447,17 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                         j += 1
                         continue
                     # Decide whether to flush before adding this line.
-                    if group_lines and group_chars + len(line_text) + 1 > _MAX_MERGED_CHARS:
+                    if typ == "table":
+                        should_flush = (
+                            group_lines
+                            and len(group_lines) >= _MAX_TABLE_ROWS_PER_CHUNK
+                        )
+                    else:  # blockquote
+                        should_flush = (
+                            group_lines
+                            and group_chars + len(line_text) + 1 > _MAX_MERGED_CHARS
+                        )
+                    if should_flush:
                         # Flush current group, start a new one.
                         group_text = "\n".join(group_lines)
                         new_chunks.append({
@@ -461,6 +490,22 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                 i += 1
 
     # ── Merge consecutive single-line chunks into logical groups ──────
+    # Skip merging when lines are already paragraph-sized — dense prose
+    # (e.g. CLI docs, API references) with 400‑600‑char \n‑delimited
+    # paragraphs.  Merging would fuse unrelated paragraphs together.
+    # Feed pages with 50‑150‑char lines still get the normal merge pass.
+    text_chars = [
+        len(c["text"]) for c in new_chunks
+        if not c["text"].lstrip().startswith("```")
+        and c["text"].count("\n") == 0  # single-line text chunks only
+    ]
+    if text_chars:
+        avg_line = sum(text_chars) / len(text_chars)
+        if avg_line > _DENSE_LINE_CHARS_THRESHOLD:
+            # Dense prose — each line is a paragraph, don't merge.
+            tree["chunks"] = new_chunks
+            return
+
     tree["chunks"] = _merge_consecutive_chunks(new_chunks, _MAX_MERGED_CHARS)
 
 
@@ -1021,9 +1066,13 @@ async def _fetch_once(
             await browser.close()
 
 
-def _truncation_message(total_chars: int, markdown: str = "") -> str:
-    """Minimal markdown placeholder + info when content exceeds the threshold."""
-    return " ... " + _truncation_info(total_chars, markdown)
+def _truncation_message() -> str:
+    """Minimal markdown placeholder when content exceeds the threshold.
+
+    The full explanation lives in ``_truncation_info`` (returned via the
+    ``info`` field), not duplicated here.
+    """
+    return " ... "
 
 
 def _truncation_info(total_chars: int, markdown: str = "") -> str:
@@ -1053,15 +1102,22 @@ def _is_feed_page(markdown: str) -> bool:
     """Detect feed-style pages (dense links, few paragraph breaks).
 
     News sites and link directories often render as long link streams
-    with few ``\\n\\n`` separators — the chunked-tree ToC is less useful
+    with few blank-line separators — the chunked-tree ToC is less useful
     on these pages.  Returns ``True`` when both conditions hold:
-    - blank-line rate < 10 % of total lines
-    - link rate > 30 % of total lines
+
+    * blank-line rate < 10 % of total lines
+    * link rate > 30 % of total lines
+
+    Blank lines are counted as runs of 2+ consecutive newlines (``\\n\\n``,
+    ``\\n\\n\\n``, …) — a triple newline counts as **one** blank-line gap,
+    not two.
     """
     total_lines = markdown.count("\n") + 1
     if total_lines == 0:
         return False
-    nl_rate = markdown.count("\n\n") / total_lines
+    # Count each run of 2+ consecutive newlines as one blank-line gap.
+    nl_count = len(_RE_BLANK_LINE_RUN.findall(markdown))
+    nl_rate = nl_count / total_lines
     link_rate = markdown.count("](http") / total_lines
     return nl_rate < 0.1 and link_rate > 0.3
 
@@ -1217,7 +1273,7 @@ def _result_with_truncation(
     toc = _chunked_to_toc(chunked)
     return FetchResult(
         success=True,
-        markdown=_truncation_message(total_chars, markdown),
+        markdown=_truncation_message(),
         navigation=navigation,
         toc=toc,
         info=_truncation_info(total_chars, markdown),

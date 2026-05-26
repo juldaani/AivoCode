@@ -17,6 +17,8 @@ from web_ops.fetcher import (
     _parse_chunked,
     _DENSITY_CHARS_THRESHOLD,
     _MAX_MERGED_CHARS,
+    _MAX_TABLE_ROWS_PER_CHUNK,
+    _DENSE_LINE_CHARS_THRESHOLD,
 )
 
 
@@ -183,6 +185,50 @@ class TestDensityDetection:
         # But density should still work if non-code chunks are large
         assert tree["chunks"] is not None  # sanity check
 
+    def test_dense_prose_lines_not_merged(self):
+        """When \n-split produces long lines (>300 chars avg), they are
+        self-contained paragraphs — merge must be skipped so unrelated
+        paragraphs don't get fused together."""
+        # Simulate dense API docs: each line is 400-500 chars (a paragraph).
+        long_lines = [
+            "x" * 420,
+            "y" * 480,
+            "z" * 390,
+        ]
+        tree = _make_section(["\n".join(long_lines) + "\n" + ("p\n" * 600)])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        # Each long line should remain its own chunk (merge skipped).
+        x_count = sum(1 for c in chunks if c["text"].startswith("x"))
+        y_count = sum(1 for c in chunks if c["text"].startswith("y"))
+        z_count = sum(1 for c in chunks if c["text"].startswith("z"))
+        assert x_count == 1, f"Long line 'x' should be its own chunk, got {x_count}"
+        assert y_count == 1, f"Long line 'y' should be its own chunk, got {y_count}"
+        assert z_count == 1, f"Long line 'z' should be its own chunk, got {z_count}"
+
+    def test_short_feed_lines_are_merged(self):
+        """When \n-split produces short lines (<300 chars avg), they are
+        feed/link items that benefit from grouping — merge must happen."""
+        # Simulate feed items: each line is 80-120 chars (headline + link).
+        short_lines = [
+            "[Item 1](http://a.com/) — description here",
+            "[Item 2](http://b.com/) — another description",
+            "[Item 3](http://c.com/) — yet another one",
+            "[Item 4](http://d.com/) — fourth description here",
+            "[Item 5](http://e.com/) — fifth description",
+        ]
+        tree = _make_section(["\n".join(short_lines) + "\n" + ("p\n" * 600)])
+        _rechunk_dense_sections(tree)
+
+        chunks = tree["chunks"]
+        # Short lines should be merged into fewer chunks
+        item_chunks = [c for c in chunks if "[Item" in c["text"]]
+        assert len(item_chunks) < len(short_lines), (
+            f"Short lines should be merged: {len(item_chunks)} chunks "
+            f"for {len(short_lines)} lines"
+        )
+
 
 # ============================================================================
 # _rechunk_dense_sections tests — table/blockquote grouping
@@ -214,10 +260,9 @@ class TestTableGroupingInRechunk:
             pytest.fail("Table rows not found in any chunk")
 
     def test_table_grouping_respects_size_cap(self):
-        """When table rows exceed the merge cap, they are split into
+        """When table rows exceed the row-count cap (20), they are split into
         multiple groups (regression test for 10K wiki infobox bug)."""
         # Simulate a large Wikipedia infobox with many rows.
-        # Each row is ~150 chars, 100 rows = 15,000 chars total.
         rows = ["| {:30} | {:30} |".format("Key{}".format(i), "Value{}".format(i))
                 for i in range(100)]
         # Make dense so rechunk triggers
@@ -225,15 +270,20 @@ class TestTableGroupingInRechunk:
         _rechunk_dense_sections(tree)
 
         chunks = tree["chunks"]
-        # No single chunk should exceed the cap by more than a small margin
-        # (a single row could be ~150 chars, which is fine)
+        # Table chunks should have at most _MAX_TABLE_ROWS_PER_CHUNK rows
         for c in chunks:
             if "| Key" in c["text"]:
-                # A table chunk should not exceed the merge cap significantly
-                assert len(c["text"]) <= _MAX_MERGED_CHARS + 500, (
-                    f"Table chunk too large: {len(c['text'])} chars > "
-                    f"{_MAX_MERGED_CHARS + 500} (cap + slack)"
+                n_rows = len([l for l in c["text"].split("\n") if l.strip()])
+                assert n_rows <= _MAX_TABLE_ROWS_PER_CHUNK, (
+                    f"Table chunk has {n_rows} rows, exceeds cap of "
+                    f"{_MAX_TABLE_ROWS_PER_CHUNK}"
                 )
+        # And we should have multiple table chunks (was 100 rows → need at
+        # least 5 groups at 20 rows each)
+        table_chunks = [c for c in chunks if "| Key" in c["text"]]
+        assert len(table_chunks) >= 5, (
+            f"Expected ≥5 table groups for 100 rows, got {len(table_chunks)}"
+        )
 
     def test_blockquote_lines_keep_together(self):
         """Consecutive blockquote lines remain in one chunk."""
