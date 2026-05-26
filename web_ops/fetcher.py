@@ -369,9 +369,6 @@ def _line_kind(raw_line: str) -> str:
 # Numbered lists (1., 42.) match any digit + dot at line start.
 _RE_LIST_ITEM = re.compile(r"^[\*\-+]\s|\d+\.")
 
-# Module-level regex for detecting blank-line runs (2+ consecutive newlines).
-# Used by _is_feed_page to count paragraph-break gaps, not individual \n\n pairs.
-_RE_BLANK_LINE_RUN = re.compile(r"\n{2,}")
 
 
 def _count_leading_spaces(raw_line: str) -> int:
@@ -1215,27 +1212,28 @@ def _truncation_info(total_chars: int, markdown: str = "") -> str:
 
 
 def _is_feed_page(markdown: str) -> bool:
-    """Detect feed-style pages (dense links, few paragraph breaks).
+    """Detect feed-style pages (dense short lines, many links).
 
-    News sites and link directories often render as long link streams
-    with few blank-line separators — the chunked-tree ToC is less useful
-    on these pages.  Returns ``True`` when both conditions hold:
+    News sites and link directories produce many short (50‑150 char) lines
+    separated by ``\\n`` with a high density of markdown links.  Pages with
+    long (300‑600 char) ``\\n``-delimited paragraphs are well-formed prose
+    and should NOT be flagged, even if they have few blank lines.
 
-    * blank-line rate < 10 % of total lines
-    * link rate > 30 % of total lines
+    Returns ``True`` when **either** condition holds:
 
-    Blank lines are counted as runs of 2+ consecutive newlines (``\\n\\n``,
-    ``\\n\\n\\n``, …) — a triple newline counts as **one** blank-line gap,
-    not two.
+    * average chars per line < 150 (short lines = feed / directory)
+    * link rate > 30 % of total lines (link density)
+
+    Average chars per line is computed over **all** lines (including blank
+    lines, which contribute 0 chars) — this naturally penalises sparse
+    content without needing a separate blank-line metric.
     """
     total_lines = markdown.count("\n") + 1
     if total_lines == 0:
         return False
-    # Count each run of 2+ consecutive newlines as one blank-line gap.
-    nl_count = len(_RE_BLANK_LINE_RUN.findall(markdown))
-    nl_rate = nl_count / total_lines
+    avg_chars = len(markdown) / total_lines
     link_rate = markdown.count("](http") / total_lines
-    return nl_rate < 0.1 and link_rate > 0.3
+    return avg_chars < 150 or link_rate > 0.3
 
 
 # ---------------------------------------------------------------------------
