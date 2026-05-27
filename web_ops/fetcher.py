@@ -1493,18 +1493,23 @@ async def fetch_urls(
     )
 
 
-def result_to_output_json(result: FetchResult) -> str:
+def result_to_output_json(result: FetchResult, *, compact_toc: bool = True) -> str:
     """Serialize a ``FetchResult`` to the standard JSON output format.
 
     Builds the agent-facing output dict from *result*, strips ``None``-valued
     keys (so the agent sees only meaningful fields), and serializes with
-    ``indent=2`` wrapper formatting but a **compact** (single‑line) ``toc``
-    field — because the ToC dominates the payload and indentation wastes ~66 %
-    on whitespace in deeply nested structures.
+    ``indent=2`` wrapper formatting.
+
+    When *compact_toc* is ``True`` (the default), the ``toc`` field is
+    serialized as a single compact line — because the ToC dominates the
+    payload and indentation wastes ~66 % on whitespace in deeply nested
+    structures.  When ``False``, the entire output uses ``indent=2``,
+    producing a human‑readable multi‑line ToC.
 
     Returns a JSON string ready to ``print``.
     """
-    # Compute toc_n_chars from compact JSON — matches what the agent receives.
+    # Compute toc_n_chars from compact JSON — compact is the real content
+    # metric regardless of output format.
     toc_n_chars: int | None = None
     if result.toc is not None:
         toc_n_chars = len(json.dumps(result.toc, ensure_ascii=False))
@@ -1524,7 +1529,7 @@ def result_to_output_json(result: FetchResult) -> str:
     output = {k: v for k, v in output.items() if v is not None}
 
     toc = output.get("toc")
-    if toc is None:
+    if toc is None or not compact_toc:
         return json.dumps(output, indent=2, ensure_ascii=False)
 
     # Marker-replace: serialize wrapper with indent=2, then swap the

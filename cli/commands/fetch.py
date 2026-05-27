@@ -79,6 +79,13 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=False,
         help="Show status messages to stderr (default: silent, JSON only).",
     )
+    parser.add_argument(
+        "--pretty-format",
+        action="store_true",
+        default=False,
+        help="Pretty-print the toc field with indent=2 for human readability "
+             "(default: compact single-line toc).",
+    )
     parser.set_defaults(func=handle)
 
 
@@ -114,7 +121,7 @@ def handle(args: argparse.Namespace) -> int:
         )
     )
 
-    print(result_to_output_json(result), flush=True)
+    print(result_to_output_json(result, compact_toc=not args.pretty_format), flush=True)
 
     # ── Verbose stderr stats ────────────────────────────────────────────
     if args.verbose:
