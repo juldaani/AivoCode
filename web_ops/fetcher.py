@@ -97,10 +97,19 @@ _DEFAULT_WAIT_UNTIL: _WaitUntil = "load"
 _TRUNCATION_THRESHOLD: int = 10_000
 
 # Maximum number of text-chunk previews to include per section/node in the
-# compact ToC delivered to agents.  Excess chunks are replaced by a sentinel
-# entry with a line range covering all skipped chunks and a message telling
-# the agent how to expand that section.
-_TOC_MAX_CHUNKS_PER_SECTION: int = 15
+# compact ToC, keyed by section depth (0 = root, 1 = H1, …).  Depths beyond
+# the last index use the final value.  Used as the default (un‑pruned) cap.
+_TOC_MAX_CHUNKS_PER_DEPTH: list[int] = [15]
+
+# Pruned per‑depth caps applied when the ToC is both large (> 50 000 chars
+# compact) and achieves poor compression (< 10× vs raw markdown).  Deeper
+# sections get fewer previews — typical of reference docs where H4+ headings
+# are footnotes or granular API entries that overwhelm the ToC.
+_TOC_MAX_CHUNKS_PER_DEPTH_PRUNED: list[int] = [15, 10, 5, 0]
+
+# Thresholds that trigger the pruned caps.
+_TOC_PRUNING_SIZE_THRESHOLD: int = 50_000
+_TOC_PRUNING_RATIO_THRESHOLD: float = 10.0
 
 # Minimum character count a chunk must have (after URL stripping) to be
 # included in the compact ToC.  Chunks below this are typically pure
@@ -727,7 +736,10 @@ def _strip_urls(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _chunked_to_toc(tree: dict[str, Any]) -> list[Any]:
+def _chunked_to_toc(
+    tree: dict[str, Any],
+    max_per_depth: list[int] | None = None,
+) -> list[Any]:
     """Project the verbose cached chunked tree into a compact ToC.
 
     The compact format is an ordered array where:
@@ -737,59 +749,85 @@ def _chunked_to_toc(tree: dict[str, Any]) -> list[Any]:
     Duplicate heading names at the same level get a ``" (N)"`` suffix.
     The root ``type`` / ``level`` keys and full ``text`` values are
     dropped — only previews and line ranges are retained.
+
+    *max_per_depth* controls how many chunk previews to emit per section
+    at each nesting depth.  Defaults to ``_TOC_MAX_CHUNKS_PER_DEPTH``.
     """
-    return _section_to_toc(tree)
+    if max_per_depth is None:
+        max_per_depth = _TOC_MAX_CHUNKS_PER_DEPTH
+    return _section_to_toc(tree, depth=0, max_per_depth=max_per_depth)
 
 
-def _section_to_toc(node: dict[str, Any]) -> list[Any]:
+def _section_to_toc(
+    node: dict[str, Any],
+    *,
+    depth: int = 0,
+    max_per_depth: list[int] | None = None,
+) -> list[Any]:
     """Recursively convert a single node to ToC array entries.
 
-    Caps text-chunk previews at ``_TOC_MAX_CHUNKS_PER_SECTION`` per node
-    to prevent context bloat on pages with many short paragraphs (e.g.
-    GitHub commit histories).  Skipped chunks are summarised by a sentinel
-    triple whose line range spans all of them.
+    Caps text-chunk previews per depth using *max_per_depth* (index =
+    section nesting depth; depths beyond the list use the last value).
+    Skipped chunks are summarised by a sentinel triple.
     """
+    if max_per_depth is None:
+        max_per_depth = _TOC_MAX_CHUNKS_PER_DEPTH
+    # Per-depth cap — clamp to the last element for deep nesting.
+    cap = max_per_depth[min(depth, len(max_per_depth) - 1)]
+
     result: list[Any] = []
     chunks: list[dict[str, Any]] = node.get("chunks", [])
 
-    # Emit up to N chunk previews — cap with sentinel if there are more.
-    # Skip trivially-short non-code chunks whose content was mostly URLs.
-    # Track *emitted* separately from loop index so that short-filtered
-    # chunks don't prematurely exhaust the cap (leaving zero visible
-    # previews followed by a sentinel).
-    emitted = 0
-    i = -1
-    for i, chunk in enumerate(chunks):
-        text = chunk["text"].strip()
-        if not text.startswith("```"):
-            if len(_strip_urls(chunk["text"])) < _MIN_CHUNK_PREVIEW_CHARS:
-                continue
-
-        ls, le = chunk["lines"]
-        result.append([ls, le, chunk["preview"]])
-        emitted += 1
-
-        if emitted >= _TOC_MAX_CHUNKS_PER_SECTION:
-            break
-
-    # Only add sentinel when we stopped early due to the cap — i.e. there
-    # are chunks remaining after the last one we examined.
-    if emitted >= _TOC_MAX_CHUNKS_PER_SECTION and i + 1 < len(chunks):
-        skipped = len(chunks) - (i + 1)
-        first = chunks[i + 1]["lines"][0]
+    if cap == 0 and chunks:
+        # No previews at this depth — emit a single sentinel covering
+        # all chunks so the section heading is still navigable.
+        first = chunks[0]["lines"][0]
         last = chunks[-1]["lines"][1]
         msg = (
-            f"… {skipped} more chunks — use --heading to expand all, "
+            f"… {len(chunks)} chunks — use --heading to expand all, "
             f"or --line-range to read selectively"
         )
         result.append([first, last, msg])
+    elif cap > 0:
+        # Emit up to *cap* chunk previews — cap with sentinel if there are
+        # more.  Skip trivially-short non-code chunks whose content was
+        # mostly URLs.
+        emitted = 0
+        i = -1
+        for i, chunk in enumerate(chunks):
+            text = chunk["text"].strip()
+            if not text.startswith("```"):
+                if len(_strip_urls(chunk["text"])) < _MIN_CHUNK_PREVIEW_CHARS:
+                    continue
+
+            ls, le = chunk["lines"]
+            result.append([ls, le, chunk["preview"]])
+            emitted += 1
+
+            if emitted >= cap:
+                break
+
+        # Only add sentinel when we stopped early due to the cap.
+        if emitted >= cap and i + 1 < len(chunks):
+            skipped = len(chunks) - (i + 1)
+            first = chunks[i + 1]["lines"][0]
+            last = chunks[-1]["lines"][1]
+            msg = (
+                f"… {skipped} more chunks — use --heading to expand all, "
+                f"or --line-range to read selectively"
+            )
+            result.append([first, last, msg])
 
     # Subsections — deduplicate heading names within this level.
     # Skip sections whose entire content was filtered out (e.g. empty
     # "Stars" or "Watchers" sections on a GitHub sidebar).
     seen: dict[str, int] = {}
     for subsection in node.get("sections", []):
-        child = _section_to_toc(subsection)
+        child = _section_to_toc(
+            subsection,
+            depth=depth + 1,
+            max_per_depth=max_per_depth,
+        )
         if not child:
             continue
         clean_heading = _strip_urls(subsection["heading"])
@@ -1388,6 +1426,18 @@ def _result_with_truncation(
         chunked = _parse_chunked(markdown)
 
     toc = _chunked_to_toc(chunked)
+
+    # ── Pruning: re‑build ToC with depth‑aware caps when the ToC is
+    # both large and achieves poor compression — typical of reference
+    # docs with hundreds of deeply nested sections (e.g. node_fs).
+    toc_json = json.dumps(toc, ensure_ascii=False)
+    toc_n_chars = len(toc_json)
+    if (
+        toc_n_chars > _TOC_PRUNING_SIZE_THRESHOLD
+        and total_chars / toc_n_chars < _TOC_PRUNING_RATIO_THRESHOLD
+    ):
+        toc = _chunked_to_toc(chunked, max_per_depth=_TOC_MAX_CHUNKS_PER_DEPTH_PRUNED)
+
     return FetchResult(
         success=True,
         markdown=_truncation_message(),
