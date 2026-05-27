@@ -3,8 +3,11 @@
 What this module provides
 - FetchResult: dataclass holding markdown, success flag, HTTP status, error,
   structured links, ToC entries, and truncation metadata.
-- fetch_url(): async function that fetches a URL via CloakBrowser + Crawl4AI
-  with caching, truncation, ToC generation, and section extraction.
+- fetch_urls(): async function — single public entry point.  Handles full-page
+  fetches (with truncation / ToC), single-section extraction, and multi-section
+  extraction with a single cache-seed fetch.
+- result_to_output_json(): serialize any FetchResult to the standard
+  agent-facing JSON format (indent‑2 wrapper, compact ToC field).
 
 Why this exists
 - Single entry point for web fetching — used by CLI, Python agents, and
@@ -1241,7 +1244,7 @@ def _is_feed_page(markdown: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def fetch_url(
+async def _fetch_url(
     url: str,
     *,
     wait_until: _WaitUntil = _DEFAULT_WAIT_UNTIL,
@@ -1393,3 +1396,140 @@ def _result_with_truncation(
         info=_truncation_info(total_chars, markdown),
         total_chars=total_chars,
     )
+
+
+async def fetch_urls(
+    url: str,
+    *,
+    wait_until: _WaitUntil = _DEFAULT_WAIT_UNTIL,
+    headings: list[str] | None = None,
+    line_ranges: list[str] | None = None,
+    refresh_cache: bool = False,
+    include_navigation: bool = False,
+) -> FetchResult:
+    """Fetch *url* (or extract sections from it) and return structured results.
+
+    The single public entry point for web fetching.  Handles three cases:
+
+    1. **No selectors** — returns the full page (truncated to a ToC when the
+       content exceeds ``_TRUNCATION_THRESHOLD`` chars).
+    2. **Single selector** (one heading or one line‑range) — extracts that
+       section from the cached page.
+    3. **Multiple selectors** — seeds the cache with one fetch, then extracts
+       each section and returns combined, annotated markdown joined by
+       ``\\n\\n---\\n\\n``.
+
+    Args:
+        url: The URL to fetch.
+        wait_until: Playwright navigation event.
+        headings: Section headings to extract (case‑insensitive).
+        line_ranges: ``\"start-end\"`` line ranges to extract (1‑based).
+        refresh_cache: If ``True``, always refetch, ignoring cache.
+        include_navigation: If ``True``, include extracted page links in the
+            result (only applicable when no selectors are given).
+
+    Returns:
+        ``FetchResult`` — never ``None``.
+
+    Side effects:
+        Launches/takes down a CloakBrowser subprocess per fresh fetch.
+        Writes/reads unified JSON cache files to ``tmp/aivocode/cache/``.
+    """
+    headings = headings or []
+    line_ranges = line_ranges or []
+    n_selectors = len(headings) + len(line_ranges)
+
+    # ── Multi‑section path ──────────────────────────────────────────────
+    if n_selectors > 1:
+        # Seed the cache with one fetch.
+        seed = await _fetch_url(
+            url, wait_until=wait_until, refresh_cache=refresh_cache,
+        )
+        if not seed.success:
+            return FetchResult(
+                success=False,
+                markdown="",
+                error=f"Failed to fetch {url}: {seed.error}",
+            )
+
+        successes: list[str] = []
+        errors: list[str] = []
+
+        for heading in headings:
+            r = await _fetch_url(
+                url, wait_until=wait_until, heading=heading,
+            )
+            if r.success and r.markdown:
+                successes.append(f"[heading: {heading}]\n\n{r.markdown}")
+            else:
+                errors.append(f"heading '{heading}': {r.error or 'no content'}")
+
+        for lr in line_ranges:
+            r = await _fetch_url(
+                url, wait_until=wait_until, line_range=lr,
+            )
+            if r.success and r.markdown:
+                successes.append(f"[lines: {lr}]\n\n{r.markdown}")
+            else:
+                errors.append(f"line-range '{lr}': {r.error or 'no content'}")
+
+        combined = "\n\n---\n\n".join(successes) if successes else ""
+        return FetchResult(
+            success=bool(successes),
+            markdown=combined,
+            error="; ".join(errors) if errors else None,
+        )
+
+    # ── Single / no selector → delegate to _fetch_url ───────────────────
+    heading = headings[0] if headings else None
+    line_range = line_ranges[0] if line_ranges else None
+    return await _fetch_url(
+        url,
+        wait_until=wait_until,
+        heading=heading,
+        line_range=line_range,
+        refresh_cache=refresh_cache,
+        include_navigation=include_navigation,
+    )
+
+
+def result_to_output_json(result: FetchResult) -> str:
+    """Serialize a ``FetchResult`` to the standard JSON output format.
+
+    Builds the agent-facing output dict from *result*, strips ``None``-valued
+    keys (so the agent sees only meaningful fields), and serializes with
+    ``indent=2`` wrapper formatting but a **compact** (single‑line) ``toc``
+    field — because the ToC dominates the payload and indentation wastes ~66 %
+    on whitespace in deeply nested structures.
+
+    Returns a JSON string ready to ``print``.
+    """
+    # Compute toc_n_chars from compact JSON — matches what the agent receives.
+    toc_n_chars: int | None = None
+    if result.toc is not None:
+        toc_n_chars = len(json.dumps(result.toc, ensure_ascii=False))
+
+    output: dict[str, Any] = {
+        "success": result.success,
+        "status_code": result.status_code,
+        "error": result.error,
+        "info": result.info,
+        "toc_n_chars": toc_n_chars,
+        "markdown": result.markdown,
+        "navigation": result.navigation,
+        "toc": result.toc,
+    }
+
+    # Strip None / null fields.
+    output = {k: v for k, v in output.items() if v is not None}
+
+    toc = output.get("toc")
+    if toc is None:
+        return json.dumps(output, indent=2, ensure_ascii=False)
+
+    # Marker-replace: serialize wrapper with indent=2, then swap the
+    # indented toc for its compact JSON representation.
+    output_marker = dict(output)
+    output_marker["toc"] = "__TOC__"
+    pretty = json.dumps(output_marker, indent=2, ensure_ascii=False)
+    return pretty.replace('"__TOC__"', json.dumps(toc, ensure_ascii=False))

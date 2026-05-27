@@ -17,6 +17,6 @@ See Also
 - web_ops.tst_web_fetch for the standalone reference implementation.
 """
 
-from web_ops.fetcher import FetchResult, fetch_url
+from web_ops.fetcher import FetchResult, fetch_urls, result_to_output_json
 
-__all__ = ["fetch_url", "FetchResult"]
+__all__ = ["fetch_urls", "FetchResult", "result_to_output_json"]

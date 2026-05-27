@@ -1,17 +1,17 @@
 """CLI subcommand: fetch — fetch a URL and output structured result as JSON.
 
-Uses ``web_ops.fetch_url`` (CloakBrowser + Crawl4AI) under the hood.
-Outputs the full ``FetchResult`` as JSON to stdout.
+Thin UI layer: parses CLI arguments, calls ``web_ops.fetch_urls`` for all
+processing (full‑page fetch, single/multi‑section extraction, JSON
+serialization), and prints the result.  No processing logic lives here.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import sys
 
-from web_ops import fetch_url
+from web_ops import fetch_urls, result_to_output_json
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
@@ -82,61 +82,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=handle)
 
 
-async def _fetch_multi(
-    url: str,
-    wait_until: str,
-    headings: list[str],
-    line_ranges: list[str],
-    refresh_cache: bool,
-) -> tuple[list[str], list[str]]:
-    """Extract multiple sections, fetching the page once if needed.
-
-    Ensures the page is cached first so subsequent section extractions
-    are instant cache reads rather than repeated browser launches.
-
-    Each success string is annotated with its selector.
-    """
-    successes: list[str] = []
-    errors: list[str] = []
-
-    # Ensure the page is cached — fetch once (or use existing cache).
-    cache_seed = await fetch_url(
-        url,
-        wait_until=wait_until,
-        refresh_cache=refresh_cache,
-    )
-    if not cache_seed.success:
-        return [], [f"Failed to fetch {url}: {cache_seed.error}"]
-
-    # Extract each section from the now-fresh cache.
-    for heading in headings:
-        r = await fetch_url(
-            url, wait_until=wait_until, heading=heading,
-        )
-        if r.success and r.markdown:
-            successes.append(f"[heading: {heading}]\n\n{r.markdown}")
-        else:
-            errors.append(f"heading '{heading}': {r.error or 'no content'}")
-
-    for lr in line_ranges:
-        r = await fetch_url(
-            url, wait_until=wait_until, line_range=lr,
-        )
-        if r.success and r.markdown:
-            successes.append(f"[lines: {lr}]\n\n{r.markdown}")
-        else:
-            errors.append(f"line-range '{lr}': {r.error or 'no content'}")
-
-    return successes, errors
-
-
 def handle(args: argparse.Namespace) -> int:
     """Execute the fetch command and return an exit code."""
     headings = args.heading or []
     line_ranges = args.line_range or []
     wait_until = "networkidle" if args.js_render else args.wait_until
-
-    has_multi = len(headings) + len(line_ranges) > 1
+    is_multi = len(headings) + len(line_ranges) > 1
 
     # Status message.
     if args.verbose:
@@ -151,69 +102,21 @@ def handle(args: argparse.Namespace) -> int:
             status_parts.append("(refreshing cache)")
         print(" ".join(status_parts) + " ...", file=sys.stderr, flush=True)
 
-    if has_multi:
-        # Multiple sections: fetch once, extract all, merge.
-        successes, errors = asyncio.run(
-            _fetch_multi(
-                args.url,
-                wait_until=wait_until,
-                headings=headings,
-                line_ranges=line_ranges,
-                refresh_cache=args.refresh_cache,
-            )
-        )
-        combined = "\n\n---\n\n".join(successes) if successes else ""
-        output: dict = {
-            "success": bool(successes),
-            "error": "; ".join(errors) if errors else None,
-            "markdown": combined,
-        }
-        # Strip None / null fields.
-        output = {k: v for k, v in output.items() if v is not None}
-        print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
-        if args.verbose:
-            print(
-                f"Done. {len(successes)} sections extracted ({', '.join(errors)})" if errors
-                else f"Done. {len(successes)} sections extracted.",
-                file=sys.stderr,
-                flush=True,
-            )
-        return 0 if successes else 1
-
-    # Single-selector or full-page path.
-    heading_arg = headings[0] if headings else None
-    range_arg = line_ranges[0] if line_ranges else None
-
+    # ── All processing delegated to web_ops ─────────────────────────────
     result = asyncio.run(
-        fetch_url(
+        fetch_urls(
             args.url,
             wait_until=wait_until,
-            heading=heading_arg,
-            line_range=range_arg,
+            headings=headings if headings else None,
+            line_ranges=line_ranges if line_ranges else None,
             refresh_cache=args.refresh_cache,
             include_navigation=args.navigation,
         )
     )
 
-    toc_n_chars = (
-        len(json.dumps(result.toc, ensure_ascii=False))
-        if result.toc is not None
-        else None
-    )
-    output = {
-        "success": result.success,
-        "status_code": result.status_code,
-        "error": result.error,
-        "info": result.info,
-        "toc_n_chars": toc_n_chars,
-        "markdown": result.markdown,
-        "navigation": result.navigation,
-        "toc": result.toc,
-    }
-    # Strip None / null fields so the agent sees only meaningful keys.
-    output = {k: v for k, v in output.items() if v is not None}
-    print(json.dumps(output, indent=2, ensure_ascii=False), flush=True)
+    print(result_to_output_json(result), flush=True)
 
+    # ── Verbose stderr stats ────────────────────────────────────────────
     if args.verbose:
         if result.success:
             nav_info = ""
@@ -221,8 +124,20 @@ def handle(args: argparse.Namespace) -> int:
                 n_int = len(result.navigation.get("internal", []))
                 n_ext = len(result.navigation.get("external", []))
                 nav_info = f" ({n_int} internal, {n_ext} external links)"
-            if result.toc:
-                # Count entries: triples are chunks, dicts are sections.
+
+            if is_multi:
+                # Multi‑section: count successes from markdown.
+                n_sections = len(headings) + len(line_ranges)
+                n_errors = 0
+                if result.error:
+                    n_errors = result.error.count("; ") + 1
+                n_ok = n_sections - n_errors
+                msg = f"Done. {n_ok} sections extracted."
+                if result.error:
+                    msg += f" Errors: {result.error}"
+                print(msg + nav_info + ".", file=sys.stderr, flush=True)
+            elif result.toc:
+                # Full page with ToC: count chunks and sections.
                 n_chunks = sum(
                     1 for e in result.toc
                     if isinstance(e, list) and isinstance(e[0], int)
@@ -236,13 +151,15 @@ def handle(args: argparse.Namespace) -> int:
                     file=sys.stderr, flush=True,
                 )
             else:
+                # Single section or small page.
                 print(
                     f"Done. {len(result.markdown)} chars{nav_info}.",
                     file=sys.stderr, flush=True,
                 )
         else:
             print(
-                f"Error: fetch failed (error={result.error}, status={result.status_code})",
+                f"Error: fetch failed (error={result.error}, "
+                f"status={result.status_code})",
                 file=sys.stderr, flush=True,
             )
 
