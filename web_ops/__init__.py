@@ -1,22 +1,40 @@
-"""Web operations utilities — stealth fetching, extraction, and content processing.
+"""Web operations utilities — stealth fetching, extraction, and neural search.
 
 What this package provides
-- fetch_url: stealth web page fetcher via CloakBrowser + Crawl4AI.
-- FetchResult: structured result dataclass (markdown, success, status, error).
+- ``fetch_urls``: stealth web page fetcher via CloakBrowser + Crawl4AI.
+- ``FetchResult``: structured result dataclass (markdown, success, HTTP status,
+  error, navigation, ToC, truncation metadata).
+- ``web_search``: neural search via the Exa Search API
+  (web and code — same endpoint, vary ``type`` and query).
+- ``SearchResult`` / ``ResultItem``: dataclasses for search results.
+- Serializers available directly from each sub-module:
+  ``from web_ops.fetcher import result_to_output_json`` and
+  ``from web_ops.searcher import result_to_output_json``.
 
 How to use
 - Import and call::
 
-    from web_ops import fetch_url, FetchResult
+    from web_ops import fetch_urls, web_search
 
-    result = await fetch_url("https://example.com")
-    print(result.markdown)
+    page = await fetch_urls("https://example.com")
+    print(page.markdown)
+
+    results = await web_search("latest AI news")
+    for r in results.results:
+        print(r.title, r.url)
 
 See Also
-- web_ops.fetcher for the full module documentation.
-- web_ops.tst_web_fetch for the standalone reference implementation.
+- ``web_ops.fetcher`` for the full fetch module documentation.
+- ``web_ops.searcher`` for the search module documentation.
 """
 
-from web_ops.fetcher import FetchResult, fetch_urls, result_to_output_json
+from web_ops.fetcher import FetchResult, fetch_urls
+from web_ops.searcher import ResultItem, SearchResult, web_search
 
-__all__ = ["fetch_urls", "FetchResult", "result_to_output_json"]
+__all__ = [
+    "fetch_urls",
+    "FetchResult",
+    "ResultItem",
+    "SearchResult",
+    "web_search",
+]

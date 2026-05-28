@@ -17,6 +17,7 @@ import argparse
 import sys
 
 from cli.commands import fetch
+from cli.commands import websearch
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- register subcommands -----------------------------------------------
     fetch.add_subparser(subparsers)
+    websearch.add_subparser(subparsers)
     # Future commands: import and call add_subparser(subparsers) here.
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])

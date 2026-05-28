@@ -11,7 +11,8 @@ import argparse
 import asyncio
 import sys
 
-from web_ops import fetch_urls, result_to_output_json
+from web_ops import fetch_urls
+from web_ops.fetcher import result_to_output_json
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
