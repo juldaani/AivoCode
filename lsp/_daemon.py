@@ -391,6 +391,15 @@ async def _run_daemon(
                             server_ref.close()
                         return
 
+                    case "status":
+                        resp = {
+                            "id": req_id,
+                            "result": {
+                                "language": lang_entry.name,
+                                "server": lang_entry.server,
+                            },
+                        }
+
                     case "symbols":
                         file_str = params.get("file", "")
                         if not file_str:

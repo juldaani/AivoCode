@@ -26,18 +26,19 @@ import subprocess
 from pathlib import Path
 
 
-def detect_workspace(file_path: Path) -> Path:
-    """Find the git repository root for *file_path*.
+def detect_workspace(file_or_dir: Path) -> Path:
+    """Find the git repository root for *file_or_dir*.
 
-    Walks up from the file's parent directory, calling
-    ``git rev-parse --show-toplevel`` at each candidate directory until a
-    git worktree is found.
+    Walks up from the given path (or its parent, if the path points to a file)
+    calling ``git rev-parse --show-toplevel`` at each candidate directory
+    until a git worktree is found.  Accepts both files and directories,
+    so callers can pass ``Path.cwd()`` directly.
 
     Parameters
     ----------
-    file_path : Path
-        A file path (relative or absolute). Relative paths are resolved
-        against the current working directory before walking.
+    file_or_dir : Path
+        A file or directory path (relative or absolute). Relative paths are
+        resolved against the current working directory before walking.
 
     Returns
     -------
@@ -48,7 +49,7 @@ def detect_workspace(file_path: Path) -> Path:
     ------
     RuntimeError
         If git is not installed, or no git repository is found in any
-        ancestor of *file_path*.
+        ancestor of *file_or_dir*.
     """
     if not shutil.which("git"):
         raise RuntimeError(
@@ -57,15 +58,20 @@ def detect_workspace(file_path: Path) -> Path:
             "Use --workspace to specify the workspace manually."
         )
 
-    # Resolve to absolute, then walk up from the parent (the file itself may
-    # not exist yet, but its parent dir should).
-    resolved = file_path.resolve() if file_path.is_absolute() else Path.cwd() / file_path
+    # Resolve to absolute.
+    resolved = (
+        file_or_dir.resolve()
+        if file_or_dir.is_absolute()
+        else Path.cwd() / file_or_dir
+    )
     target_abs = resolved.resolve()
 
-    # Walk up from the file's parent directory looking for a git worktree.
-    # Using --show-toplevel which always prints the absolute canonical root,
-    # avoiding symlink/windows-drive issues.
-    current = target_abs.parent
+    # git -C expects a directory.  If the path is a file (or doesn't exist),
+    # start walking from its parent.  If it's a directory, start there.
+    if target_abs.is_dir():
+        current = target_abs
+    else:
+        current = target_abs.parent
     while True:
         try:
             proc = subprocess.run(

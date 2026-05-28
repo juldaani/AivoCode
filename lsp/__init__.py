@@ -49,6 +49,8 @@ from lsp._symbols import SYMBOL_KIND_NAMES
 
 # High-level public API — these are what CLI / MCP / REST endpoints call.
 from lsp._daemon import stop_daemon as daemon_stop
+from lsp._daemon import _is_running as _daemon_is_running
+from lsp._daemon import _socket_path as _daemon_socket_path
 from lsp._daemon import send_query as _send_query
 from lsp._serialize import result_to_output_json
 from lsp._workspace import detect_workspace
@@ -129,6 +131,38 @@ async def query_document_symbols(
     return result
 
 
+def daemon_status(workspace: Path | None = None) -> dict:
+    """Check the running status of the LSP daemon for a workspace.
+
+    Parameters
+    ----------
+    workspace : Path | None
+        Workspace to check. If None, auto-detected from the current
+        working directory (via ``detect_workspace(Path.cwd())``).
+
+    Returns
+    -------
+    dict
+        ``{"workspace": "...", "running": true, "language": "...", "server": "..."}``
+        when the daemon is running, or ``{"workspace": "...", "running": false}``
+        when it is not.
+    """
+    ws = workspace if workspace is not None else detect_workspace(Path.cwd())
+
+    socket_path = _daemon_socket_path(ws)
+    if not _daemon_is_running(socket_path):
+        return {"workspace": str(ws), "running": False}
+
+    try:
+        result = _send_query(ws, "status", {})
+    except (RuntimeError, ConnectionError, OSError):
+        return {"workspace": str(ws), "running": False}
+
+    result["workspace"] = str(ws)
+    result["running"] = True
+    return result
+
+
 __all__ = [
     # Low-level building blocks (existing)
     "LspClient",
@@ -137,6 +171,7 @@ __all__ = [
     "SYMBOL_KIND_NAMES",
     # High-level public API (new)
     "query_document_symbols",
+    "daemon_status",
     "daemon_stop",
     "result_to_output_json",
     "detect_workspace",
