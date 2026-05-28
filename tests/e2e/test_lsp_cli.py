@@ -82,6 +82,15 @@ def lsp_server():
         _wait_for_server(url, timeout=45.0)
         yield url
     finally:
+        # ── Stop any running daemon first ──────────────────────────────
+        # The daemon is spawned with start_new_session=True, so it won't
+        # be killed when we terminate the uvicorn process.  Send a stop
+        # request to shut it down cleanly.
+        try:
+            httpx.post(f"{url}/lsp/stop", json={"workspace": str(_REPO_ROOT)}, timeout=10.0)
+        except Exception:
+            pass
+
         proc.terminate()
         try:
             proc.wait(timeout=10)
