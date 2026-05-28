@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from cli.commands import lsp
 from cli.commands import webfetch
 from cli.commands import websearch
 
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # ---- register subcommands -----------------------------------------------
+    lsp.add_subparser(subparsers)
     webfetch.add_subparser(subparsers)
     websearch.add_subparser(subparsers)
     # Future commands: import and call add_subparser(subparsers) here.

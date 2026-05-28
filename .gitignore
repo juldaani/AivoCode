@@ -208,3 +208,6 @@ marimo/_lsp/
 __marimo__/
 
 tmp/
+
+# LSP daemon runtime files (sockets, logs)
+logs/
