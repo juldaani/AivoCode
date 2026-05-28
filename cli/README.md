@@ -5,7 +5,7 @@ Thin UI layer for aivoCode tools. All processing lives in the corresponding pack
 ## Commands
 
 ```
-aivocode fetch <url> [options]
+aivocode webfetch <url> [options]
 ```
 
 ## Install

@@ -39,9 +39,9 @@ print(result.markdown)
 ## CLI
 
 ```
-aivocode fetch https://example.com
-aivocode fetch https://example.com --heading "API Reference"
-aivocode fetch https://nodejs.org/api/fs.html --pretty-format
+aivocode webfetch https://example.com
+aivocode webfetch https://example.com --heading "API Reference"
+aivocode webfetch https://nodejs.org/api/fs.html --pretty-format
 ```
 
 ## How it works

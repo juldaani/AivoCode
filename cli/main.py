@@ -4,7 +4,7 @@ Registered as the ``aivocode`` console_scripts entry point via ``pyproject.toml`
 
 Usage::
 
-    aivocode fetch <url> [--wait-until ...]
+    aivocode webfetch <url> [--wait-until ...]
 
 To add a new subcommand:
     1. Create ``cli/commands/<name>.py`` with ``add_subparser()`` and ``handle()``.
@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from cli.commands import fetch
+from cli.commands import webfetch
 from cli.commands import websearch
 
 
@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # ---- register subcommands -----------------------------------------------
-    fetch.add_subparser(subparsers)
+    webfetch.add_subparser(subparsers)
     websearch.add_subparser(subparsers)
     # Future commands: import and call add_subparser(subparsers) here.
 

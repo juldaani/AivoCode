@@ -1,4 +1,4 @@
-"""CLI subcommand: fetch — fetch a URL and output structured result as JSON.
+"""CLI subcommand: webfetch — fetch a URL and output structured result as JSON.
 
 Thin UI layer: parses CLI arguments, calls ``web_ops.fetch_urls`` for all
 processing (full‑page fetch, single/multi‑section extraction, JSON
@@ -16,9 +16,9 @@ from web_ops.fetcher import result_to_output_json
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
-    """Register the ``fetch`` command on the given subparser group."""
+    """Register the ``webfetch`` command on the given subparser group."""
     parser: argparse.ArgumentParser = subparsers.add_parser(
-        "fetch",
+        "webfetch",
         help="Fetch a URL and output the result as JSON.",
         description="Fetch a URL via CloakBrowser + Crawl4AI and output structured result as JSON.",
     )
@@ -91,7 +91,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
 
 
 def handle(args: argparse.Namespace) -> int:
-    """Execute the fetch command and return an exit code."""
+    """Execute the webfetch command and return an exit code."""
     headings = args.heading or []
     line_ranges = args.line_range or []
     wait_until = "networkidle" if args.js_render else args.wait_until
