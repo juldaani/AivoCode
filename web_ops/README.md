@@ -39,9 +39,9 @@ print(result.markdown)
 ## CLI
 
 ```
-aivocode webfetch https://example.com
-aivocode webfetch https://example.com --heading "API Reference"
-aivocode webfetch https://nodejs.org/api/fs.html --pretty-format
+python -m cli webfetch https://example.com
+python -m cli webfetch https://example.com --heading "API Reference"
+python -m cli webfetch https://nodejs.org/api/fs.html --pretty-format
 ```
 
 ## How it works

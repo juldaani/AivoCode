@@ -5,14 +5,12 @@ Thin UI layer for aivoCode tools. All processing lives in the corresponding pack
 ## Commands
 
 ```
-aivocode webfetch <url> [options]
+python -m cli lsp <file> --symbols
+python -m cli webfetch <url> [options]
+python -m cli websearch <query> [options]
 ```
 
-## Install
-
-```
-pip install -e .
-```
+Each worktree runs its own CLI code via `python -m cli` — no global `aivocode` install needed.
 
 ## Options
 

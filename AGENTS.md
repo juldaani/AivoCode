@@ -40,6 +40,16 @@
 - Conda env is auto-activated in all shells (micromamba).
 
 ## Commands
+### CLI
+- Run CLI commands: `python -m cli <subcommand> [args]` from the repo root.
+- There is no global `aivocode` install — each worktree runs its own CLI code.
+  Running `python -m cli` ensures imports resolve to the current worktree's
+  `cli/`, `lsp/`, `web_ops/`, and `file_watcher/` packages.
+- Examples:
+  - `python -m cli lsp mock_pkg/utils.py --symbols`
+  - `python -m cli webfetch https://example.com`
+  - `python -m cli websearch "python asyncio" --num-results 5`
+
 ### Tests
 - Run all tests: `pytest`
 - Run a single file: `pytest path/to/test_file.py`
