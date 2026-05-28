@@ -1,8 +1,9 @@
-"""CLI subcommand: lsp — LSP daemon operations.
+"""CLI subcommand: lsp — LSP daemon operations via REST API.
 
-Thin UI layer: parses CLI arguments and delegates all processing to the
-``lsp`` library package.  No daemon logic, workspace detection, or
-serialization lives here.
+Thin UI layer: parses CLI arguments and sends HTTP requests to the
+aivocode REST API server.  No daemon logic, workspace detection, or
+serialization lives here (workspace detection is a local git operation
+and stays).
 
 Commands
 - ``aivocode lsp symbols <file>``  — query document symbols
@@ -15,19 +16,38 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import os
+import sys
 from pathlib import Path
 
-from lsp import (
-    detect_workspace,
-    daemon_status,
-    daemon_stop,
-    query_document_symbols,
-    result_to_output_json,
-)
-from lsp._daemon import ensure_daemon
+import httpx
+
+from lsp._workspace import detect_workspace
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── HTTP transport ────────────────────────────────────────────────────
+
+_AIVOCODE_URL = os.environ.get("AIVOCODE_URL", "http://localhost:8000")
+
+
+async def _post(path: str, body: dict) -> dict:
+    """Send a POST request to the REST API, return parsed JSON."""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(f"{_AIVOCODE_URL}{path}", json=body)
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def _get(path: str, params: dict) -> dict:
+    """Send a GET request to the REST API, return parsed JSON."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{_AIVOCODE_URL}{path}", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────
 
 
 def _resolve_workspace(args_workspace: str | None) -> Path:
@@ -37,7 +57,12 @@ def _resolve_workspace(args_workspace: str | None) -> Path:
     return detect_workspace(Path.cwd())
 
 
-# ── Subparser registration ────────────────────────────────────────────────────
+def _print_json(data: dict) -> None:
+    """Print a dict as a single-line JSON string to stdout."""
+    print(json.dumps(data, ensure_ascii=False), flush=True)
+
+
+# ── Subparser registration ────────────────────────────────────────────
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
@@ -53,7 +78,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     lsp_sub.required = True
 
-    # ── symbols ──────────────────────────────────────────────────────────
+    # ── symbols ──────────────────────────────────────────────────────
     sym_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "symbols",
         help="Query document symbols for a file.",
@@ -62,10 +87,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     sym_parser.add_argument(
         "file",
         type=str,
-        help=(
-            "File path relative to the git repo root "
-            "(e.g. mock_pkg/utils.py)."
-        ),
+        help="File path relative to the git repo root (e.g. mock_pkg/utils.py).",
     )
     sym_parser.add_argument(
         "--workspace",
@@ -78,7 +100,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     sym_parser.set_defaults(func=_handle_symbols)
 
-    # ── start ────────────────────────────────────────────────────────────
+    # ── start ────────────────────────────────────────────────────────
     start_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "start",
         help="Ensure the LSP daemon is running.",
@@ -98,7 +120,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     start_parser.set_defaults(func=_handle_start)
 
-    # ── stop ─────────────────────────────────────────────────────────────
+    # ── stop ─────────────────────────────────────────────────────────
     stop_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "stop",
         help="Shut down the LSP daemon.",
@@ -115,7 +137,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     stop_parser.set_defaults(func=_handle_stop)
 
-    # ── status ───────────────────────────────────────────────────────────
+    # ── status ───────────────────────────────────────────────────────
     status_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "status",
         help="Check LSP daemon health.",
@@ -133,58 +155,60 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     status_parser.set_defaults(func=_handle_status)
 
 
-# ── Handlers ──────────────────────────────────────────────────────────────────
+# ── Handlers ──────────────────────────────────────────────────────────
 
 
 def _handle_symbols(args: argparse.Namespace) -> int:
-    """Execute the ``lsp symbols`` command."""
-    workspace: Path | None = None
+    """Execute the ``lsp symbols`` command via HTTP POST."""
+    body: dict = {"file": args.file}
     if args.workspace:
-        workspace = Path(args.workspace)
+        body["workspace"] = args.workspace
 
-    result = asyncio.run(
-        query_document_symbols(
-            Path(args.file),
-            workspace=workspace,
-        )
-    )
-    print(result_to_output_json(result), flush=True)
-    return 0 if result.get("error") is None else 1
+    try:
+        result = asyncio.run(_post("/lsp/symbols", body))
+        _print_json(result)
+        return 0 if result.get("error") is None else 1
+    except httpx.HTTPError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
 
 def _handle_start(args: argparse.Namespace) -> int:
-    """Execute the ``lsp start`` command."""
-    workspace = _resolve_workspace(args.workspace)
+    """Execute the ``lsp start`` command via HTTP POST."""
+    ws = _resolve_workspace(args.workspace)
 
-    socket_path = ensure_daemon(workspace)
-
-    result = {
-        "workspace": str(workspace),
-        "running": True,
-        "socket": str(socket_path),
-    }
-    print(result_to_output_json(result), flush=True)
-    return 0
+    try:
+        result = asyncio.run(_post("/lsp/start", {"workspace": str(ws)}))
+        _print_json(result)
+        return 0
+    except httpx.HTTPError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
 
 def _handle_stop(args: argparse.Namespace) -> int:
-    """Execute the ``lsp stop`` command."""
-    workspace = _resolve_workspace(args.workspace)
+    """Execute the ``lsp stop`` command via HTTP POST."""
+    ws = _resolve_workspace(args.workspace)
 
-    daemon_stop(workspace)
-
-    result = {
-        "workspace": str(workspace),
-        "running": False,
-    }
-    print(result_to_output_json(result), flush=True)
-    return 0
+    try:
+        result = asyncio.run(_post("/lsp/stop", {"workspace": str(ws)}))
+        _print_json(result)
+        return 0
+    except httpx.HTTPError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
 
 def _handle_status(args: argparse.Namespace) -> int:
-    """Execute the ``lsp status`` command."""
-    workspace = _resolve_workspace(args.workspace)
+    """Execute the ``lsp status`` command via HTTP GET."""
+    ws = _resolve_workspace(args.workspace)
 
-    result = daemon_status(workspace)
-    print(result_to_output_json(result), flush=True)
-    return 0 if result.get("running") else 1
+    try:
+        result = asyncio.run(
+            _get("/lsp/status", {"workspace": str(ws)})
+        )
+        _print_json(result)
+        return 0 if result.get("running") else 1
+    except httpx.HTTPError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
