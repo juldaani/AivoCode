@@ -1,18 +1,30 @@
 # cli
 
-Thin UI layer for aivoCode tools. All processing lives in the corresponding packages — the CLI only parses arguments, calls the public API, and prints the result.
+Thin UI layer for aivoCode tools. The CLI parses arguments and sends HTTP
+requests to the REST API server — all processing happens server‑side. Each
+worktree runs its own CLI code via `python -m cli`; no global install needed.
 
 ## Commands
 
 ```
-python -m cli lsp <file> --symbols
+python -m cli lsp symbols <file> [--workspace PATH]
+python -m cli lsp start [--workspace PATH]
+python -m cli lsp stop [--workspace PATH]
+python -m cli lsp status [--workspace PATH]
 python -m cli webfetch <url> [options]
 python -m cli websearch <query> [options]
 ```
 
-Each worktree runs its own CLI code via `python -m cli` — no global `aivocode` install needed.
+The CLI connects to the REST API at `$AIVOCODE_URL` (defaults to
+`http://localhost:8000`).
 
-## Options
+## Flags
+
+### lsp
+
+All lsp subcommands accept `--workspace PATH` (override git‑based detection).
+
+### webfetch / websearch
 
 | Flag | Purpose |
 |---|---|

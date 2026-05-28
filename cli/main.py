@@ -1,10 +1,14 @@
 """AivoCode CLI entry point.
 
-Registered as the ``aivocode`` console_scripts entry point via ``pyproject.toml``.
+Primary usage: ``python -m cli <subcommand>`` from the repo root.
+Also available as the ``aivocode`` console_scripts entry point when
+installed via ``pip install -e .`` (PyPI distribution).
 
 Usage::
 
-    aivocode webfetch <url> [--wait-until ...]
+    python -m cli lsp symbols <file>
+    python -m cli webfetch <url>
+    python -m cli websearch <query>
 
 To add a new subcommand:
     1. Create ``cli/commands/<name>.py`` with ``add_subparser()`` and ``handle()``.

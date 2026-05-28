@@ -1,8 +1,9 @@
-"""AivoCode CLI — command-line interface for AI coding agents.
+"""AivoCode CLI — HTTP client for the aivocode REST API.
 
 Subcommands are registered via ``add_subparser()`` in each command module.
-Run as ``aivocode <subcommand>`` after ``pip install -e .`` or directly via
-``python -m cli <subcommand>``.
+Run as ``python -m cli <subcommand>`` from the repo root.  The CLI sends
+HTTP requests to the REST API server at ``$AIVOCODE_URL`` (default
+``http://localhost:8000``).
 
 To add a new command:
     1. Create ``cli/commands/<name>.py`` with ``add_subparser()`` and ``handle()``.
