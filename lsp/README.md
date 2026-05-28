@@ -1,19 +1,54 @@
 # lsp — Custom LSP Client for AivoCode
 
-A server-agnostic, config-driven Language Server Protocol (LSP) client built on top of [`lsp-client`](https://pypi.org/project/lsp-client/). Provides an async API for querying symbols, definitions, references, diagnostics, and more.
+A server-agnostic, config-driven Language Server Protocol (LSP) client built on top of [`lsp-client`](https://pypi.org/project/lsp-client/). Provides both low‑level `LspClient` access and a high‑level public API for one‑shot queries backed by a persistent daemon.
+
+## High‑Level Public API
+
+These are the entry points used by the CLI, REST API, and future MCP endpoint.
+They manage the daemon lifecycle (spawn, query via Unix socket, stop) and
+handle serialization — callers don't touch `LspClient` directly.
+
+```python
+from pathlib import Path
+from lsp import query_document_symbols, daemon_status, daemon_stop, result_to_output_json
+
+# One‑shot query — auto‑starts the daemon if needed
+result = await query_document_symbols(Path("src/utils.py"))
+print(result_to_output_json(result))
+# {"file": "/abs/...", "symbols": [...], "language": "python", ...}
+
+# Daemon management
+status = daemon_status(Path("/workspaces/my-project"))  # {"running": true/false, ...}
+daemon_stop(Path("/workspaces/my-project"))             # graceful shutdown
+```
+
+| Function | Type | Purpose |
+|---|---|---|
+| `query_document_symbols(file_path, *, workspace=None)` | `async → dict` | One‑shot document symbols query |
+| `daemon_status(workspace=None)` | `→ dict` | Check if the daemon is running |
+| `daemon_stop(workspace)` | `→ None` | Graceful shutdown |
+| `result_to_output_json(result)` | `→ str` | Serialize a result dict to a single‑line JSON string |
+| `detect_workspace(file_or_dir)` | `→ Path` | Git‑based workspace detection |
 
 ## Package Structure
 
 | Module | Visibility | Purpose |
 |---|---|---|
-| `__init__.py` | Public | Re-exports `LspClient`, `LanguageEntry`, `load_config`, `SYMBOL_KIND_NAMES` |
+| `__init__.py` | Public | Re‑exports `LspClient`, `LanguageEntry`, `load_config`, `SYMBOL_KIND_NAMES`, and the high‑level API |
 | `client.py` | Public | `LspClient` — the main async LSP client class |
 | `config.py` | Public | `LanguageEntry` dataclass + `load_config()` TOML parser |
-| `_symbols.py` | Internal | `SYMBOL_KIND_NAMES` — LSP SymbolKind integer → human-readable name |
+| `_daemon.py` | Internal | Persistent daemon lifecycle: `ensure_daemon()`, `send_query()`, `stop_daemon()`, and `_run_daemon()` |
+| `_protocol.py` | Internal | `Request`/`Response` types + LD‑JSON Unix socket transport |
+| `_serialize.py` | Internal | `DocumentSymbol` tree → plain dict + `result_to_output_json()` |
+| `_workspace.py` | Internal | `detect_workspace()` — git `rev-parse --show-toplevel` |
+| `_symbols.py` | Internal | `SYMBOL_KIND_NAMES` — LSP SymbolKind integer → human‑readable name |
 | `_translate.py` | Internal | Translates `file_watcher` events → LSP `FileEvent` objects |
 | `run_tst.py` | Script | Smoke test: connects to basedpyright and prints document symbols |
 
-## Quick Start
+## Low‑Level LspClient API
+
+Use `LspClient` directly when you need full control over the LSP lifecycle
+(custom servers, multi‑language, diagnostics, hover, etc.).
 
 ```python
 from pathlib import Path
