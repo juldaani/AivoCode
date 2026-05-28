@@ -75,12 +75,17 @@ Run CLI from the worktree you're working in:
 ```bash
 cd /workspaces/lsp-cli-endpoint
 AIVOCODE_URL=http://localhost:8000 python -m cli lsp symbols utils.py
+
+cd /workspaces/aivocode
+AIVOCODE_URL=http://localhost:8001 python -m cli lsp symbols some_file.py
 ```
 
-The default `AIVOCODE_URL=http://localhost:8000` means every worktree's CLI
-connects to its own server by default (as long as you use the default port
-in that worktree).  To query a different worktree, use absolute file paths
-and point to its server:
+Always set `AIVOCODE_URL` to point to the server for the worktree you're
+targeting.  The default `http://localhost:8000` is only correct when there
+is a single worktree or your primary worktree uses the default port.
+
+To query a different worktree, use absolute file paths and point to its
+server:
 
 ```bash
 cd /workspaces/lsp-cli-endpoint
