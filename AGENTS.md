@@ -47,19 +47,35 @@
 - For production: `fastapi run api_server/app.py`
 
 ### CLI
-- Run CLI commands: `python -m cli <subcommand> [args]` from the repo root.
-- There is no global `aivocode` install — each worktree runs its own CLI code.
-  Running `python -m cli` ensures imports resolve to the current worktree's
-  `cli/`, `lsp/`, `web_ops/`, and `file_watcher/` packages.
-- The CLI sends HTTP requests to the REST API server. Set `AIVOCODE_URL`
+- **Standalone install (recommended):** `bash cli/install.sh`
+  - Creates an isolated venv at `~/.aivocode-cli/` (zero impact on the conda env).
+  - Installs the CLI with a single dependency (`httpx`).
+  - Links `aivocode` to `~/.local/bin/` — run `aivocode lsp symbols ...` from anywhere.
+  - Works identically inside the aivocode devcontainer and in other devcontainers.
+- **Development mode:** `python -m cli <subcommand> [args]` from the repo root.
+  - Picks up uncommitted changes immediately — no reinstall needed.
+  - Imports resolve to the current worktree's `cli/` package.
+- The CLI sends HTTP requests to the REST API server. Set `$AIVOCODE_URL`
   to point to the correct server (defaults to `http://localhost:8000`).
-- Examples:
-  - `python -m cli lsp symbols mock_pkg/utils.py`
-  - `python -m cli lsp start`
-  - `python -m cli lsp stop`
-  - `python -m cli lsp status`
-  - `python -m cli webfetch https://example.com`
-  - `python -m cli websearch "python asyncio" --num-results 5`
+- The CLI has **zero local processing** — no imports from `lsp`, `web_ops`, or
+  `file_watcher`. Only `httpx` + stdlib. All logic lives server-side.
+- Workspace detection is **server-side** — the CLI sends absolute paths
+  (cwd or file path) and the server calls `detect_workspace()` via git.
+- `--pretty-format` is available on every subcommand for indented JSON output.
+
+Examples:
+  ```bash
+  # Standalone (after install.sh):
+  aivocode lsp symbols src/main.py
+  aivocode lsp status --pretty-format
+  aivocode webfetch https://example.com
+  aivocode websearch "python asyncio" --num-results 5
+
+  # Development (from repo root):
+  python -m cli lsp symbols mock_pkg/utils.py
+  python -m cli webfetch https://example.com
+  python -m cli websearch "python asyncio" --num-results 5
+  ```
 
 ### Development with multiple worktrees
 - Each worktree is self-contained: its own REST API server, its own daemon

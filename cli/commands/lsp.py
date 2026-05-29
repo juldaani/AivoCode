@@ -1,9 +1,8 @@
 """CLI subcommand: lsp — LSP daemon operations via REST API.
 
 Thin UI layer: parses CLI arguments and sends HTTP requests to the
-aivocode REST API server.  No daemon logic, workspace detection, or
-serialization lives here (workspace detection is a local git operation
-and stays).
+aivocode REST API server.  No daemon logic, no workspace detection —
+all business logic lives server-side.
 
 Commands
 - ``aivocode lsp symbols <file>``  — query document symbols
@@ -16,53 +15,30 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
-import os
-import sys
 from pathlib import Path
 
 import httpx
 
-from lsp._workspace import detect_workspace
+from cli._utils import _GLOBAL_OPTIONS, _get, _post, _print_json
 
 
-# ── HTTP transport ────────────────────────────────────────────────────
-
-_AIVOCODE_URL = os.environ.get("AIVOCODE_URL", "http://localhost:8000")
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _post(path: str, body: dict) -> dict:
-    """Send a POST request to the REST API, return parsed JSON."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(f"{_AIVOCODE_URL}{path}", json=body)
-        resp.raise_for_status()
-        return resp.json()
+def _resolve_path(args_workspace: str | None) -> str:
+    """Return an absolute path string for the workspace resolution hint.
 
-
-async def _get(path: str, params: dict) -> dict:
-    """Send a GET request to the REST API, return parsed JSON."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(f"{_AIVOCODE_URL}{path}", params=params)
-        resp.raise_for_status()
-        return resp.json()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────
-
-
-def _resolve_workspace(args_workspace: str | None) -> Path:
-    """Resolve workspace from --workspace flag or auto-detect from cwd."""
+    If ``--workspace`` is given, resolves it to absolute.  Otherwise
+    returns the current working directory as an absolute path.  The
+    server calls ``detect_workspace()`` on whatever path we send,
+    so we don't need git knowledge client-side.
+    """
     if args_workspace:
-        return Path(args_workspace).resolve()
-    return detect_workspace(Path.cwd())
+        return str(Path(args_workspace).resolve())
+    return str(Path.cwd())
 
 
-def _print_json(data: dict) -> None:
-    """Print a dict as a single-line JSON string to stdout."""
-    print(json.dumps(data, ensure_ascii=False), flush=True)
-
-
-# ── Subparser registration ────────────────────────────────────────────
+# ── Subparser registration ────────────────────────────────────────────────────
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
@@ -78,9 +54,10 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     lsp_sub.required = True
 
-    # ── symbols ──────────────────────────────────────────────────────
+    # ── symbols ────────────────────────────────────────────────────────
     sym_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "symbols",
+        parents=[_GLOBAL_OPTIONS],
         help="Query document symbols for a file.",
         description="Query document symbols from the LSP daemon and output as JSON.",
     )
@@ -94,15 +71,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         default=None,
         help=(
-            "Git repo root. Auto-detected via ``git rev-parse --show-toplevel`` "
-            "from the file path if not provided."
+            "Git repo root. Auto-detected server-side via "
+            "``git rev-parse --show-toplevel`` from the file path if not provided."
         ),
     )
     sym_parser.set_defaults(func=_handle_symbols)
 
-    # ── start ────────────────────────────────────────────────────────
+    # ── start ──────────────────────────────────────────────────────────
     start_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "start",
+        parents=[_GLOBAL_OPTIONS],
         help="Ensure the LSP daemon is running.",
         description=(
             "Start the LSP daemon for a workspace if not already running. "
@@ -114,15 +92,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         default=None,
         help=(
-            "Git repo root. Auto-detected from cwd "
-            "via ``git rev-parse --show-toplevel`` if not provided."
+            "Path within the git workspace (or the workspace itself). "
+            "Auto-detected server-side from cwd if not provided."
         ),
     )
     start_parser.set_defaults(func=_handle_start)
 
-    # ── stop ─────────────────────────────────────────────────────────
+    # ── stop ───────────────────────────────────────────────────────────
     stop_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "stop",
+        parents=[_GLOBAL_OPTIONS],
         help="Shut down the LSP daemon.",
         description="Gracefully shut down the LSP daemon for a workspace. Idempotent.",
     )
@@ -131,15 +110,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         default=None,
         help=(
-            "Git repo root. Auto-detected from cwd "
-            "via ``git rev-parse --show-toplevel`` if not provided."
+            "Path within the git workspace (or the workspace itself). "
+            "Auto-detected server-side from cwd if not provided."
         ),
     )
     stop_parser.set_defaults(func=_handle_stop)
 
-    # ── status ───────────────────────────────────────────────────────
+    # ── status ─────────────────────────────────────────────────────────
     status_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "status",
+        parents=[_GLOBAL_OPTIONS],
         help="Check LSP daemon health.",
         description="Check whether the LSP daemon is running for a workspace.",
     )
@@ -148,67 +128,68 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         default=None,
         help=(
-            "Git repo root. Auto-detected from cwd "
-            "via ``git rev-parse --show-toplevel`` if not provided."
+            "Path within the git workspace (or the workspace itself). "
+            "Auto-detected server-side from cwd if not provided."
         ),
     )
     status_parser.set_defaults(func=_handle_status)
 
 
-# ── Handlers ──────────────────────────────────────────────────────────
+# ── Handlers ──────────────────────────────────────────────────────────────────
 
 
 def _handle_symbols(args: argparse.Namespace) -> int:
     """Execute the ``lsp symbols`` command via HTTP POST."""
-    body: dict = {"file": args.file}
+    # Resolve file to absolute — server detects workspace from it.
+    file_abs = str(Path(args.file).resolve())
+
+    body: dict = {"file": file_abs}
     if args.workspace:
-        body["workspace"] = args.workspace
+        body["workspace"] = str(Path(args.workspace).resolve())
 
     try:
         result = asyncio.run(_post("/lsp/symbols", body))
-        _print_json(result)
+        _print_json(result, pretty=args.pretty_format)
         return 0 if result.get("error") is None else 1
-    except httpx.HTTPError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except httpx.HTTPError:
+        _print_json({"error": "REST API unavailable"}, pretty=args.pretty_format)
         return 1
 
 
 def _handle_start(args: argparse.Namespace) -> int:
     """Execute the ``lsp start`` command via HTTP POST."""
-    ws = _resolve_workspace(args.workspace)
+    ws = _resolve_path(args.workspace)
 
     try:
-        result = asyncio.run(_post("/lsp/start", {"workspace": str(ws)}))
-        _print_json(result)
+        result = asyncio.run(_post("/lsp/start", {"workspace": ws}))
+        _print_json(result, pretty=args.pretty_format)
         return 0
-    except httpx.HTTPError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except httpx.HTTPError:
+        _print_json({"error": "REST API unavailable"}, pretty=args.pretty_format)
         return 1
 
 
 def _handle_stop(args: argparse.Namespace) -> int:
     """Execute the ``lsp stop`` command via HTTP POST."""
-    ws = _resolve_workspace(args.workspace)
+    ws = _resolve_path(args.workspace)
 
     try:
-        result = asyncio.run(_post("/lsp/stop", {"workspace": str(ws)}))
-        _print_json(result)
+        result = asyncio.run(_post("/lsp/stop", {"workspace": ws}))
+        _print_json(result, pretty=args.pretty_format)
         return 0
-    except httpx.HTTPError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except httpx.HTTPError:
+        _print_json({"error": "REST API unavailable"}, pretty=args.pretty_format)
         return 1
 
 
 def _handle_status(args: argparse.Namespace) -> int:
     """Execute the ``lsp status`` command via HTTP GET."""
-    ws = _resolve_workspace(args.workspace)
+    ws = _resolve_path(args.workspace)
 
     try:
-        result = asyncio.run(
-            _get("/lsp/status", {"workspace": str(ws)})
-        )
-        _print_json(result)
+        result = asyncio.run(_get("/lsp/status", {"workspace": ws}))
+        _print_json(result, pretty=args.pretty_format)
         return 0 if result.get("running") else 1
-    except httpx.HTTPError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except httpx.HTTPError:
+        _print_json({"error": "REST API unavailable"}, pretty=args.pretty_format)
         return 1

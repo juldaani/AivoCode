@@ -1,17 +1,18 @@
-"""CLI subcommand: websearch — neural web/code search via the Exa Search API.
+"""CLI subcommand: websearch — neural web/code search via the REST API.
 
-Thin UI layer: parses CLI arguments, calls ``web_ops.web_search``, and prints
-the result as JSON.  No processing logic lives here.
+Thin UI layer: parses CLI arguments, sends an HTTP POST to the
+aivocode REST API, and prints the result as JSON.  No processing
+logic lives here — the server handles the Exa Search API.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import sys
 
-from web_ops import web_search
-from web_ops.searcher import result_to_output_json
+import httpx
+
+from cli._utils import _GLOBAL_OPTIONS, _post, _print_json
 
 
 _SEARCH_TYPE_CHOICES = (
@@ -28,6 +29,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``websearch`` command on the given subparser group."""
     parser: argparse.ArgumentParser = subparsers.add_parser(
         "websearch",
+        parents=[_GLOBAL_OPTIONS],
         help="Search the web or code via the Exa API.",
         description=(
             "Perform a neural web or code search using the Exa Search API "
@@ -75,31 +77,27 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=False,
         help="Return full page text for each result (default: highlights only).",
     )
-    parser.set_defaults(func=handle)
+    parser.set_defaults(func=_handle)
 
 
-def handle(args: argparse.Namespace) -> int:
-    """Execute the websearch command and return an exit code."""
-    # ── All processing delegated to web_ops ─────────────────────────────
-    result = asyncio.run(
-        web_search(
-            args.query,
-            type=args.type,
-            num_results=args.num_results,
-            highlights=not args.full_text,
-            text=args.full_text,
-            include_domains=args.include_domains,
-            exclude_domains=args.exclude_domains,
-        )
-    )
+def _handle(args: argparse.Namespace) -> int:
+    """Execute the websearch command via HTTP POST."""
+    body: dict = {
+        "query": args.query,
+        "type": args.type,
+        "num_results": args.num_results,
+        "highlights": not args.full_text,
+        "text": args.full_text,
+    }
+    if args.include_domains:
+        body["include_domains"] = args.include_domains
+    if args.exclude_domains:
+        body["exclude_domains"] = args.exclude_domains
 
-    print(result_to_output_json(result), flush=True)
-
-    if not result.success:
-        print(
-            f"websearch: error: {result.error}",
-            file=sys.stderr,
-            flush=True,
-        )
-
-    return 0 if result.success else 1
+    try:
+        result = asyncio.run(_post("/web_ops/websearch", body))
+        _print_json(result, pretty=args.pretty_format)
+        return 0 if result.get("success") else 1
+    except httpx.HTTPError:
+        _print_json({"error": "REST API unavailable"}, pretty=args.pretty_format)
+        return 1

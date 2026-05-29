@@ -1,25 +1,21 @@
-"""End-to-end tests: ``python -m cli lsp symbols`` via the REST API server.
+"""End-to-end tests: ``python -m cli lsp`` via the REST API server.
 
 What this tests
-- Start the REST API server on a free port.
+- Start the REST API server on a free port (shared fixture).
 - Run the CLI (as a subprocess) against the server.
 - Assert document symbols are returned correctly.
-- Shut down the server.
+- Shut down the server after the module completes.
 
-How to run
-    pytest tests/e2e/test_lsp_cli.py -v
+The shared server fixture lives in ``tests/e2e/conftest.py``.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import socket
 import subprocess
-import time
 from pathlib import Path
 
-import httpx
 import pytest
 
 # Repository root — needed to run the CLI with ``python -m cli``.
@@ -27,85 +23,15 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _TEST_FILE = "tests/data/mock_repos/python/mock_pkg/utils.py"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Port / server helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-def _find_free_port() -> int:
-    """Bind to port 0, return the OS-assigned port, then release it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _wait_for_server(url: str, timeout: float = 30.0) -> None:
-    """Poll ``GET /health`` until the server responds or *timeout* expires."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            resp = httpx.get(f"{url}/health", timeout=2.0)
-            if resp.status_code == 200:
-                return
-        except Exception:
-            pass
-        time.sleep(0.3)
-    raise RuntimeError(f"Server did not become ready within {timeout}s")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Module-scoped server fixture
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-@pytest.fixture(scope="module")
-def lsp_server():
-    """Start the REST API server on a free port, yield the URL, then stop it."""
-    port = _find_free_port()
-    url = f"http://127.0.0.1:{port}"
-
-    # Use uvicorn directly (not fastapi dev) for deterministic lifecycle.
-    proc = subprocess.Popen(
-        [
-            "uvicorn",
-            "api_server.app:app",
-            "--host", "127.0.0.1",
-            "--port", str(port),
-        ],
-        cwd=_REPO_ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env={**os.environ},
-    )
-
-    try:
-        _wait_for_server(url, timeout=45.0)
-        yield url
-    finally:
-        # ── Stop any running daemon first ──────────────────────────────
-        # The daemon is spawned with start_new_session=True, so it won't
-        # be killed when we terminate the uvicorn process.  Send a stop
-        # request to shut it down cleanly.
-        try:
-            httpx.post(f"{url}/lsp/stop", json={"workspace": str(_REPO_ROOT)}, timeout=10.0)
-        except Exception:
-            pass
-
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────────────────────────────────────
+# ── CLI helper ────────────────────────────────────────────────────────────────
 
 
 def _run_cli(lsp_server: str, *args: str) -> dict:
-    """Run ``python -m cli lsp <args>`` against *lsp_server* and return parsed JSON."""
+    """Run ``python -m cli lsp <args>`` against *lsp_server* and return parsed JSON.
+
+    The CLI no longer does client-side workspace detection — it sends
+    ``Path.cwd()`` as a hint and the server calls ``detect_workspace()``.
+    """
     env = {**os.environ, "AIVOCODE_URL": lsp_server}
     proc = subprocess.run(
         ["python", "-m", "cli", "lsp", *args],
@@ -118,9 +44,7 @@ def _run_cli(lsp_server: str, *args: str) -> dict:
     return json.loads(proc.stdout)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Tests
-# ──────────────────────────────────────────────────────────────────────────────
+# ── Tests ─────────────────────────────────────────────────────────────────────
 
 
 class TestLspSymbols:
@@ -170,6 +94,16 @@ class TestLspSymbols:
         child_names = {c["name"] for c in greeter["children"]}
         assert "greet" in child_names, f"greet method not found in Greeter children: {child_names}"
 
+    def test_symbols_use_absolute_path_in_response(
+        self, lsp_server: str
+    ) -> None:
+        """The server returns an absolute file path in the response."""
+        data = _run_cli(lsp_server, "symbols", _TEST_FILE)
+        assert "error" not in data, f"unexpected error: {data.get('error')}"
+        assert data["file"].startswith("/"), (
+            f"expected absolute path, got {data['file']}"
+        )
+
 
 class TestLspStatus:
     """End-to-end: ``lsp status``."""
@@ -210,3 +144,25 @@ class TestLspStartStop:
 
         status_data = _run_cli(lsp_server, "status")
         assert status_data.get("running") is True, f"status after start: {status_data}"
+
+
+class TestPrettyFormat:
+    """End-to-end: ``--pretty-format`` flag."""
+
+    def test_pretty_format_produces_multiline_output(
+        self, lsp_server: str
+    ) -> None:
+        """``--pretty-format`` produces indented (multi-line) JSON."""
+        env = {**os.environ, "AIVOCODE_URL": lsp_server}
+        proc = subprocess.run(
+            ["python", "-m", "cli", "lsp", "status", "--pretty-format"],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=env,
+        )
+        output = proc.stdout
+        assert "\n  " in output, (
+            f"expected indented JSON (multi-line), got: {output[:200]}"
+        )

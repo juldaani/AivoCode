@@ -22,9 +22,12 @@ CLI: python -m cli lsp symbols file.py       │
 ```
 
 - **REST API server** — FastAPI app in `api_server/`.  Thin routes wrapping
-  the `lsp` library.  Swagger docs at `http://localhost:8000/docs`.
-- **CLI** — `cli/commands/lsp.py`.  Sends HTTP requests to the REST API
-  (`$AIVOCODE_URL`, defaults to `http://localhost:8000`).  No daemon logic.
+  the `lsp` and `web_ops` libraries.  Swagger docs at `http://localhost:8000/docs`.
+- **CLI** — standalone package in `cli/`.  Sends HTTP requests to the REST API
+  (`$AIVOCODE_URL`, defaults to `http://localhost:8000`).  No daemon logic,
+  no web_ops imports — pure HTTP client with only `httpx` as a dependency.
+  Install once via `bash cli/install.sh` and run `aivocode lsp symbols ...`
+  from anywhere.
 - **Library** — `lsp/`.  Persistent daemon, workspace detection, symbol
   serialization.  Unchanged regardless of CLI / REST / MCP front‑end.
 
@@ -40,20 +43,45 @@ fastapi dev api_server/app.py
 
 For production: `fastapi run api_server/app.py`
 
-### 2. Run CLI commands (from the repo root)
+### 2. Install the CLI (one-time)
+
+```bash
+bash cli/install.sh
+```
+
+Creates an isolated venv at `~/.aivocode-cli/` (zero impact on the conda env),
+installs the CLI with a single dependency (`httpx`), and links `aivocode` to
+`~/.local/bin/`.
+
+### 3. Run CLI commands
 
 ```bash
 # Query document symbols (auto-starts the LSP daemon if needed)
-python -m cli lsp symbols tests/data/mock_repos/python/mock_pkg/utils.py
+aivocode lsp symbols tests/data/mock_repos/python/mock_pkg/utils.py
+
+# Fetch a URL
+aivocode webfetch https://example.com
+
+# Search the web
+aivocode websearch "python asyncio" --num-results 5
 
 # Manage the daemon
-python -m cli lsp start
-python -m cli lsp status
-python -m cli lsp stop
+aivocode lsp start
+aivocode lsp status
+aivocode lsp stop
+
+# Pretty-printed output (available on every subcommand)
+aivocode lsp status --pretty-format
 ```
 
 The CLI connects to the REST API at `$AIVOCODE_URL` (defaults to
 `http://localhost:8000`).
+
+**Development mode** (from the repo root, picks up uncommitted changes):
+
+```bash
+python -m cli lsp symbols tests/data/mock_repos/python/mock_pkg/utils.py
+```
 
 ## Development with Multiple Worktrees
 
@@ -74,10 +102,10 @@ Run CLI from the worktree you're working in:
 
 ```bash
 cd /workspaces/lsp-cli-endpoint
-AIVOCODE_URL=http://localhost:8000 python -m cli lsp symbols utils.py
+AIVOCODE_URL=http://localhost:8000 aivocode lsp symbols utils.py
 
 cd /workspaces/aivocode
-AIVOCODE_URL=http://localhost:8001 python -m cli lsp symbols some_file.py
+AIVOCODE_URL=http://localhost:8001 aivocode lsp symbols some_file.py
 ```
 
 Always set `AIVOCODE_URL` to point to the server for the worktree you're
@@ -89,11 +117,12 @@ server:
 
 ```bash
 cd /workspaces/lsp-cli-endpoint
-AIVOCODE_URL=http://localhost:8001 python -m cli lsp symbols /workspaces/aivocode/src/main.py
+AIVOCODE_URL=http://localhost:8001 aivocode lsp symbols /workspaces/aivocode/src/main.py
 ```
 
-There is **no global `aivocode` install** — `python -m cli` resolves
-imports from the current worktree's packages.
+The CLI can be installed once via `bash cli/install.sh` and works from any
+worktree — it's an HTTP client with zero local processing.  For development,
+use `python -m cli` from the repo root to pick up uncommitted changes.
 
 ## REST API Endpoints
 
@@ -104,6 +133,11 @@ imports from the current worktree's packages.
 | `POST` | `/lsp/start` | Ensure daemon is running `{"workspace": "..."}` |
 | `POST` | `/lsp/stop` | Graceful shutdown `{"workspace": "..."}` |
 | `GET` | `/lsp/status` | Daemon health `?workspace=...` |
+| `POST` | `/web_ops/webfetch` | Fetch a URL `{"url": "...", "wait_until?": "load", ...}` |
+| `POST` | `/web_ops/websearch` | Search web/code `{"query": "...", "num_results?": 10, ...}` |
+
+Workspace detection is **server-side** — the CLI sends absolute paths
+(cwd or file path), and the server calls `detect_workspace()` via git.
 
 ## Package Structure
 
@@ -113,8 +147,11 @@ api_server/          REST API server (FastAPI)
 └── routes/lsp.py    LSP route handlers
 
 cli/                 CLI (thin HTTP client)
-├── main.py          Entry point: python -m cli
-└── commands/        One module per subcommand
+├── pyproject.toml    Standalone package: aivocode-cli (dep: httpx only)
+├── install.sh        Isolated venv install script
+├── main.py           Entry point: python -m cli / aivocode
+├── _utils.py         Shared: HTTP transport, --pretty-format
+└── commands/         One module per subcommand
     ├── lsp.py
     ├── webfetch.py
     └── websearch.py
@@ -161,7 +198,9 @@ pytest tests/e2e/test_lsp_cli.py -v
 | Crash‑fast | Watcher or LSP crash → daemon exits → next query auto‑restarts fresh. Stale state is worse than a clean start. |
 | Thin layers everywhere | CLI, REST routes, public API — all ~10‑line wrappers. Library owns the logic. |
 | REST API, not direct import | Universal endpoint for CLI, MCP, browser consumers. Same API regardless of transport. |
-| `python -m cli`, no global install | Each worktree runs its own code. No cross‑contamination. |
+| Server‑side workspace detection | CLI sends absolute paths (cwd / file); server calls `detect_workspace()` via git. Zero git knowledge in CLI. |
+| Standalone CLI with isolated venv | `cli/install.sh` creates `~/.aivocode-cli/` — only `httpx` + stdlib. Zero impact on the devcontainer's conda env.
+| `python -m cli` for development | Picks up uncommitted changes immediately without reinstall.
 
 ## Gotchas
 
@@ -169,6 +208,9 @@ pytest tests/e2e/test_lsp_cli.py -v
   in any file that uses it (PEP 236).
 - **Unix socket path limit** is 108 bytes — the socket hash is truncated to
   24 hex chars to stay under the limit.
+- **Workspace detection** is server‑side. The CLI sends absolute paths
+  and the server calls `detect_workspace()` via git. No `lsp` imports in
+  the CLI at all.
 - **`detect_workspace()`** accepts both files and directories.  Passing
   `Path.cwd()` works for `start`/`stop`/`status`.
 - **File existence** is checked before calling the LSP server — missing
@@ -176,3 +218,6 @@ pytest tests/e2e/test_lsp_cli.py -v
   ExceptionGroup.
 - **Daemon `start_new_session=True`** means the daemon survives parent
   exit.  Tests clean up with `POST /lsp/stop` before killing the server.
+- **Standalone CLI isolation** — `cli/install.sh` creates a dedicated venv
+  at `~/.aivocode-cli/`. The `aivocode` console script automatically uses
+  that venv's Python via its shebang line. `httpx` lives only there.

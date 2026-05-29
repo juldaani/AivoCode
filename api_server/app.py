@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api_server.routes.lsp import router as lsp_router
+from api_server.routes.web_ops import router as web_ops_router
 
 app = FastAPI(title="aivocode", version="0.1.0")
 
@@ -23,6 +24,7 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 
 app.include_router(lsp_router)
+app.include_router(web_ops_router)
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

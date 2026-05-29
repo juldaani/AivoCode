@@ -1,0 +1,22 @@
+[project]
+name = "aivocode-cli"
+version = "0.1.0"
+description = "AivoCode CLI — thin HTTP client for the aivocode REST API"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28",
+]
+
+[project.scripts]
+aivocode = "cli.main:main"
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# The pyproject.toml lives *inside* the cli/ package directory (flat layout).
+# We use package-dir to point setuptools at "." as the package root, and
+# list packages explicitly since find_packages can't discover the root here.
+package-dir = {"cli" = "."}
+packages = ["cli", "cli.commands"]

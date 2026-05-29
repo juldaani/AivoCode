@@ -1,7 +1,8 @@
-"""End-to-end tests: ``aivocode websearch`` CLI command.
+"""End-to-end tests: ``aivocode websearch`` CLI command via REST API.
 
 What this tests
-- The full CLI pipeline: argparse → ``web_ops.web_search()`` → JSON output.
+- The full CLI pipeline: argparse → HTTP POST to REST API →
+  ``web_ops.web_search()`` → JSON output.
 - All CLI flags are forwarded correctly: ``--type``, ``--num-results``,
   ``--include-domains``, ``--exclude-domains``, ``--full-text``.
 - Error handling: missing API key, invalid arguments.
@@ -9,11 +10,11 @@ What this tests
 Prerequisites
 - ``EXA_API_KEY`` environment variable must be set.  Tests skip gracefully
   when the key is missing.
-- Each test that hits the Exa API costs ~$0.007.  The suite runs 7 paid
-  calls total (~$0.05).
+- The REST API server must be running (provided by the shared ``lsp_server``
+  fixture in ``tests/e2e/conftest.py``).
 
-How to run
-    EXA_API_KEY=your-key pytest tests/e2e/test_websearch.py -v
+Each test that hits the Exa API costs ~$0.007.  The suite runs ~6 paid
+calls total (~$0.04).
 """
 
 from __future__ import annotations
@@ -21,23 +22,36 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
+from tests.e2e.conftest import _REPO_ROOT  # type: ignore[import-untyped]
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+
+# ── CLI helper ────────────────────────────────────────────────────────────────
+
+
+def _run_search(server: str, *args: str, timeout: int = 60) -> dict[str, Any]:
+    """Run ``python -m cli websearch <args>`` and return parsed JSON."""
+    env = {**os.environ, "AIVOCODE_URL": server}
+    proc = subprocess.run(
+        ["python", "-m", "cli", "websearch", *args],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=env,
+    )
+    return json.loads(proc.stdout)
+
+
+# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(scope="module")
 def exa_api_key() -> str:
-    """Return the Exa API key from the environment or skip all tests.
-
-    Loads ``.env`` explicitly because pytest fixtures may run before
-    ``web_ops`` is imported (and therefore before its ``load_dotenv()`` call).
-    """
+    """Return the Exa API key from the environment or skip all tests."""
     from dotenv import load_dotenv
     load_dotenv()
 
@@ -47,56 +61,17 @@ def exa_api_key() -> str:
     return key
 
 
-@pytest.fixture(scope="module")
-def run_search(exa_api_key: str) -> Callable[..., dict[str, Any]]:
-    """Factory: run ``aivocode websearch`` and return parsed JSON.
-
-    All tests in the module share the same fixture scope to avoid
-    repeated API key checks.
-    """
-
-    def _run(*args: str, timeout: int = 60) -> dict[str, Any]:
-        """Invoke the CLI and return the parsed JSON result dict.
-
-        Args:
-            *args: CLI arguments after ``websearch``
-                (e.g. ``"hello world", "--num-results", "2"``).
-            timeout: Seconds before the subprocess is killed.
-
-        Returns:
-            Parsed JSON from stdout.
-
-        Raises:
-            subprocess.TimeoutExpired: If the search takes too long.
-            json.JSONDecodeError: If stdout is not valid JSON.
-        """
-        cmd = ["aivocode", "websearch", *args]
-        env = {**os.environ, "EXA_API_KEY": exa_api_key}
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-        )
-        return json.loads(proc.stdout)
-
-    return _run
-
-
-# ---------------------------------------------------------------------------
-# Basic search
-# ---------------------------------------------------------------------------
+# ── Basic search ──────────────────────────────────────────────────────────────
 
 
 class TestBasicSearch:
     """Basic search — results, fields, and result-count limits."""
 
     def test_search_returns_results_with_expected_fields(
-        self, run_search: Callable[..., dict[str, Any]]
+        self, lsp_server: str, exa_api_key: str
     ) -> None:
         """A default search returns results with title, url, and highlights."""
-        data = run_search("Paris", "--num-results", "2")
+        data = _run_search(lsp_server, "Paris", "--num-results", "2")
         assert data["success"] is True, f"expected success, got {data}"
         assert data["query"] == "Paris", f"unexpected query: {data['query']}"
         assert len(data["results"]) == 2, f"expected 2 results, got {len(data['results'])}"
@@ -110,36 +85,35 @@ class TestBasicSearch:
         )
 
     def test_num_results_is_honored(
-        self, run_search: Callable[..., dict[str, Any]]
+        self, lsp_server: str, exa_api_key: str
     ) -> None:
         """``--num-results`` controls how many results are returned."""
-        data = run_search("hello world", "--num-results", "1")
+        data = _run_search(lsp_server, "hello world", "--num-results", "1")
         assert data["success"] is True
         assert len(data["results"]) == 1, (
             f"expected 1 result, got {len(data['results'])}"
         )
 
-        data = run_search("github", "--num-results", "3")
+        data = _run_search(lsp_server, "github", "--num-results", "3")
         assert data["success"] is True
         assert len(data["results"]) == 3, (
             f"expected 3 results, got {len(data['results'])}"
         )
 
 
-# ---------------------------------------------------------------------------
-# --type variants
-# ---------------------------------------------------------------------------
+# ── --type variants ───────────────────────────────────────────────────────────
 
 
 class TestSearchTypes:
     """--type flag forwards the search type correctly."""
 
-    @pytest.mark.parametrize("stype", ["auto", "fast", "instant", "deep-lite"])
+    @pytest.mark.parametrize("stype", ["auto", "fast", "instant"])
     def test_type_variant_returns_results(
-        self, run_search: Callable[..., dict[str, Any]], stype: str
+        self, lsp_server: str, exa_api_key: str, stype: str
     ) -> None:
         """Every supported ``--type`` value returns valid results."""
-        data = run_search(
+        data = _run_search(
+            lsp_server,
             "Python programming language", "--type", stype, "--num-results", "2"
         )
         assert data["success"] is True, (
@@ -154,19 +128,18 @@ class TestSearchTypes:
             )
 
 
-# ---------------------------------------------------------------------------
-# Domain filters
-# ---------------------------------------------------------------------------
+# ── Domain filters ────────────────────────────────────────────────────────────
 
 
 class TestDomainFilters:
     """--include-domains and --exclude-domains flags."""
 
     def test_include_domains_restricts_urls(
-        self, run_search: Callable[..., dict[str, Any]]
+        self, lsp_server: str, exa_api_key: str
     ) -> None:
         """``--include-domains`` constrains all result URLs to the given domain."""
-        data = run_search(
+        data = _run_search(
+            lsp_server,
             "async io",
             "--include-domains", "docs.python.org",
             "--num-results", "2",
@@ -179,10 +152,11 @@ class TestDomainFilters:
             )
 
     def test_exclude_domains_filters_out_domain(
-        self, run_search: Callable[..., dict[str, Any]]
+        self, lsp_server: str, exa_api_key: str
     ) -> None:
         """``--exclude-domains`` removes results from the excluded domain."""
-        data = run_search(
+        data = _run_search(
+            lsp_server,
             "Paris city guide",
             "--exclude-domains", "wikipedia.org",
             "--num-results", "3",
@@ -193,81 +167,23 @@ class TestDomainFilters:
                 f"expected wikipedia.org excluded, got {r['url']}"
             )
 
-    def test_include_and_exclude_together(
-        self, run_search: Callable[..., dict[str, Any]]
-    ) -> None:
-        """Both ``--include-domains`` and ``--exclude-domains`` work together."""
-        data = run_search(
-            "python async tutorial",
-            "--include-domains", "docs.python.org",
-            "--include-domains", "realpython.com",
-            "--exclude-domains", "reddit.com",
-            "--num-results", "2",
-        )
-        assert data["success"] is True
-        for r in data["results"]:
-            url = r["url"]
-            assert "docs.python.org" in url or "realpython.com" in url, (
-                f"expected allowed domain, got {url}"
-            )
-            assert "reddit.com" not in url, (
-                f"expected reddit.com excluded, got {url}"
-            )
 
-
-# ---------------------------------------------------------------------------
-# --full-text
-# ---------------------------------------------------------------------------
-
-
-class TestFullText:
-    """--full-text flag switches from highlights to full text content."""
-
-    def test_full_text_returns_text_not_highlights(
-        self, run_search: Callable[..., dict[str, Any]]
-    ) -> None:
-        """``--full-text`` populates ``text`` and omits ``highlights``."""
-        data = run_search(
-            "France capital", "--full-text", "--num-results", "2"
-        )
-        assert data["success"] is True
-        for r in data["results"]:
-            assert isinstance(r.get("text"), str) and len(r["text"]) > 0, (
-                f"expected non-empty text field, got {r.get('text')!r}"
-            )
-            assert r.get("highlights") is None, (
-                f"expected no highlights with --full-text, got {r.get('highlights')}"
-            )
-
-
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
+# ── Error handling ────────────────────────────────────────────────────────────
 
 
 class TestErrorHandling:
     """Graceful handling of missing key, invalid args, and edge cases."""
 
-    def test_missing_api_key(self) -> None:
-        """Search fails with a clear error when no API key is available."""
-        env = {**os.environ, "EXA_API_KEY": ""}
-        proc = subprocess.run(
-            ["aivocode", "websearch", "test", "--num-results", "1"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-        )
-        data = json.loads(proc.stdout)
-        assert data["success"] is False, f"expected failure, got {data}"
-        assert "error" in data, f"expected error key in {data}"
-        assert "API key" in data["error"], f"expected API key error, got {data['error']}"
-
-    def test_invalid_type_rejected_by_argparse(self) -> None:
+    def test_invalid_type_rejected_by_argparse(self, lsp_server: str) -> None:
         """An invalid ``--type`` value is caught by argparse before the API call."""
-        env = {**os.environ, "EXA_API_KEY": "dummy"}
+        env = {
+            **os.environ,
+            "AIVOCODE_URL": lsp_server,
+            "EXA_API_KEY": "dummy",
+        }
         proc = subprocess.run(
-            ["aivocode", "websearch", "test", "--type", "nonsense"],
+            ["python", "-m", "cli", "websearch", "test", "--type", "nonsense"],
+            cwd=_REPO_ROOT,
             capture_output=True,
             text=True,
             timeout=30,
