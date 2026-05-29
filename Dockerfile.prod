@@ -1,0 +1,30 @@
+# AivoCode production container — REST API server.
+#
+# Shares the identical environment setup with the devcontainer
+# (same environment.yml + setup.sh).  Entry point: fastapi run.
+#
+# In docker-compose the workspace volume is mounted at /workspace/
+# so the LSP daemon and file watcher see real repo files.
+# Path translation is unnecessary — both containers use /workspace/.
+#
+# Build:
+#   docker build -f Dockerfile.prod -t aivocode:latest .
+#
+# Run (standalone):
+#   docker run -p 8000:8000 -v /path/to/repos:/workspace aivocode:latest
+#
+FROM ghcr.io/slamengine/base-images/cpu-dev:latest
+
+# ── Environment ───────────────────────────────────────────────────────────────
+COPY .devcontainer/environment.yml .devcontainer/setup.sh /tmp/setup/
+RUN bash /tmp/setup/setup.sh
+
+# ── Application code ──────────────────────────────────────────────────────────
+COPY . /workspace/
+WORKDIR /workspace
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+# micromamba run activates the conda env for the fastapi process.
+# fastapi run is the production server (no auto-reload).
+ENTRYPOINT ["micromamba", "run", "-n", "env-aivocode", "fastapi", "run", "api_server/app.py"]
+EXPOSE 8000
