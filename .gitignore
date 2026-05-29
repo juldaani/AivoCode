@@ -209,5 +209,5 @@ __marimo__/
 
 tmp/
 
-# LSP daemon runtime files (sockets, logs)
-logs/
+# Aivocode daemon runtime files (sockets, logs) — per-workspace .aivocode/
+.aivocode/

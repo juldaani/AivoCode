@@ -36,7 +36,7 @@ Why this exists
 
 How it works
 - Client: `ensure_daemon(workspace)` checks for a Unix socket at
-  ``<workspace>/logs/lsp/daemons/<sha256>.sock``.  If missing or unresponsive,
+  ``<workspace>/.aivocode/daemons/<sha256>.sock``.  If missing or unresponsive,
   spawns ``sys.executable <path/to/_daemon.py> <workspace> <socket>``.
   Then sends LD‑JSON requests via the socket.
 - Daemon: asyncio event loop running three concurrent tasks:
@@ -68,17 +68,19 @@ from lsp._serialize import _symbol_tree_to_dict
 from lsp.client import LspClient
 from lsp.config import LanguageEntry
 
-# ── Per-workspace log/socket directory layout ────────────────────────────────
-# All aivocode-related runtime files live under <workspace>/logs/lsp/.
-# This keeps them colocated with the workspace, easy to find and clean up.
+# ── Per-workspace runtime directory layout ────────────────────────────────────
+# All aivocode runtime files live under <workspace>/.aivocode/ — a dot-directory
+# at the workspace root (like .git/).  This keeps daemon sockets and log files
+# colocated with the workspace while clearly separating them from source code.
+# .aivocode/ is gitignored so runtime artifacts never end up in the repo.
 
 _SOCKET_SUBDIR = "daemons"
 _LOG_SUBDIR = "logs"
 
 
 def _aivocode_dir(workspace: Path, *subdirs: str) -> Path:
-    """Return and create ``<workspace>/logs/lsp/<subdirs...>``."""
-    d = workspace.resolve() / "logs" / "lsp"
+    """Return and create ``<workspace>/.aivocode/<subdirs...>``."""
+    d = workspace.resolve() / ".aivocode"
     for s in subdirs:
         d = d / s
     d.mkdir(parents=True, exist_ok=True)
