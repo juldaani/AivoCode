@@ -3,9 +3,9 @@
 # Shares the identical environment setup with the devcontainer
 # (same environment.yml + setup.sh).  Entry point: fastapi run.
 #
-# In docker-compose the workspace volume is mounted at /workspace/
-# so the LSP daemon and file watcher see real repo files.
-# Path translation is unnecessary — both containers use /workspace/.
+# In docker-compose the workspace volume is mounted so the LSP daemon
+# and file watcher see real repo files.  Both containers should use the
+# same mount path so the CLI can send absolute paths without translation.
 #
 # Build:
 #   docker build -f Dockerfile.prod -t aivocode:latest .
@@ -20,8 +20,8 @@ COPY .devcontainer/environment.yml .devcontainer/setup.sh /tmp/setup/
 RUN bash /tmp/setup/setup.sh
 
 # ── Application code ──────────────────────────────────────────────────────────
-COPY . /workspace/
-WORKDIR /workspace
+COPY . /aivocode/
+WORKDIR /aivocode
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 # micromamba run activates the conda env for the fastapi process.
