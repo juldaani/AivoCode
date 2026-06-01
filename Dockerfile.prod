@@ -3,7 +3,7 @@
 # Shares the identical environment setup with the devcontainer
 # (same environment.yml + setup.sh).  Entry point: fastapi run.
 #
-# In docker-compose the workspace volume is mounted so the LSP daemon
+# In docker-compose (in .devcontainer/) the workspace volume is mounted so the LSP daemon
 # and file watcher see real repo files.  Both containers should use the
 # same mount path so the CLI can send absolute paths without translation.
 #

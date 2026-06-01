@@ -16,9 +16,9 @@ import httpx
 import pytest
 from dotenv import load_dotenv
 
-# Load .env at the repo root so that EXA_API_KEY (and any future secrets)
+# Load .aivocode.env at the repo root so that EXA_API_KEY (and any future secrets)
 # are available to all E2E tests and the uvicorn server subprocess.
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent.parent / ".aivocode.env")
 
 # Repository root — needed to run the CLI via ``python -m cli`` and to
 # start the uvicorn server from the correct working directory.

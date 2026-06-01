@@ -28,11 +28,13 @@ See Also
 - ``web_ops.searcher`` for the search module documentation.
 """
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-# Load secrets from .env file at the project root (e.g. EXA_API_KEY).
+# Load secrets from .aivocode.env file at the project root (e.g. EXA_API_KEY).
 # Must run before sub-module imports in case they read env vars at import time.
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".aivocode.env")
 
 from web_ops.fetcher import FetchResult, fetch_urls  # noqa: E402
 from web_ops.searcher import ResultItem, SearchResult, web_search  # noqa: E402

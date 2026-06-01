@@ -21,7 +21,8 @@ conda env or system Python.
 After install:
 
 ```bash
-export AIVOCODE_URL=http://localhost:8000   # or http://aivocode:8080 in docker-compose
+# Default is http://aivocode:8000 (compose service name). Override for local dev:
+export AIVOCODE_URL=http://localhost:8000
 aivocode lsp symbols src/main.py
 aivocode webfetch https://example.com
 aivocode websearch "python asyncio"
@@ -39,7 +40,7 @@ aivocode websearch <query> [options] [--pretty-format]
 ```
 
 The CLI connects to the REST API at ``$AIVOCODE_URL`` (defaults to
-``http://localhost:8000``).
+``http://aivocode:8000`` — the compose service name; override via env var for local dev).
 
 ## Global flag: ``--pretty-format``
 

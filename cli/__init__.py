@@ -3,7 +3,7 @@
 Subcommands are registered via ``add_subparser()`` in each command module.
 Run as ``python -m cli <subcommand>`` from the repo root.  The CLI sends
 HTTP requests to the REST API server at ``$AIVOCODE_URL`` (default
-``http://localhost:8000``).
+``http://aivocode:8000`` — the compose service name; override for local dev).
 
 To add a new command:
     1. Create ``cli/commands/<name>.py`` with ``add_subparser()`` and ``handle()``.

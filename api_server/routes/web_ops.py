@@ -82,7 +82,7 @@ async def websearch(body: WebsearchBody):
     """Search the web or code via the Exa Search API.
 
     All parameters mirror the ``web_search()`` public API.  Requires
-    ``EXA_API_KEY`` in the server environment (loaded from ``.env``).
+    ``EXA_API_KEY`` in the server environment (loaded from ``.aivocode.env``).
     """
     result = await web_search(
         body.query,

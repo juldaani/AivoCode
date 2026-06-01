@@ -1,7 +1,8 @@
 """Shared CLI utilities — HTTP transport, JSON output, and global argparse options.
 
 What this module provides
-- ``_AIVOCODE_URL``: the REST API base URL (from ``$AIVOCODE_URL`` env var).
+- ``_AIVOCODE_URL``: the REST API base URL (from ``$AIVOCODE_URL`` env var,
+  defaults to ``http://aivocode:8000`` — the compose service name).
 - ``_post(path, body)``: async HTTP POST returning parsed JSON.
 - ``_get(path, params)``: async HTTP GET returning parsed JSON.
 - ``_print_json(data, *, pretty)``: print a dict as JSON to stdout.
@@ -40,7 +41,7 @@ import httpx
 
 # ── REST API endpoint ─────────────────────────────────────────────────────────
 
-_AIVOCODE_URL: str = os.environ.get("AIVOCODE_URL", "http://localhost:8000")
+_AIVOCODE_URL: str = os.environ.get("AIVOCODE_URL", "http://aivocode:8000")
 
 
 async def _post(path: str, body: dict) -> dict:

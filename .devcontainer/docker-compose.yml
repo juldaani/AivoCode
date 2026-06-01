@@ -2,34 +2,32 @@
 #
 # /workspaces is a shared named volume — any new subdirectories created
 # in one container are immediately visible in the other.
-# The AivoCode repo is bind-mounted at /workspaces/AivoCode in both.
+# The AivoCode repo is bind-mounted at /workspaces/aivocode in both.
 #
 # Usage:
-#   docker compose up -d                    # start both
-#   docker compose exec devcontainer bash   # shell into dev env
-#   docker compose down                     # stop both
+#   docker compose -f .devcontainer/docker-compose.yml up -d
+#   docker compose -f .devcontainer/docker-compose.yml exec devcontainer bash
+#   docker compose -f .devcontainer/docker-compose.yml down
 services:
   aivocode:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.prod
     ports:
       - "8000:8000"
     volumes:
       - workspaces:/workspaces
-      - .:/workspaces/aivocode
-    # env_file:
-    #   - .env    # uncomment if you have EXA_API_KEY set in .env
+      - ..:/workspaces/aivocode
+    env_file:
+      - ../.aivocode.env
 
   devcontainer:
     build:
-      context: .devcontainer
+      context: .
       dockerfile: Dockerfile
     volumes:
       - workspaces:/workspaces
-      - .:/workspaces/aivocode
-    environment:
-      - AIVOCODE_URL=http://aivocode:8000
+      - ..:/workspaces/aivocode
     command: sleep infinity
     depends_on:
       - aivocode
