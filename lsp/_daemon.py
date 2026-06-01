@@ -39,12 +39,16 @@ How it works
   ``<workspace>/.aivocode/daemons/<sha256>.sock``.  If missing or unresponsive,
   spawns ``sys.executable <path/to/_daemon.py> <workspace> <socket>``.
   Then sends LD‑JSON requests via the socket.
-- Daemon: asyncio event loop running three concurrent tasks:
+- Daemon: asyncio event loop running four concurrent tasks:
   1. **file watcher**: ``awatch_repos`` with ``force_polling=True``.
      Forwards every batch to ``client.notify_file_changes()``.
   2. **Unix socket server**: accepts connections, reads one line, dispatches
      by method name, writes one response line.
-  3. **LspClient**: kept alive as async context manager.  Query methods
+  3. **idle watcher**: periodically checks the time since the last client
+     query.  If it exceeds ``_IDLE_TIMEOUT`` (default 600 s), triggers a
+     graceful shutdown to free resources.  Controlled by env var
+     ``AIVOCODE_DAEMON_IDLE_TIMEOUT``.
+  4. **LspClient**: kept alive as async context manager.  Query methods
      (e.g. ``request_document_symbol_list``) are called synchronously within
      the socket handler (the handler is inside the context manager).
 
@@ -116,6 +120,14 @@ _DEFAULT_PYTHON_LANG = LanguageEntry(
 )
 
 logger = logging.getLogger(__name__)
+
+# ── Idle shutdown ─────────────────────────────────────────────────────────────
+# After _IDLE_TIMEOUT seconds of no client queries, the daemon shuts itself
+# down to free resources.  The next incoming query transparently auto-starts
+# a fresh daemon via ensure_daemon().  Set AIVOCODE_DAEMON_IDLE_TIMEOUT env
+# var to override (e.g. "15" for testing, "600" for 10‑minute production default).
+
+_IDLE_TIMEOUT = float(os.environ.get("AIVOCODE_DAEMON_IDLE_TIMEOUT", "600"))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -295,26 +307,35 @@ async def _run_daemon(
     socket_path: Path,
     lang_entry: LanguageEntry,
 ) -> None:
-    """Main daemon loop — runs until shutdown or a component crash.
+    """Main daemon loop — runs until shutdown, idle timeout, or a component crash.
 
     Crash-fast design: if the file watcher or LSP server fails, the entire
     daemon shuts down.  The next incoming CLI query will auto-start a fresh
     daemon via :func:`ensure_daemon`.  There is no retry — stale state
     (e.g. watcher out of sync with LSP index) is worse than a clean restart.
 
-    Failure paths:
-    - Watcher crash → ``server.close()`` → ``serve_forever()`` returns → exit.
-    - Client sends ``"shutdown"`` → ``server.close()`` → exit (graceful).
-    - LspClient crash → exception in ``async with`` → ``finally`` cleans up.
+    Shutdown paths (any of these close the server):
+    - **Idle timeout**: no client query for ``_IDLE_TIMEOUT`` seconds
+      (default 600 s / 10 min, overridable via ``AIVOCODE_DAEMON_IDLE_TIMEOUT``).
+    - **Watcher crash**: ``server.close()`` → ``serve_forever()`` returns → exit.
+    - **Client ``"shutdown"``**: ``server.close()`` → exit (graceful).
+    - **LspClient crash**: exception in ``async with`` → ``finally`` cleans up.
     """
     socket_path.unlink(missing_ok=True)
 
     # ── server_ref — mutable closure capture ───────────────────────────
-    # The watcher and socket handler both need to close the server to
-    # trigger daemon shutdown.  The server instance doesn't exist yet when
-    # these functions are defined, so we capture a mutable cell and assign
-    # it after ``start_unix_server``.
+    # The watcher, socket handler, and idle watcher all need to close the
+    # server to trigger daemon shutdown.  The server instance doesn't exist
+    # yet when these functions are defined, so we capture a mutable cell and
+    # assign it after ``start_unix_server``.
     server_ref: asyncio.AbstractServer | None = None
+
+    # ── last_activity — monotonic timestamp for idle shutdown ───────────
+    # Updated by _handle_client on every client query.  The idle watcher
+    # task periodically checks if (_now - last_activity) > _IDLE_TIMEOUT
+    # and calls server_ref.close() if so.  Initialized to "now" so the
+    # daemon isn't killed before it even starts listening.
+    last_activity: float = time.monotonic()
 
     async with LspClient(lang_entry=lang_entry, workspace=workspace) as client:
         logger.info(
@@ -348,6 +369,28 @@ async def _run_daemon(
                 if server_ref is not None:
                     server_ref.close()
 
+        # ── Task 3: Idle watcher ───────────────────────────────────────
+        # Periodically checks whether the daemon has been idle (no client
+        # queries) for longer than _IDLE_TIMEOUT.  If so, triggers a
+        # graceful shutdown.  The check interval is 1/3 of the timeout
+        # (capped at 30 s) so we detect idle promptly without busy-waiting.
+
+        async def _idle_watcher() -> None:
+            check_interval = min(_IDLE_TIMEOUT / 3, 30.0)
+            while True:
+                await asyncio.sleep(check_interval)
+                elapsed = time.monotonic() - last_activity
+                if elapsed >= _IDLE_TIMEOUT:
+                    logger.info(
+                        "Idle timeout reached (%.0fs elapsed, limit=%.0fs) — "
+                        "shutting down daemon",
+                        elapsed,
+                        _IDLE_TIMEOUT,
+                    )
+                    if server_ref is not None:
+                        server_ref.close()
+                    return
+
         # ── Task 2: Socket server ──────────────────────────────────────
 
         async def _handle_client(
@@ -355,6 +398,7 @@ async def _run_daemon(
             writer: asyncio.StreamWriter,
         ) -> None:
             """Handle one client: read request → dispatch → write response."""
+            nonlocal last_activity
             try:
                 line = await asyncio.wait_for(reader.readline(), timeout=30.0)
                 if not line:
@@ -363,6 +407,11 @@ async def _run_daemon(
                 raw = line.decode("utf-8").strip()
                 if not raw:
                     return
+
+                # ── Reset idle timer on every client request ───────────
+                # Any query (ping, symbols, status, etc.) counts as activity
+                # and resets the idle shutdown clock.
+                last_activity = time.monotonic()
 
                 try:
                     req_data = json.loads(raw)
@@ -489,18 +538,21 @@ async def _run_daemon(
 
         # ── Run until shutdown ─────────────────────────────────────────
         # Block on serve_forever().  Returns when:
+        # - Idle timeout reached → idle watcher calls server_ref.close().
         # - Watcher crashes → server_ref.close() was called.
         # - Client sends "shutdown" → server_ref.close() was called.
         # - LspClient crashes → exception in async with → finally below.
         watcher_task = asyncio.create_task(_watcher_loop())
+        idle_task = asyncio.create_task(_idle_watcher())
 
         try:
             await server.serve_forever()
         finally:
             logger.info("Daemon shutting down...")
+            idle_task.cancel()
             watcher_task.cancel()
             try:
-                await watcher_task
+                await asyncio.gather(idle_task, watcher_task, return_exceptions=True)
             except asyncio.CancelledError:
                 pass
             server.close()
