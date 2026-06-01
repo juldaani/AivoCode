@@ -1,0 +1,37 @@
+# AivoCode docker-compose stack — devcontainer + REST API server.
+#
+# /workspaces is a shared named volume — any new subdirectories created
+# in one container are immediately visible in the other.
+# The AivoCode repo is bind-mounted at /workspaces/AivoCode in both.
+#
+# Usage:
+#   docker compose up -d                    # start both
+#   docker compose exec devcontainer bash   # shell into dev env
+#   docker compose down                     # stop both
+services:
+  aivocode:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - workspaces:/workspaces
+    # env_file:
+    #   - .env    # uncomment if you have EXA_API_KEY set in .env
+
+  devcontainer:
+    build:
+      context: .devcontainer
+      dockerfile: Dockerfile
+    volumes:
+      - workspaces:/workspaces
+      - .:/workspaces/aivocode
+    environment:
+      - AIVOCODE_URL=http://aivocode:8000
+    command: sleep infinity
+    depends_on:
+      - aivocode
+
+volumes:
+  workspaces:
