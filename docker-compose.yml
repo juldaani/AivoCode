@@ -17,6 +17,7 @@ services:
       - "8000:8000"
     volumes:
       - workspaces:/workspaces
+      - .:/workspaces/aivocode
     # env_file:
     #   - .env    # uncomment if you have EXA_API_KEY set in .env
 
