@@ -104,6 +104,60 @@ class TestLspSymbols:
             f"expected absolute path, got {data['file']}"
         )
 
+    def test_symbols_have_one_indexed_positions(
+        self, lsp_server: str
+    ) -> None:
+        """Symbol line/character positions are 1-indexed (editor-friendly).
+
+        LSP protocol uses 0-indexed positions internally, but all consumers
+        (editors, shell tools, agent read-offset) expect 1-indexed values.
+        The serializer MUST add +1 to every line and character integer so
+        that the output can be used directly with ``read offset=N``,
+        ``sed -n 'Np'``, VS Code cursor position, etc.
+        """
+        data = _run_cli(lsp_server, "symbols", _TEST_FILE)
+        assert "error" not in data, f"unexpected error: {data.get('error')}"
+
+        symbols = data["symbols"]
+        by_name: dict[str, dict] = {s["name"]: s for s in symbols}
+
+        # ── MAX_RETRIES: file line 8, no indent → character 1 (1‑idx) ──
+        mr = by_name.get("MAX_RETRIES")
+        assert mr is not None, "MAX_RETRIES not found"
+        assert mr["range"]["start"]["line"] == 8, (
+            f"MAX_RETRIES line: expected 8, got {mr['range']['start']['line']}"
+        )
+        assert mr["range"]["start"]["character"] == 1, (
+            f"MAX_RETRIES character: expected 1, got {mr['range']['start']['character']}"
+        )
+
+        # ── Greeter: file line 43 ───────────────────────────────────────
+        greeter = by_name.get("Greeter")
+        assert greeter is not None, "Greeter not found"
+        assert greeter["range"]["start"]["line"] == 43, (
+            f"Greeter line: expected 43, got {greeter['range']['start']['line']}"
+        )
+
+        # ── Greeter.greet (child): file line 44, 4-space indent → char 5 ─
+        greet = next(
+            (c for c in greeter.get("children", []) if c["name"] == "greet"), None
+        )
+        assert greet is not None, "greet method not found in Greeter children"
+        assert greet["range"]["start"]["line"] == 44, (
+            f"greet line: expected 44, got {greet['range']['start']['line']}"
+        )
+        assert greet["range"]["start"]["character"] == 5, (
+            f"greet character: expected 5 (0‑idx 4 + 1), "
+            f"got {greet['range']['start']['character']}"
+        )
+
+        # ── hello: file line 14 ─────────────────────────────────────────
+        hello = by_name.get("hello")
+        assert hello is not None, "hello not found"
+        assert hello["range"]["start"]["line"] == 14, (
+            f"hello line: expected 14, got {hello['range']['start']['line']}"
+        )
+
 
 class TestLspStatus:
     """End-to-end: ``lsp status``."""

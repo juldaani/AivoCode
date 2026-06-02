@@ -68,7 +68,11 @@ import time
 from pathlib import Path
 
 from lsp._protocol import Request, Response, ping, send_request
-from lsp._serialize import _lsp_result_to_json, _symbol_tree_to_dict
+from lsp._serialize import (
+    _lsp_result_to_json,
+    _normalize_positions_to_one_indexed,
+    _symbol_tree_to_dict,
+)
 from lsp.client import LspClient
 from lsp.config import LanguageEntry
 from lsp_client.utils.types import lsp_type  # for Position(line, character)
@@ -776,6 +780,15 @@ async def _run_daemon(
                                 "message": f"Unknown method: {method}",
                             },
                         }
+
+                # ── Convert LSP positions to 1‑indexed ──────────────────
+                # LSP protocol uses 0‑indexed line/character internally.
+                # All consumers (editors, shell tools, agent read-offset)
+                # expect 1‑indexed values.  Normalize before serializing.
+                if "result" in resp:
+                    resp["result"] = _normalize_positions_to_one_indexed(
+                        resp["result"]
+                    )
 
                 writer.write(
                     (json.dumps(resp, ensure_ascii=False) + "\n").encode()

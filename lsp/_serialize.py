@@ -36,6 +36,57 @@ import attr
 from lsp._symbols import SYMBOL_KIND_NAMES
 
 
+def _normalize_positions_to_one_indexed(data: Any) -> Any:
+    """Recursively convert LSP 0-indexed positions to 1-indexed in-place.
+
+    The LSP protocol uses 0-indexed line/character values internally, but
+    all practical consumers (editors, shell tools, agent ``read`` offset)
+    expect 1-indexed values.  This function walks the result tree and adds
+    1 to every ``line`` and ``character`` integer inside any Position-like
+    dict (a dict that has BOTH ``line`` and ``character`` keys whose values
+    are ``int``).
+
+    This intentionally does NOT match the metadata ``line``/``character``
+    strings that the daemon attaches to positional query results (those are
+    ``str``, not ``int``), so they are left untouched.
+
+    Parameters
+    ----------
+    data : Any
+        A dict, list, or primitive — typically the output of
+        ``_symbol_tree_to_dict`` or ``_lsp_result_to_json``.
+
+    Returns
+    -------
+    Any
+        A new value with all LSP Position line/character values +1'd.
+        Primitives and non-matching dicts are returned as-is.
+    """
+    if data is None:
+        return None
+    if isinstance(data, (bool, int, float, str)):
+        return data
+    if isinstance(data, dict):
+        # Detect a Position-like dict: exactly 'line' + 'character', both ints.
+        # LSP spec: ``Position = { line: uint, character: uint }``.
+        # Metadata line/character in positional results are str, not int,
+        # so they are naturally skipped by the isinstance check.
+        if "line" in data and "character" in data \
+                and isinstance(data.get("line"), int) \
+                and isinstance(data.get("character"), int):
+            return {
+                **data,
+                "line": data["line"] + 1,
+                "character": data["character"] + 1,
+            }
+        # Not a Position — recurse into values.
+        return {k: _normalize_positions_to_one_indexed(v) for k, v in data.items()}
+    if isinstance(data, (list, tuple)):
+        return [_normalize_positions_to_one_indexed(x) for x in data]
+    # Fallback — shouldn't be reached in normal LSP data.
+    return data
+
+
 def _lsp_result_to_json(obj: Any) -> Any:
     """Convert any LSP return value to a JSON-safe dict, list, or primitive.
 
