@@ -22,6 +22,16 @@ from lsp import (
     daemon_stop,
     detect_workspace,
     query_document_symbols,
+    # New LSP methods.
+    query_definition,
+    query_type_definition,
+    query_references,
+    query_hover,
+    query_call_hierarchy_incoming,
+    query_call_hierarchy_outgoing,
+    query_rename_edits,
+    query_workspace_symbol,
+    query_diagnostics,
 )
 from lsp._daemon import ensure_daemon
 
@@ -47,6 +57,43 @@ class WorkspaceBody(BaseModel):
     """
 
     workspace: str
+
+
+class PositionBody(BaseModel):
+    """Request body for position-based queries.
+
+    Used by /lsp/definition, /lsp/type-definition, /lsp/references,
+    /lsp/hover, /lsp/call-hierarchy-incoming, /lsp/call-hierarchy-outgoing.
+    """
+
+    file: str
+    line: int
+    character: int
+    workspace: str | None = None
+
+
+class WorkspaceSymbolBody(BaseModel):
+    """Request body for POST /lsp/workspace-symbol."""
+
+    query: str
+    workspace: str | None = None
+
+
+class RenameBody(BaseModel):
+    """Request body for POST /lsp/rename-edits (preview)."""
+
+    file: str
+    line: int
+    character: int
+    new_name: str
+    workspace: str | None = None
+
+
+class DiagnosticsBody(BaseModel):
+    """Request body for POST /lsp/diagnostics."""
+
+    file: str
+    workspace: str | None = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -99,3 +146,105 @@ async def status(workspace: str):
     """
     ws = detect_workspace(Path(workspace))
     return daemon_status(ws)
+
+
+# ── New LSP method routes ──────────────────────────────────────────────────────
+
+
+@router.post("/workspace-symbol")
+async def workspace_symbol(body: WorkspaceSymbolBody):
+    """Search for symbols across the workspace matching a query string."""
+    return await query_workspace_symbol(
+        body.query,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/definition")
+async def definition(body: PositionBody):
+    """Go-to-definition for a position in a file."""
+    return await query_definition(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/type-definition")
+async def type_definition(body: PositionBody):
+    """Go-to-type-definition for a position in a file."""
+    return await query_type_definition(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/references")
+async def references(body: PositionBody):
+    """Find all references to the symbol at a position in a file."""
+    return await query_references(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/hover")
+async def hover(body: PositionBody):
+    """Hover information (signature, docstring) for a position in a file."""
+    return await query_hover(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/call-hierarchy-incoming")
+async def call_hierarchy_incoming(body: PositionBody):
+    """Find incoming calls — who calls the function at a position."""
+    return await query_call_hierarchy_incoming(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/call-hierarchy-outgoing")
+async def call_hierarchy_outgoing(body: PositionBody):
+    """Find outgoing calls — what the function at a position calls."""
+    return await query_call_hierarchy_outgoing(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/rename-edits")
+async def rename_edits(body: RenameBody):
+    """Preview rename edits without applying them.
+
+    Returns the WorkspaceEdit showing what would change.
+    """
+    return await query_rename_edits(
+        Path(body.file),
+        line=body.line,
+        character=body.character,
+        new_name=body.new_name,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/diagnostics")
+async def diagnostics(body: DiagnosticsBody):
+    """Query diagnostics (errors, warnings) for a file."""
+    return await query_diagnostics(
+        Path(body.file),
+        workspace=Path(body.workspace) if body.workspace else None,
+    )

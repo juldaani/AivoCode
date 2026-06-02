@@ -163,16 +163,280 @@ def daemon_status(workspace: Path | None = None) -> dict:
     return result
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Position-based queries — all follow the same pattern as query_document_symbols.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_POSITION_METHODS = (
+    "definition",
+    "type_definition",
+    "references",
+    "hover",
+    "call_hierarchy_incoming",
+    "call_hierarchy_outgoing",
+    "rename_edits",
+)
+
+
+async def _query_positional(
+    file_path: Path,
+    *,
+    method: str,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Send a position-based query to the daemon and return the result dict.
+
+    Shared implementation for definition, references, hover, call hierarchy,
+    and rename_edits — all need (file, line, character).
+    """
+    ws = workspace if workspace is not None else detect_workspace(file_path)
+    abs_path = file_path if file_path.is_absolute() else (ws / file_path).resolve()
+
+    try:
+        daemon_result = _send_query(
+            ws,
+            method,
+            {
+                "file": str(abs_path),
+                "line": line,
+                "character": character,
+            },
+        )
+    except (RuntimeError, ConnectionError, OSError) as exc:
+        return {
+            "file": str(abs_path),
+            "workspace": str(ws),
+            "error": str(exc),
+        }
+
+    result: dict = {**daemon_result}
+    if "workspace" not in result:
+        result["workspace"] = str(ws)
+    if "file" not in result:
+        result["file"] = str(abs_path)
+    return result
+
+
+async def query_definition(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Query go-to-definition for a position in *file_path*.
+
+    Returns the location(s) where the symbol at (line, character) is defined.
+    """
+    return await _query_positional(
+        file_path, method="definition", line=line, character=character, workspace=workspace
+    )
+
+
+async def query_type_definition(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Query go-to-type-definition for a position in *file_path*.
+
+    Returns the location(s) of the type declaration for the symbol.
+    """
+    return await _query_positional(
+        file_path, method="type_definition", line=line, character=character, workspace=workspace
+    )
+
+
+async def query_references(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Query find-references for a position in *file_path*.
+
+    Returns all locations where the symbol at (line, character) is referenced.
+    """
+    return await _query_positional(
+        file_path, method="references", line=line, character=character, workspace=workspace
+    )
+
+
+async def query_hover(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Query hover information for a position in *file_path*.
+
+    Returns the signature, type info, and docstring as markdown.
+    """
+    return await _query_positional(
+        file_path, method="hover", line=line, character=character, workspace=workspace
+    )
+
+
+async def query_call_hierarchy_incoming(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Query incoming call hierarchy — who calls the function at (line, character)."""
+    return await _query_positional(
+        file_path, method="call_hierarchy_incoming", line=line, character=character, workspace=workspace
+    )
+
+
+async def query_call_hierarchy_outgoing(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    workspace: Path | None = None,
+) -> dict:
+    """Query outgoing call hierarchy — what the function at (line, character) calls."""
+    return await _query_positional(
+        file_path, method="call_hierarchy_outgoing", line=line, character=character, workspace=workspace
+    )
+
+
+async def query_rename_edits(
+    file_path: Path,
+    *,
+    line: int,
+    character: int,
+    new_name: str,
+    workspace: Path | None = None,
+) -> dict:
+    """Preview rename edits for a symbol without applying them.
+
+    Returns the ``WorkspaceEdit`` that would be applied if the rename
+    were committed.  Uses ``request_rename_edits`` (preview), not
+    ``request_rename`` (apply).
+    """
+    ws = workspace if workspace is not None else detect_workspace(file_path)
+    abs_path = file_path if file_path.is_absolute() else (ws / file_path).resolve()
+
+    try:
+        daemon_result = _send_query(
+            ws,
+            "rename_edits",
+            {
+                "file": str(abs_path),
+                "line": line,
+                "character": character,
+                "new_name": new_name,
+            },
+        )
+    except (RuntimeError, ConnectionError, OSError) as exc:
+        return {
+            "file": str(abs_path),
+            "workspace": str(ws),
+            "error": str(exc),
+        }
+
+    result: dict = {**daemon_result}
+    if "workspace" not in result:
+        result["workspace"] = str(ws)
+    if "file" not in result:
+        result["file"] = str(abs_path)
+    return result
+
+
+async def query_workspace_symbol(
+    query: str,
+    *,
+    workspace: Path | None = None,
+) -> dict:
+    """Search for symbols across the workspace matching *query*.
+
+    Fuzzy substring match — query ``"greet"`` matches ``Greeter``,
+    ``greet``, ``greeter``, etc.
+    """
+    ws = workspace if workspace is not None else detect_workspace(Path.cwd())
+
+    try:
+        daemon_result = _send_query(
+            ws,
+            "workspace_symbol",
+            {"query": query},
+        )
+    except (RuntimeError, ConnectionError, OSError) as exc:
+        return {
+            "workspace": str(ws),
+            "query": query,
+            "error": str(exc),
+        }
+
+    result: dict = {**daemon_result}
+    if "workspace" not in result:
+        result["workspace"] = str(ws)
+    return result
+
+
+async def query_diagnostics(
+    file_path: Path,
+    *,
+    workspace: Path | None = None,
+) -> dict:
+    """Query diagnostics (errors, warnings) for *file_path*.
+
+    Returns type errors, undefined variables, type warnings, etc.
+    The file must exist (checked server-side before querying).
+    """
+    ws = workspace if workspace is not None else detect_workspace(file_path)
+    abs_path = file_path if file_path.is_absolute() else (ws / file_path).resolve()
+
+    try:
+        daemon_result = _send_query(
+            ws,
+            "diagnostics",
+            {"file": str(abs_path)},
+        )
+    except (RuntimeError, ConnectionError, OSError) as exc:
+        return {
+            "file": str(abs_path),
+            "workspace": str(ws),
+            "error": str(exc),
+        }
+
+    result: dict = {**daemon_result}
+    if "workspace" not in result:
+        result["workspace"] = str(ws)
+    if "file" not in result:
+        result["file"] = str(abs_path)
+    return result
+
+
 __all__ = [
     # Low-level building blocks (existing)
     "LspClient",
     "LanguageEntry",
     "load_config",
     "SYMBOL_KIND_NAMES",
-    # High-level public API (new)
+    # High-level public API (existing)
     "query_document_symbols",
     "daemon_status",
     "daemon_stop",
     "result_to_output_json",
     "detect_workspace",
+    # High-level public API (new — 9 methods)
+    "query_definition",
+    "query_type_definition",
+    "query_references",
+    "query_hover",
+    "query_call_hierarchy_incoming",
+    "query_call_hierarchy_outgoing",
+    "query_rename_edits",
+    "query_workspace_symbol",
+    "query_diagnostics",
 ]

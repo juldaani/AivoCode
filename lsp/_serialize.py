@@ -26,10 +26,65 @@ See Also
 
 from __future__ import annotations
 
+import enum
 import json
 from collections.abc import Sequence
+from typing import Any
+
+import attr
 
 from lsp._symbols import SYMBOL_KIND_NAMES
+
+
+def _lsp_result_to_json(obj: Any) -> Any:
+    """Convert any LSP return value to a JSON-safe dict, list, or primitive.
+
+    Handles attrs classes (via ``attr.asdict()``), lists, dicts, enums,
+    and primitives.  Used by the daemon to serialize LSP method return
+    values before sending over the Unix socket.
+
+    attrs classes in the ``lsprotocol`` / ``lsp-client`` ecosystem use
+    ``__slots__`` (not ``__dict__``), so ``vars()`` does not work.  We
+    detect attrs classes and use ``attr.asdict()`` for full conversion.
+
+    Parameters
+    ----------
+    obj : Any
+        The return value from an ``LspClient.request_*`` method.
+
+    Returns
+    -------
+    Any
+        A JSON-serializable value (dict, list, str, int, float, bool, None).
+    """
+    if obj is None:
+        return None
+    # Primitives — check BEFORE enum because StrEnum IS a str subclass.
+    if isinstance(obj, (bool, int, float)):
+        return obj
+    # StrEnum values are also str, so handle str check before enum.
+    if isinstance(obj, str):
+        return obj
+    # Enum values (IntEnum, StrEnum, regular Enum).
+    # Use isinstance(obj, enum.Enum) — NOT hasattr(obj, "value") — because
+    # many attrs classes (e.g. MarkupContent) have a field named "value"
+    # that would be falsely matched.
+    if isinstance(obj, enum.Enum):
+        return _lsp_result_to_json(obj.value)
+    # attrs classes — use attr.asdict for full recursive conversion.
+    # attr.has() detects both slotted and dict-based attrs classes.
+    if attr.has(obj):
+        raw = attr.asdict(obj)
+        # Post-process: enum values inside the dict may need conversion.
+        if isinstance(raw, dict):
+            return {k: _lsp_result_to_json(v) for k, v in raw.items()}
+        return _lsp_result_to_json(raw)
+    if isinstance(obj, dict):
+        return {k: _lsp_result_to_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_lsp_result_to_json(x) for x in obj]
+    # Fallback: string representation.
+    return str(obj)
 
 
 def _symbol_to_dict(sym: object) -> dict:

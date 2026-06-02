@@ -68,9 +68,10 @@ import time
 from pathlib import Path
 
 from lsp._protocol import Request, Response, ping, send_request
-from lsp._serialize import _symbol_tree_to_dict
+from lsp._serialize import _lsp_result_to_json, _symbol_tree_to_dict
 from lsp.client import LspClient
 from lsp.config import LanguageEntry
+from lsp_client.utils.types import lsp_type  # for Position(line, character)
 
 # ── Per-workspace runtime directory layout ────────────────────────────────────
 # All aivocode runtime files live under <workspace>/.aivocode/ — a dot-directory
@@ -393,6 +394,68 @@ async def _run_daemon(
 
         # ── Task 2: Socket server ──────────────────────────────────────
 
+        # ── Helpers for position-based queries ──────────────────────────
+        # Shared by definition, type_definition, references, hover,
+        # call_hierarchy_incoming, call_hierarchy_outgoing, rename_edits.
+
+        def _position_from_params(params: dict) -> lsp_type.Position:
+            """Extract (line, character) from params and build a Position."""
+            line = int(params.get("line", 0))
+            character = int(params.get("character", 0))
+            return lsp_type.Position(line=line, character=character)
+
+        def _file_error(req_id: int, file_str: str, context: str) -> dict:
+            """Return a clean error dict for missing/bad file."""
+            return {
+                "id": req_id,
+                "error": {
+                    "code": -32000,
+                    "message": f"File not found for {context}: {file_str}",
+                },
+            }
+
+        async def _query_positional(
+            req_id: int,
+            file_str: str,
+            params: dict,
+            lsp_call,
+            label: str,
+            lang_entry: LanguageEntry,
+        ) -> dict:
+            """Run a position-based LSP query and return the response dict.
+
+            Parameters
+            ----------
+            lsp_call : callable
+                Signature: ``await lsp_call(file_path, position) -> Any``.
+                For ``rename_edits``, a lambda wrapping the extra ``new_name``
+                arg is passed instead.
+            """
+            file_path = Path(file_str)
+            try:
+                position = _position_from_params(params)
+                result = await lsp_call(file_path, position)
+                return {
+                    "id": req_id,
+                    "result": {
+                        "result": _lsp_result_to_json(result),
+                        "file": file_str,
+                        "line": params.get("line"),
+                        "character": params.get("character"),
+                        "label": label,
+                        "language": lang_entry.name,
+                        "server": lang_entry.server,
+                    },
+                }
+            except Exception as exc:
+                return {
+                    "id": req_id,
+                    "error": {
+                        "code": -32000,
+                        "message": f"LSP error ({label}): {exc}",
+                    },
+                }
+
         async def _handle_client(
             reader: asyncio.StreamReader,
             writer: asyncio.StreamWriter,
@@ -486,6 +549,211 @@ async def _run_daemon(
                                         "id": req_id,
                                         "result": {
                                             "symbols": formatted,
+                                            "file": file_str,
+                                            "language": lang_entry.name,
+                                            "server": lang_entry.server,
+                                        },
+                                    }
+                                except Exception as exc:
+                                    resp = {
+                                        "id": req_id,
+                                        "error": {
+                                            "code": -32000,
+                                            "message": f"LSP error: {exc}",
+                                        },
+                                    }
+
+                    # ── workspace_symbol ────────────────────────────────
+                    # Query: workspace/symbol.  Returns a flat list of
+                    # symbols matching the query string across the entire
+                    # workspace (fuzzy substring match with basedpyright).
+                    case "workspace_symbol":
+                        query_str = params.get("query", "")
+                        if not query_str:
+                            resp = {
+                                "id": req_id,
+                                "error": {
+                                    "code": -32602,
+                                    "message": "Missing 'query' parameter",
+                                },
+                            }
+                        else:
+                            try:
+                                symbols = await client.request_workspace_symbol_list(
+                                    query_str
+                                )
+                                resp = {
+                                    "id": req_id,
+                                    "result": {
+                                        "symbols": _lsp_result_to_json(symbols),
+                                        "query": query_str,
+                                        "language": lang_entry.name,
+                                        "server": lang_entry.server,
+                                    },
+                                }
+                            except Exception as exc:
+                                resp = {
+                                    "id": req_id,
+                                    "error": {
+                                        "code": -32000,
+                                        "message": f"LSP error: {exc}",
+                                    },
+                                }
+
+                    # ── definition ──────────────────────────────────────
+                    case "definition":
+                        file_str = params.get("file", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(req_id, file_str, "definition")
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                client.request_definition,
+                                "go-to-definition",
+                                lang_entry,
+                            )
+
+                    # ── type_definition ─────────────────────────────────
+                    case "type_definition":
+                        file_str = params.get("file", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(req_id, file_str, "type definition")
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                client.request_type_definition,
+                                "go-to-type-definition",
+                                lang_entry,
+                            )
+
+                    # ── references ──────────────────────────────────────
+                    case "references":
+                        file_str = params.get("file", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(req_id, file_str, "references")
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                client.request_references,
+                                "references",
+                                lang_entry,
+                            )
+
+                    # ── hover ───────────────────────────────────────────
+                    case "hover":
+                        file_str = params.get("file", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(req_id, file_str, "hover")
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                client.request_hover,
+                                "hover",
+                                lang_entry,
+                            )
+
+                    # ── call_hierarchy_incoming ─────────────────────────
+                    case "call_hierarchy_incoming":
+                        file_str = params.get("file", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(
+                                req_id, file_str, "call hierarchy incoming"
+                            )
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                client.request_call_hierarchy_incoming_call,
+                                "call-hierarchy-incoming",
+                                lang_entry,
+                            )
+
+                    # ── call_hierarchy_outgoing ─────────────────────────
+                    case "call_hierarchy_outgoing":
+                        file_str = params.get("file", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(
+                                req_id, file_str, "call hierarchy outgoing"
+                            )
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                client.request_call_hierarchy_outgoing_call,
+                                "call-hierarchy-outgoing",
+                                lang_entry,
+                            )
+
+                    # ── rename_edits ────────────────────────────────────
+                    # Uses request_rename_edits (preview) — does NOT apply
+                    # the rename, only returns the WorkspaceEdit.
+                    case "rename_edits":
+                        file_str = params.get("file", "")
+                        new_name = params.get("new_name", "")
+                        if not file_str or not Path(file_str).is_file():
+                            resp = _file_error(req_id, file_str, "rename edits")
+                        elif not new_name:
+                            resp = {
+                                "id": req_id,
+                                "error": {
+                                    "code": -32602,
+                                    "message": "Missing 'new_name' parameter",
+                                },
+                            }
+                        else:
+                            resp = await _query_positional(
+                                req_id,
+                                file_str,
+                                params,
+                                lambda fp, pos: client.request_rename_edits(
+                                    fp, pos, new_name
+                                ),
+                                "rename-edits",
+                                lang_entry,
+                            )
+
+                    # ── diagnostics ─────────────────────────────────────
+                    case "diagnostics":
+                        file_str = params.get("file", "")
+                        if not file_str:
+                            resp = {
+                                "id": req_id,
+                                "error": {
+                                    "code": -32602,
+                                    "message": "Missing 'file' parameter",
+                                },
+                            }
+                        else:
+                            file_path = Path(file_str)
+                            if not file_path.is_file():
+                                resp = _file_error(req_id, file_str, "diagnostics")
+                            else:
+                                try:
+                                    # ── Open file in LSP server ─────────
+                                    # Diagnostics are push-based — the LSP
+                                    # server only publishes them for files
+                                    # that have been opened via didOpen.
+                                    # Read content and notify the server
+                                    # so it starts analysing the file.
+                                    file_content = file_path.read_text()
+                                    await client.notify_text_document_opened(
+                                        file_path, file_content
+                                    )
+                                    diags = await client.get_diagnostics(file_path)
+                                    resp = {
+                                        "id": req_id,
+                                        "result": {
+                                            "diagnostics": _lsp_result_to_json(diags),
                                             "file": file_str,
                                             "language": lang_entry.name,
                                             "server": lang_entry.server,

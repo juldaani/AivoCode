@@ -5,10 +5,19 @@ aivocode REST API server.  No daemon logic, no workspace detection —
 all business logic lives server-side.
 
 Commands
-- ``aivocode lsp symbols <file>``  — query document symbols
-- ``aivocode lsp start``            — ensure daemon is running
-- ``aivocode lsp stop``             — graceful shutdown
-- ``aivocode lsp status``           — check daemon health
+- ``aivocode lsp symbols <file>``        — query document symbols
+- ``aivocode lsp start``                  — ensure daemon is running
+- ``aivocode lsp stop``                   — graceful shutdown
+- ``aivocode lsp status``                 — check daemon health
+- ``aivocode lsp workspace-symbol <q>``   — search symbols across workspace
+- ``aivocode lsp definition <file> -l N -c N``   — go-to definition
+- ``aivocode lsp type-definition <file> -l N -c N`` — go-to type definition
+- ``aivocode lsp references <file> -l N -c N``     — find references
+- ``aivocode lsp hover <file> -l N -c N``          — hover info
+- ``aivocode lsp incoming-calls <file> -l N -c N`` — incoming call hierarchy
+- ``aivocode lsp outgoing-calls <file> -l N -c N`` — outgoing call hierarchy
+- ``aivocode lsp rename-edits <file> -l N -c N -n X`` — preview rename
+- ``aivocode lsp diagnostics <file>``      — query diagnostics
 """
 
 from __future__ import annotations
@@ -134,6 +143,128 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     status_parser.set_defaults(func=_handle_status)
 
+    # ── Shared position arguments ───────────────────────────────────────
+    # Used by definition, type-definition, references, hover,
+    # incoming-calls, outgoing-calls, rename-edits.
+    _POSITION_OPTIONS = argparse.ArgumentParser(add_help=False)
+    _POSITION_OPTIONS.add_argument(
+        "-l", "--line",
+        type=int,
+        required=True,
+        help="Line number (0-indexed).",
+    )
+    _POSITION_OPTIONS.add_argument(
+        "-c", "--character",
+        type=int,
+        required=True,
+        help="Character offset (0-indexed).",
+    )
+
+    # ── workspace-symbol ───────────────────────────────────────────────
+    wsym_parser = lsp_sub.add_parser(
+        "workspace-symbol",
+        parents=[_GLOBAL_OPTIONS],
+        help="Search symbols across the workspace.",
+        description="Fuzzy search for symbols by name across the entire workspace.",
+    )
+    wsym_parser.add_argument("query", type=str, help="Search query string.")
+    wsym_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    wsym_parser.set_defaults(func=_handle_workspace_symbol)
+
+    # ── definition ─────────────────────────────────────────────────────
+    def_parser = lsp_sub.add_parser(
+        "definition",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Go-to definition.",
+        description="Find where the symbol at a position is defined.",
+    )
+    def_parser.add_argument("file", type=str, help="File path.")
+    def_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    def_parser.set_defaults(func=_handle_definition)
+
+    # ── type-definition ─────────────────────────────────────────────────
+    tdef_parser = lsp_sub.add_parser(
+        "type-definition",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Go-to type definition.",
+        description="Find where the type of the symbol at a position is declared.",
+    )
+    tdef_parser.add_argument("file", type=str, help="File path.")
+    tdef_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    tdef_parser.set_defaults(func=_handle_type_definition)
+
+    # ── references ─────────────────────────────────────────────────────
+    ref_parser = lsp_sub.add_parser(
+        "references",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Find references.",
+        description="Find all references to the symbol at a position.",
+    )
+    ref_parser.add_argument("file", type=str, help="File path.")
+    ref_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    ref_parser.set_defaults(func=_handle_references)
+
+    # ── hover ──────────────────────────────────────────────────────────
+    hover_parser = lsp_sub.add_parser(
+        "hover",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Hover information.",
+        description="Get signature, type info, and docstring for a symbol.",
+    )
+    hover_parser.add_argument("file", type=str, help="File path.")
+    hover_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    hover_parser.set_defaults(func=_handle_hover)
+
+    # ── incoming-calls ─────────────────────────────────────────────────
+    inc_parser = lsp_sub.add_parser(
+        "incoming-calls",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Incoming call hierarchy.",
+        description="Find callers — who calls the function at a position.",
+    )
+    inc_parser.add_argument("file", type=str, help="File path.")
+    inc_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    inc_parser.set_defaults(func=_handle_incoming_calls)
+
+    # ── outgoing-calls ─────────────────────────────────────────────────
+    outc_parser = lsp_sub.add_parser(
+        "outgoing-calls",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Outgoing call hierarchy.",
+        description="Find callees — what the function at a position calls.",
+    )
+    outc_parser.add_argument("file", type=str, help="File path.")
+    outc_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    outc_parser.set_defaults(func=_handle_outgoing_calls)
+
+    # ── rename-edits ───────────────────────────────────────────────────
+    ren_parser = lsp_sub.add_parser(
+        "rename-edits",
+        parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
+        help="Preview rename edits.",
+        description="Preview what files would change if the symbol were renamed (no files modified).",
+    )
+    ren_parser.add_argument("file", type=str, help="File path.")
+    ren_parser.add_argument(
+        "-n", "--new-name",
+        type=str,
+        required=True,
+        help="New name for the symbol.",
+    )
+    ren_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    ren_parser.set_defaults(func=_handle_rename_edits)
+
+    # ── diagnostics ────────────────────────────────────────────────────
+    diag_parser = lsp_sub.add_parser(
+        "diagnostics",
+        parents=[_GLOBAL_OPTIONS],
+        help="Query diagnostics.",
+        description="Get type errors, warnings, and other diagnostics for a file.",
+    )
+    diag_parser.add_argument("file", type=str, help="File path.")
+    diag_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
+    diag_parser.set_defaults(func=_handle_diagnostics)
+
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
 
@@ -193,3 +324,89 @@ def _handle_status(args: argparse.Namespace) -> int:
     except httpx.HTTPError:
         _print_json({"error": "REST API unavailable"}, pretty=args.pretty_format)
         return 1
+
+
+# ── Handler helpers ────────────────────────────────────────────────────────────
+
+
+def _build_body(args: argparse.Namespace, *, extra: dict | None = None) -> dict:
+    """Build the JSON body for an HTTP POST from common CLI args.
+
+    Resolves file to absolute path and optionally includes workspace.
+    Mutations via *extra* are applied last (e.g. {``"new_name"``: ...}).
+    """
+    body: dict = {"file": str(Path(args.file).resolve())}
+    if args.workspace:
+        body["workspace"] = str(Path(args.workspace).resolve())
+    if extra:
+        body.update(extra)
+    return body
+
+
+def _post_handler(endpoint: str, body: dict, pretty: bool) -> int:
+    """Common POST + print + error-handling pattern for all handlers."""
+    try:
+        result = asyncio.run(_post(endpoint, body))
+        _print_json(result, pretty=pretty)
+        return 0 if result.get("error") is None else 1
+    except httpx.HTTPError:
+        _print_json({"error": "REST API unavailable"}, pretty=pretty)
+        return 1
+
+
+# ── New handlers ───────────────────────────────────────────────────────────────
+
+
+def _handle_workspace_symbol(args: argparse.Namespace) -> int:
+    """Execute ``lsp workspace-symbol <query>``."""
+    body: dict = {"query": args.query}
+    if args.workspace:
+        body["workspace"] = str(Path(args.workspace).resolve())
+    return _post_handler("/lsp/workspace-symbol", body, args.pretty_format)
+
+
+def _handle_definition(args: argparse.Namespace) -> int:
+    body = _build_body(args, extra={"line": args.line, "character": args.character})
+    return _post_handler("/lsp/definition", body, args.pretty_format)
+
+
+def _handle_type_definition(args: argparse.Namespace) -> int:
+    body = _build_body(args, extra={"line": args.line, "character": args.character})
+    return _post_handler("/lsp/type-definition", body, args.pretty_format)
+
+
+def _handle_references(args: argparse.Namespace) -> int:
+    body = _build_body(args, extra={"line": args.line, "character": args.character})
+    return _post_handler("/lsp/references", body, args.pretty_format)
+
+
+def _handle_hover(args: argparse.Namespace) -> int:
+    body = _build_body(args, extra={"line": args.line, "character": args.character})
+    return _post_handler("/lsp/hover", body, args.pretty_format)
+
+
+def _handle_incoming_calls(args: argparse.Namespace) -> int:
+    body = _build_body(args, extra={"line": args.line, "character": args.character})
+    return _post_handler("/lsp/call-hierarchy-incoming", body, args.pretty_format)
+
+
+def _handle_outgoing_calls(args: argparse.Namespace) -> int:
+    body = _build_body(args, extra={"line": args.line, "character": args.character})
+    return _post_handler("/lsp/call-hierarchy-outgoing", body, args.pretty_format)
+
+
+def _handle_rename_edits(args: argparse.Namespace) -> int:
+    body = _build_body(
+        args,
+        extra={
+            "line": args.line,
+            "character": args.character,
+            "new_name": args.new_name,
+        },
+    )
+    return _post_handler("/lsp/rename-edits", body, args.pretty_format)
+
+
+def _handle_diagnostics(args: argparse.Namespace) -> int:
+    body = _build_body(args)
+    return _post_handler("/lsp/diagnostics", body, args.pretty_format)
