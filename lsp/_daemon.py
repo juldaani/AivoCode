@@ -175,9 +175,39 @@ def ensure_daemon(
     socket_path = _socket_path(workspace)
 
     if _is_running(socket_path):
-        return socket_path
+        # ── Freshness check: is the daemon running stale code? ─────────
+        # Compare the socket's mtime (daemon start time) against the
+        # newest .py source file in the lsp/ package.  If any source
+        # file changed after the daemon started, the daemon is running
+        # old code — kill it, clean up, and spawn a fresh one.
+        try:
+            lsp_dir = Path(__file__).resolve().parent  # lsp/ package dir
+            src_mtime = max(
+                p.stat().st_mtime for p in lsp_dir.rglob("*.py")
+            )
+            if socket_path.stat().st_mtime < src_mtime:
+                logger.info(
+                    "Daemon source newer than running daemon (%s < %s) — restarting",
+                    socket_path.stat().st_mtime,
+                    src_mtime,
+                )
+                stop_daemon(workspace)  # full kill + socket cleanup
+                # Fall through to spawn a fresh daemon below.
+            else:
+                return socket_path  # daemon is fresh — reuse it
+        except OSError:
+            # mtime check failed (e.g. a .py file was deleted mid-glob) —
+            # conservative: kill and restart to be safe.
+            logger.warning(
+                "mtime freshness check failed — restarting daemon"
+            )
+            try:
+                stop_daemon(workspace)
+            except Exception:
+                pass
+            # Fall through to spawn a fresh daemon below.
 
-    # ── Daemon not running — spawn it ──────────────────────────────────
+    # ── Daemon not running (or killed above) — spawn it ────────────────
     socket_path.unlink(missing_ok=True)
 
     daemon_script = Path(__file__)  # lsp/_daemon.py — we ARE the daemon script.

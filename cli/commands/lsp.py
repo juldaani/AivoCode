@@ -112,15 +112,10 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         "stop",
         parents=[_GLOBAL_OPTIONS],
         help="Shut down the LSP daemon.",
-        description="Gracefully shut down the LSP daemon for a workspace. Idempotent.",
-    )
-    stop_parser.add_argument(
-        "--workspace",
-        type=str,
-        default=None,
-        help=(
-            "Path within the git workspace (or the workspace itself). "
-            "Auto-detected server-side from cwd if not provided."
+        description=(
+            "Kill the LSP daemon and remove all sockets for the current "
+            "workspace (detected from cwd).  No arguments needed — always "
+            "does a full cleanup."
         ),
     )
     stop_parser.set_defaults(func=_handle_stop)
@@ -301,8 +296,12 @@ def _handle_start(args: argparse.Namespace) -> int:
 
 
 def _handle_stop(args: argparse.Namespace) -> int:
-    """Execute the ``lsp stop`` command via HTTP POST."""
-    ws = _resolve_path(args.workspace)
+    """Execute the ``lsp stop`` command via HTTP POST.
+
+    Always uses cwd for workspace detection — no ``--workspace`` flag.
+    The server detects the git root server-side.
+    """
+    ws = str(Path.cwd())
 
     try:
         result = asyncio.run(_post("/lsp/stop", {"workspace": ws}))
