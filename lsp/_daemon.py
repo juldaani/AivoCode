@@ -279,27 +279,45 @@ def send_query(
 def stop_daemon(workspace: Path) -> None:
     """Shut down the daemon for *workspace*, if running.
 
+    Removes **all** daemon socket files in ``<workspace>/.aivocode/daemons/``,
+    not just the expected hash — this guarantees no orphan socket from a
+    crashed or stale daemon survives to confuse ``ensure_daemon``.
+
     Parameters
     ----------
     workspace : Path
         Git repo root.
     """
     socket_path = _socket_path(workspace)
-    if not _is_running(socket_path):
-        socket_path.unlink(missing_ok=True)
-        return
+    daemons_dir = _aivocode_dir(workspace, _SOCKET_SUBDIR)
 
     try:
-        send_request(
-            socket_path,
-            Request(id=0, method="shutdown", params={}),
-            timeout=3.0,
-        )
-    except Exception:
-        logger.warning("Failed to send shutdown to daemon at %s", socket_path)
+        if not _is_running(socket_path):
+            return  # nothing to shut down
+
+        try:
+            send_request(
+                socket_path,
+                Request(id=0, method="shutdown", params={}),
+                timeout=3.0,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send shutdown to daemon at %s", socket_path
+            )
     finally:
-        time.sleep(0.2)
-        socket_path.unlink(missing_ok=True)
+        # ── Always clean up ALL sockets in the daemons directory ────────
+        # Unlinking just the expected socket is not enough — a crashed or
+        # zombie daemon can leave stray .sock files behind.  Removing every
+        # socket in the directory guarantees no stale socket survives,
+        # regardless of which code path brought us here.
+        time.sleep(0.2)  # give the daemon a moment to flush / exit
+        for sock_file in daemons_dir.glob("*.sock"):
+            try:
+                sock_file.unlink()
+                logger.info("Removed stale socket: %s", sock_file)
+            except OSError:
+                logger.warning("Failed to remove socket: %s", sock_file)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
