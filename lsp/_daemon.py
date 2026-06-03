@@ -71,6 +71,7 @@ from lsp._protocol import Request, Response, ping, send_request
 from lsp._serialize import (
     _lsp_result_to_json,
     _normalize_positions_to_one_indexed,
+    _replace_kind_integers,
     _symbol_tree_to_dict,
 )
 from lsp.client import LspClient
@@ -843,14 +844,14 @@ async def _run_daemon(
                             },
                         }
 
-                # ── Convert LSP positions to 1‑indexed ──────────────────
-                # LSP protocol uses 0‑indexed line/character internally.
-                # All consumers (editors, shell tools, agent read-offset)
-                # expect 1‑indexed values.  Normalize before serializing.
+                # ── Normalize output ───────────────────────────────────
+                # (1) LSP positions: 0‑indexed → 1‑indexed
+                # (2) LSP kind integers → human-readable names
                 if "result" in resp:
                     resp["result"] = _normalize_positions_to_one_indexed(
                         resp["result"]
                     )
+                    resp["result"] = _replace_kind_integers(resp["result"])
 
                 writer.write(
                     (json.dumps(resp, ensure_ascii=False) + "\n").encode()

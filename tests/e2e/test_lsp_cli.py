@@ -69,14 +69,13 @@ class TestLspSymbols:
     def test_symbols_include_kind_and_range(
         self, lsp_server: str
     ) -> None:
-        """Every symbol dict includes kind, kind_number, and range."""
+        """Every symbol dict includes kind and range."""
         data = _run_cli(lsp_server, "symbols", _TEST_FILE)
         assert "error" not in data
 
         for sym in data["symbols"]:
             assert isinstance(sym["name"], str), f"name missing in {sym}"
             assert isinstance(sym["kind"], str), f"kind missing in {sym}"
-            assert isinstance(sym["kind_number"], int), f"kind_number missing in {sym}"
             rng = sym["range"]
             assert "start" in rng and "end" in rng, f"range missing in {sym}"
             assert "line" in rng["start"], f"range.start.line missing in {sym}"

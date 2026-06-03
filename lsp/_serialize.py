@@ -87,6 +87,35 @@ def _normalize_positions_to_one_indexed(data: Any) -> Any:
     return data
 
 
+def _replace_kind_integers(data: Any) -> Any:
+    """Walk the result tree and replace ``kind: int`` with human-readable names.
+
+    The LSP protocol uses integer SymbolKind values (e.g. 12 = Function).
+    This function converts them to names (e.g. ``"Function"``) everywhere
+    in the output tree so consumers never see raw integers.
+
+    Works on the already-serialized dict/list/primitive tree — post
+    ``_lsp_result_to_json`` / ``_symbol_tree_to_dict``.
+    """
+    if data is None:
+        return None
+    if isinstance(data, (bool, int, float, str)):
+        return data
+    if isinstance(data, dict):
+        # Replace kind integers with human-readable names.
+        return {
+            k: (
+                SYMBOL_KIND_NAMES.get(v, f"Kind({v})")
+                if k == "kind" and isinstance(v, int)
+                else _replace_kind_integers(v)
+            )
+            for k, v in data.items()
+        }
+    if isinstance(data, (list, tuple)):
+        return [_replace_kind_integers(x) for x in data]
+    return data
+
+
 def _lsp_result_to_json(obj: Any) -> Any:
     """Convert any LSP return value to a JSON-safe dict, list, or primitive.
 
@@ -154,7 +183,7 @@ def _symbol_to_dict(sym: object) -> dict:
     Returns
     -------
     dict
-        Keys: name, kind, kind_number, range, selection_range, children.
+        Keys: name, kind, range, selection_range, children.
         ``children`` is None when empty/falsy rather than an empty list,
         for cleaner JSON output.
     """
@@ -165,11 +194,9 @@ def _symbol_to_dict(sym: object) -> dict:
     if name is not None:
         result["name"] = name
 
-    # Kind: both the human-readable name and the raw integer.
-    # The raw integer is useful for programmatic consumers.
+    # Kind: human-readable name (e.g. "Class", "Method").
     kind = getattr(sym, "kind", 0)
     result["kind"] = SYMBOL_KIND_NAMES.get(kind, f"Kind({kind})")
-    result["kind_number"] = kind
 
     # Range: where the symbol is declared in the file.
     rng = getattr(sym, "range", None)

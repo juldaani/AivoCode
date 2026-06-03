@@ -87,7 +87,7 @@ async def query_document_symbols(
         - ``workspace``: absolute path to the workspace root.
         - ``language``: language name (e.g. ``"python"``).
         - ``server``: language server binary (e.g. ``"basedpyright-langserver"``).
-        - ``symbols``: list of symbol dicts (name, kind, kind_number, range, children).
+        - ``symbols``: list of symbol dicts (name, kind, range, children).
         On error, the dict contains an ``error`` key instead of ``symbols``.
 
     Raises
