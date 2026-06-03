@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from cli.commands import codebase
 from cli.commands import lsp
 from cli.commands import webfetch
 from cli.commands import websearch
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # ---- register subcommands -----------------------------------------------
+    codebase.add_subparser(subparsers)
     lsp.add_subparser(subparsers)
     webfetch.add_subparser(subparsers)
     websearch.add_subparser(subparsers)
