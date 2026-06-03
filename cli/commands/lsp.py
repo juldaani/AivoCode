@@ -146,13 +146,13 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         "-l", "--line",
         type=int,
         required=True,
-        help="Line number (0-indexed).",
+        help="Line number (1-indexed).",
     )
     _POSITION_OPTIONS.add_argument(
         "-c", "--character",
         type=int,
         required=True,
-        help="Character offset (0-indexed).",
+        help="Character offset (1-indexed).",
     )
 
     # ── workspace-symbol ───────────────────────────────────────────────

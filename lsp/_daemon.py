@@ -451,9 +451,20 @@ async def _run_daemon(
         # call_hierarchy_incoming, call_hierarchy_outgoing, rename_edits.
 
         def _position_from_params(params: dict) -> lsp_type.Position:
-            """Extract (line, character) from params and build a Position."""
-            line = int(params.get("line", 0))
-            character = int(params.get("character", 0))
+            """Extract (line, character) from params and build a Position.
+
+            Converts 1-indexed user input to 0-indexed LSP protocol positions.
+            The daemon is the normalization boundary — all human-facing
+            interfaces (CLI, REST, MCP) speak 1-indexed; internally we
+            translate to 0-indexed for the LSP server.
+            """
+            line = int(params.get("line", 1)) - 1
+            character = int(params.get("character", 1)) - 1
+            if line < 0 or character < 0:
+                raise ValueError(
+                    f"Position must be ≥ 1 (1-indexed). "
+                    f"Got line={line + 1}, character={character + 1}"
+                )
             return lsp_type.Position(line=line, character=character)
 
         def _file_error(req_id: int, file_str: str, context: str) -> dict:
@@ -492,8 +503,11 @@ async def _run_daemon(
                     "result": {
                         "result": _lsp_result_to_json(result),
                         "file": file_str,
-                        "line": params.get("line"),
-                        "character": params.get("character"),
+                        # Metadata fields are str (not int) so that
+                        # _normalize_positions_to_one_indexed skips them.
+                        # They record the user's 1-indexed input as-is.
+                        "line": str(params.get("line", "")),
+                        "character": str(params.get("character", "")),
                         "label": label,
                         "language": lang_entry.name,
                         "server": lang_entry.server,
