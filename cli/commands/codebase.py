@@ -5,7 +5,14 @@ aivocode REST API server.  No business logic lives here — all
 intelligence is server-side.
 
 Commands
-- ``aivocode codebase root`` — list top-level workspace directories
+- ``aivocode codebase root``         — list top-level workspace dirs
+- ``aivocode codebase tree``         — recursive file/dir listing
+- ``aivocode codebase read``         — read a symbol's body text
+- ``aivocode codebase incoming-calls`` — who calls this symbol?
+- ``aivocode codebase outgoing-calls`` — what does this symbol call?
+- ``aivocode codebase references``   — where is this symbol used?
+- ``aivocode codebase overview``     — file ToC with signatures
+- ``aivocode codebase explain``      — full symbol report
 """
 
 from __future__ import annotations
@@ -21,48 +28,138 @@ from cli._utils import _GLOBAL_OPTIONS, _post, _print_json
 
 
 def _resolve_workspace(args_workspace: str | None) -> str:
-    """Return an absolute path string for the workspace resolution hint."""
     if args_workspace:
         return str(Path(args_workspace).resolve())
     return str(Path.cwd())
+
+
+def _symbol_handler(args: argparse.Namespace, endpoint: str) -> None:
+    body: dict = {
+        "file": args.file,
+        "symbol_name": args.symbol,
+        "line": getattr(args, "line", None),
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post(endpoint, body))
+    _print_json(result, pretty=args.pretty_format)
 
 
 # ── Handlers ───────────────────────────────────────────────────────────────────
 
 
 def _handle_root(args: argparse.Namespace) -> None:
-    """Handle ``aivocode codebase root``."""
     body = {"workspace": _resolve_workspace(args.workspace)}
     result = asyncio.run(_post("/codebase/root", body))
     _print_json(result, pretty=args.pretty_format)
+
+
+def _handle_tree(args: argparse.Namespace) -> None:
+    body = {"workspace": _resolve_workspace(args.workspace), "suffix": args.suffix}
+    result = asyncio.run(_post("/codebase/tree", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
+def _handle_read(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/read")
+
+
+def _handle_incoming(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/incoming-calls")
+
+
+def _handle_outgoing(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/outgoing-calls")
+
+
+def _handle_references(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/references")
+
+
+def _handle_overview(args: argparse.Namespace) -> None:
+    body = {
+        "file": args.file,
+        "depth": args.depth,
+        "workspace": _resolve_workspace(args.workspace),
+    }
+    result = asyncio.run(_post("/codebase/overview", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
+def _handle_explain(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/explain")
+
+
+# ── Shared argument definitions ────────────────────────────────────────────────
+
+def _add_symbol_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("file", type=str, help="Source file path.")
+    parser.add_argument("--symbol", "-s", type=str, required=True, help="Symbol name.")
+    parser.add_argument("--line", "-l", type=int, default=None,
+                        help="Line number for disambiguation.")
+    parser.add_argument("--workspace", type=str,
+                        help="Workspace root path (auto-detected if omitted).")
 
 
 # ── Subparser registration ─────────────────────────────────────────────────────
 
 
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
-    """Register the ``codebase`` command group on the given subparser group."""
     cb_parser = subparsers.add_parser(
         "codebase",
         help="Codebase exploration tools.",
         description="High-level codebase exploration tools for AI agents.",
     )
-    cb_sub = cb_parser.add_subparsers(
-        title="commands",
-        dest="codebase_command",
-    )
+    cb_sub = cb_parser.add_subparsers(title="commands", dest="codebase_command")
     cb_sub.required = True
 
     # ── root ───────────────────────────────────────────────────────────
-    root_parser = cb_sub.add_parser(
-        "root",
-        parents=[_GLOBAL_OPTIONS],
-        help="List top-level directories in the workspace.",
-        description="List top-level non-hidden directories in the workspace root.",
-    )
-    root_parser.add_argument(
-        "--workspace",
-        type=str,
-        help="Workspace root path (auto-detected if omitted).",
-    )
-    root_parser.set_defaults(func=_handle_root)
+    rp = cb_sub.add_parser("root", parents=[_GLOBAL_OPTIONS],
+                            help="List top-level directories.")
+    rp.add_argument("--workspace", type=str)
+    rp.set_defaults(func=_handle_root)
+
+    # ── tree ───────────────────────────────────────────────────────────
+    tp = cb_sub.add_parser("tree", parents=[_GLOBAL_OPTIONS],
+                            help="Recursive file/directory tree.")
+    tp.add_argument("--workspace", type=str)
+    tp.add_argument("--suffix", type=str, default=None)
+    tp.set_defaults(func=_handle_tree)
+
+    # ── read ───────────────────────────────────────────────────────────
+    rdp = cb_sub.add_parser("read", parents=[_GLOBAL_OPTIONS],
+                             help="Read a symbol's body text.")
+    _add_symbol_args(rdp)
+    rdp.set_defaults(func=_handle_read)
+
+    # ── incoming-calls ─────────────────────────────────────────────────
+    icp = cb_sub.add_parser("incoming-calls", parents=[_GLOBAL_OPTIONS],
+                             help="Who calls this symbol?")
+    _add_symbol_args(icp)
+    icp.set_defaults(func=_handle_incoming)
+
+    # ── outgoing-calls ─────────────────────────────────────────────────
+    ocp = cb_sub.add_parser("outgoing-calls", parents=[_GLOBAL_OPTIONS],
+                             help="What does this symbol call?")
+    _add_symbol_args(ocp)
+    ocp.set_defaults(func=_handle_outgoing)
+
+    # ── references ─────────────────────────────────────────────────────
+    refp = cb_sub.add_parser("references", parents=[_GLOBAL_OPTIONS],
+                              help="Where is this symbol used?")
+    _add_symbol_args(refp)
+    refp.set_defaults(func=_handle_references)
+
+    # ── overview ───────────────────────────────────────────────────────
+    ovp = cb_sub.add_parser("overview", parents=[_GLOBAL_OPTIONS],
+                             help="File ToC with signatures and ref counts.")
+    ovp.add_argument("file", type=str, help="Source file path.")
+    ovp.add_argument("--depth", "-d", type=int, default=0,
+                      help="Symbol tree depth (default 0 = top-level only).")
+    ovp.add_argument("--workspace", type=str)
+    ovp.set_defaults(func=_handle_overview)
+
+    # ── explain ────────────────────────────────────────────────────────
+    exp = cb_sub.add_parser("explain", parents=[_GLOBAL_OPTIONS],
+                             help="Full symbol report.")
+    _add_symbol_args(exp)
+    exp.set_defaults(func=_handle_explain)
