@@ -1,0 +1,20 @@
+{
+  "symbol": "caller_1",
+  "kind": "Function",
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+  "incoming_calls": [
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 86,
+      "snippet": "    chain1_result = caller_1(name, ws)\n    chain2_result = chain_a(name)\n\n    # Cross-file calls — fixtures_functions",
+      "symbol": "entry_point",
+      "kind": "Function",
+      "locality": "same_file"
+    }
+  ],
+  "query": {
+    "command": "incoming-calls",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+    "symbol": "caller_1"
+  }
+}

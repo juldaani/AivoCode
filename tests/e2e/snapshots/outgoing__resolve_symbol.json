@@ -1,0 +1,20 @@
+{
+  "symbol": "resolve_symbol",
+  "kind": "Function",
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
+  "outgoing_calls": [
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+      "line": 50,
+      "snippet": "class ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.",
+      "symbol": "ResolvedSymbol",
+      "kind": "Class",
+      "locality": "cross_file"
+    }
+  ],
+  "query": {
+    "command": "outgoing-calls",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
+    "symbol": "resolve_symbol"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "query": {
+    "command": "search",
+    "arg": "ResolvedSymbol",
+    "limit": 50
+  },
+  "results": [],
+  "count": 0
+}

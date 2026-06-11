@@ -1,0 +1,107 @@
+{
+  "symbol": "entry_point",
+  "kind": "Function",
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+  "incoming_calls": [],
+  "outgoing_calls": [
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 46,
+      "snippet": "def caller_1(text: str, workspace: Path) -> str:\n    \"\"\"Top of same-file chain — calls caller_2 and relativize.\"\"\"\n    rel = relativize(workspace, workspace)  # cross-file outgoing\n    inner = caller_",
+      "symbol": "caller_1",
+      "kind": "Function",
+      "locality": "same_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 62,
+      "snippet": "def chain_a(name: str) -> str:\n    \"\"\"Calls chain_b (same file).\"\"\"\n    return chain_b(name.upper())\n",
+      "symbol": "chain_a",
+      "kind": "Function",
+      "locality": "same_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
+      "line": 117,
+      "snippet": "def build_tree(\n    workspace: Path,\n    *,\n    suffix: str | None = None,",
+      "symbol": "build_tree",
+      "kind": "Function",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
+      "line": 54,
+      "snippet": "async def resolve_symbol(\n    file_path: str,\n    symbol_name: str,\n    *,",
+      "symbol": "resolve_symbol",
+      "kind": "Function",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
+      "line": 131,
+      "snippet": "def sync_wrapper(name: str, workspace: Path) -> str:\n    \"\"\"Thin wrapper that delegates to relativize.\n\n    Tests outgoing-calls resolving to a workspace call.",
+      "symbol": "sync_wrapper",
+      "kind": "Function",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+      "line": 87,
+      "snippet": "    def make_default() -> \"LoudGreeter\":\n        \"\"\"Static factory — creates a default instance.\"\"\"\n        return LoudGreeter()\n",
+      "symbol": "make_default",
+      "kind": "Method",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+      "line": 82,
+      "snippet": "    def greet(self, name: str) -> str:\n        \"\"\"Override: shout the greeting.\"\"\"\n        return super().greet(name).upper()\n",
+      "symbol": "greet",
+      "kind": "Method",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+      "line": 98,
+      "snippet": "    def shout(self, text: str) -> str:\n        \"\"\"Extra method for call hierarchy depth.\"\"\"\n        return text.upper() + \"!!!\"\n",
+      "symbol": "shout",
+      "kind": "Method",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+      "line": 113,
+      "snippet": "class GreeterFactory:\n    \"\"\"Factory that creates and caches greeters.\n\n    Uses instance methods — tests outgoing-calls from factory methods.",
+      "symbol": "GreeterFactory",
+      "kind": "Class",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+      "line": 122,
+      "snippet": "    def create(self, name: str) -> LoudGreeter:\n        greeter = LoudGreeter.make_default()\n        self._cache[name] = greeter\n        return greeter",
+      "symbol": "create",
+      "kind": "Method",
+      "locality": "cross_file"
+    }
+  ],
+  "references": [
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 70,
+      "snippet": "async def entry_point(\n    name: str,\n    *,\n    file_path: str = \"/tmp/test.py\",",
+      "locality": "same_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py",
+      "line": 54,
+      "snippet": "    from mock_pkg.fixtures_callchain import entry_point\n\n# ── Re-exports ────────────────────────────────────────────────────────────────\n",
+      "locality": "cross_file"
+    }
+  ],
+  "query": {
+    "command": "impact",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+    "symbol": "entry_point"
+  }
+}

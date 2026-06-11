@@ -1,0 +1,227 @@
+{
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+  "imports": [
+    {
+      "line": 14,
+      "statement": "from __future__ import annotations"
+    },
+    {
+      "line": 16,
+      "statement": "from dataclasses import dataclass, field"
+    },
+    {
+      "line": 17,
+      "statement": "from enum import Enum"
+    },
+    {
+      "line": 18,
+      "statement": "from pathlib import Path"
+    }
+  ],
+  "symbols": [
+    {
+      "symbol": "LookupErrorBase",
+      "kind": "Class",
+      "signature": "class LookupErrorBase(Exception):",
+      "preview": "    \"\"\"Base for symbol lookup errors.  No own methods — children: null.\"\"\"\n    pass",
+      "range_line_char": {
+        "start": [
+          24,
+          1
+        ],
+        "end": [
+          26,
+          9
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 2
+      },
+      "children": null
+    },
+    {
+      "symbol": "SymbolNotFoundError",
+      "kind": "Class",
+      "signature": "class SymbolNotFoundError(LookupErrorBase):",
+      "preview": "    \"\"\"Raised when a symbol name is not found in the target file.\"\"\"\n    pass",
+      "range_line_char": {
+        "start": [
+          29,
+          1
+        ],
+        "end": [
+          31,
+          9
+        ]
+      },
+      "references_count": {},
+      "children": null
+    },
+    {
+      "symbol": "AmbiguousSymbolError",
+      "kind": "Class",
+      "signature": "class AmbiguousSymbolError(LookupErrorBase):",
+      "preview": "    \"\"\"Raised when a symbol name matches multiple candidates.\n\n    Has an explicit __init__ — children should include it.\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          34,
+          1
+        ],
+        "end": [
+          43,
+          82
+        ]
+      },
+      "references_count": {},
+      "children": {
+        "count": 1
+      }
+    },
+    {
+      "symbol": "ResolvedSymbol",
+      "kind": "Class",
+      "signature": "@dataclass(frozen=True, slots=True)\nclass ResolvedSymbol:",
+      "preview": "    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          49,
+          1
+        ],
+        "end": [
+          61,
+          55
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 3,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
+      },
+      "children": null
+    },
+    {
+      "symbol": "GreeterBase",
+      "kind": "Class",
+      "signature": "class GreeterBase:",
+      "preview": "    \"\"\"Base class for greeters — referenced from fixtures_callchain.py.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Return a polite greeting.\"\"\"\n        return f\"Hello, {name}\"",
+      "range_line_char": {
+        "start": [
+          67,
+          1
+        ],
+        "end": [
+          76,
+          42
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 1,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 1,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 2
+      },
+      "children": {
+        "count": 2
+      }
+    },
+    {
+      "symbol": "LoudGreeter",
+      "kind": "Class",
+      "signature": "class LoudGreeter(GreeterBase):",
+      "preview": "    \"\"\"Loud greeter — overrides greet, adds factory methods.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Override: shout the greeting.\"\"\"\n        return super().greet(name).upper()",
+      "range_line_char": {
+        "start": [
+          79,
+          1
+        ],
+        "end": [
+          100,
+          36
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 8,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 2,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 3
+      },
+      "children": {
+        "count": 4
+      }
+    },
+    {
+      "symbol": "ExtraLoudGreeter",
+      "kind": "Class",
+      "signature": "class ExtraLoudGreeter(LoudGreeter):",
+      "preview": "    \"\"\"Even louder — three levels of inheritance.\"\"\"\n\n    def greet(self, name: str) -> str:\n        return super().greet(name) + \"!!!\"\n",
+      "range_line_char": {
+        "start": [
+          103,
+          1
+        ],
+        "end": [
+          110,
+          54
+        ]
+      },
+      "references_count": {},
+      "children": {
+        "count": 2
+      }
+    },
+    {
+      "symbol": "GreeterFactory",
+      "kind": "Class",
+      "signature": "class GreeterFactory:",
+      "preview": "    \"\"\"Factory that creates and caches greeters.\n\n    Uses instance methods — tests outgoing-calls from factory methods.\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          113,
+          1
+        ],
+        "end": [
+          128,
+          37
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 2,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
+      },
+      "children": {
+        "count": 3
+      }
+    },
+    {
+      "symbol": "SymbolKind",
+      "kind": "Class",
+      "signature": "class SymbolKind(str, Enum):",
+      "preview": "    \"\"\"Symbol kinds from LSP protocol — overview includes Enum kind.\"\"\"\n\n    FILE = \"File\"\n    MODULE = \"Module\"\n    NAMESPACE = \"Namespace\"",
+      "range_line_char": {
+        "start": [
+          134,
+          1
+        ],
+        "end": [
+          146,
+          82
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 3,
+        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
+      },
+      "children": {
+        "count": 1
+      }
+    }
+  ],
+  "symbol_count": 9,
+  "depth": 0,
+  "query": {
+    "command": "overview",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+    "depth": 0
+  }
+}

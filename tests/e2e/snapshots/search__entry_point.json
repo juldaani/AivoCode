@@ -1,0 +1,16 @@
+{
+  "query": {
+    "command": "search",
+    "arg": "entry_point",
+    "limit": 50
+  },
+  "results": [
+    {
+      "symbol": "entry_point",
+      "kind": "Function",
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 70
+    }
+  ],
+  "count": 1
+}

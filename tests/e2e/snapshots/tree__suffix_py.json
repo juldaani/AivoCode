@@ -1,0 +1,187 @@
+{
+  "root": [
+    {
+      "api_server/": [
+        "__init__.py",
+        "app.py",
+        {
+          "routes/": [
+            "__init__.py",
+            "codebase.py",
+            "lsp.py",
+            "web_ops.py"
+          ]
+        }
+      ]
+    },
+    {
+      "cli/": [
+        "__init__.py",
+        "__main__.py",
+        "_utils.py",
+        {
+          "commands/": [
+            "__init__.py",
+            "codebase.py",
+            "lsp.py",
+            "webfetch.py",
+            "websearch.py"
+          ]
+        },
+        "main.py"
+      ]
+    },
+    {
+      "codebase/": [
+        "__init__.py",
+        "_analyze.py",
+        "_read.py",
+        "_resolve.py",
+        "_snippet.py",
+        "_tree.py"
+      ]
+    },
+    {
+      "file_watcher/": [
+        "__init__.py",
+        "filters.py",
+        "gitignore.py",
+        "how_to_use.py",
+        "types.py",
+        "watcher.py"
+      ]
+    },
+    {
+      "lsp/": [
+        "__init__.py",
+        "_daemon.py",
+        "_protocol.py",
+        "_serialize.py",
+        "_symbols.py",
+        "_translate.py",
+        "_workspace.py",
+        "client.py",
+        "config.py"
+      ]
+    },
+    {
+      "tests/": [
+        "__init__.py",
+        "conftest.py",
+        {
+          "data/": [
+            {
+              "mock_repos/": [
+                {
+                  "python/": [
+                    {
+                      "mock_pkg/": [
+                        "__init__.py",
+                        "errors.py",
+                        "fixtures_callchain.py",
+                        "fixtures_classes.py",
+                        "fixtures_enums.py",
+                        "fixtures_functions.py",
+                        "fixtures_imports.py",
+                        "types.py",
+                        "utils.py"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "e2e/": [
+            "__init__.py",
+            "conftest.py",
+            "test_codebase_schema.py",
+            "test_codebase_snapshots.py",
+            "test_lsp_bridge.py",
+            "test_lsp_cli.py",
+            "test_web_ops_cli.py",
+            "test_websearch.py"
+          ]
+        },
+        {
+          "integration/": [
+            "__init__.py",
+            {
+              "file_watcher/": [
+                "__init__.py",
+                "test_integration.py"
+              ]
+            },
+            {
+              "lsp/": [
+                "__init__.py",
+                "conftest.py",
+                "test_call_hierarchy.py",
+                "test_definition.py",
+                "test_diagnostics.py",
+                "test_document_symbol.py",
+                "test_file_changes.py",
+                "test_hover.py",
+                "test_references.py",
+                "test_rename.py",
+                "test_workspace_symbol.py"
+              ]
+            }
+          ]
+        },
+        {
+          "unit/": [
+            "__init__.py",
+            {
+              "file_watcher/": [
+                "__init__.py",
+                "test_filters.py",
+                "test_gitignore.py",
+                "test_watcher.py"
+              ]
+            },
+            {
+              "lsp/": [
+                "__init__.py",
+                "test_client.py",
+                "test_config.py",
+                "test_symbols.py",
+                "test_translate.py"
+              ]
+            },
+            {
+              "web_ops/": [
+                "__init__.py",
+                "test_chunking.py"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tmp/": [
+        {
+          "probe/": [
+            "test_lsp_methods.py"
+          ]
+        }
+      ]
+    },
+    {
+      "web_ops/": [
+        "__init__.py",
+        "fetcher.py",
+        "searcher.py",
+        "tst_web_fetch.py"
+      ]
+    }
+  ],
+  "workspace": "/workspaces/lsp-functionalities",
+  "query": {
+    "command": "tree",
+    "suffix": ".py"
+  }
+}

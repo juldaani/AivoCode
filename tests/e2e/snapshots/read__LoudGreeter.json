@@ -1,0 +1,39 @@
+{
+  "symbol": "LoudGreeter",
+  "kind": "Class",
+  "body": "class LoudGreeter(GreeterBase):\n    \"\"\"Loud greeter — overrides greet, adds factory methods.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Override: shout the greeting.\"\"\"\n        return super().greet(name).upper()\n\n    @staticmethod\n    def make_default() -> \"LoudGreeter\":\n        \"\"\"Static factory — creates a default instance.\"\"\"\n        return LoudGreeter()\n\n    @classmethod\n    def make_named(cls, prefix: str) -> \"LoudGreeter\":\n        \"\"\"Classmethod factory — creates with a config prefix.\"\"\"\n        instance = cls()\n        instance._prefix = prefix\n        return instance\n\n    def shout(self, text: str) -> str:\n        \"\"\"Extra method for call hierarchy depth.\"\"\"\n        return text.upper() + \"!!!\"",
+  "range_line_char": {
+    "start": [
+      79,
+      1
+    ],
+    "end": [
+      100,
+      36
+    ]
+  },
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+  "imports": [
+    {
+      "line": 14,
+      "statement": "from __future__ import annotations"
+    },
+    {
+      "line": 16,
+      "statement": "from dataclasses import dataclass, field"
+    },
+    {
+      "line": 17,
+      "statement": "from enum import Enum"
+    },
+    {
+      "line": 18,
+      "statement": "from pathlib import Path"
+    }
+  ],
+  "query": {
+    "command": "read",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+    "symbol": "LoudGreeter"
+  }
+}

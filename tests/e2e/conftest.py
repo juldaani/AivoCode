@@ -46,6 +46,24 @@ def _wait_for_server(url: str, timeout: float = 45.0) -> None:
     raise RuntimeError(f"Server did not become ready within {timeout}s")
 
 
+# ── Snapshot update flag ───────────────────────────────────────────────────────
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add ``--update-snapshots`` flag for golden-file regression tests."""
+    parser.addoption(
+        "--update-snapshots", action="store_true", default=False,
+        help="Regenerate snapshot files instead of comparing.",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _set_update_mode(request: pytest.FixtureRequest) -> None:
+    """Propagate ``--update-snapshots`` to the snapshot module."""
+    import tests.e2e.test_codebase_snapshots as mod
+    mod._update_mode = request.config.getoption("--update-snapshots", False)
+
+
 @pytest.fixture(scope="module")
 def lsp_server() -> str:
     """Start the REST API server on a free port, yield the URL, then stop it.

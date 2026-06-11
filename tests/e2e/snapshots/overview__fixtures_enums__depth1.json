@@ -1,0 +1,162 @@
+{
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py",
+  "imports": [
+    {
+      "line": 15,
+      "statement": "from __future__ import annotations"
+    },
+    {
+      "line": 17,
+      "statement": "from dataclasses import dataclass, field"
+    },
+    {
+      "line": 18,
+      "statement": "from enum import Enum"
+    },
+    {
+      "line": 19,
+      "statement": "from typing import ClassVar"
+    }
+  ],
+  "symbols": [
+    {
+      "symbol": "GreetingStyle",
+      "kind": "Class",
+      "signature": "class GreetingStyle(str, Enum):",
+      "preview": "    \"\"\"Enum for greeting styles — kind Enum, included in overview.\"\"\"\n\n    FRIENDLY = \"friendly\"\n    FORMAL = \"formal\"\n    CASUAL = \"casual\"",
+      "range_line_char": {
+        "start": [
+          38,
+          1
+        ],
+        "end": [
+          51,
+          20
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py": 2
+      },
+      "children": [
+        {
+          "symbol": "to_prefix",
+          "kind": "Method",
+          "signature": "    def to_prefix(self) -> str:",
+          "preview": "        \"\"\"Method on enum — should appear as child.\"\"\"\n        if self is GreetingStyle.FRIENDLY:\n            return \"Hey\"\n        elif self is GreetingStyle.FORMAL:\n            return \"Dear\"",
+          "range_line_char": {
+            "start": [
+              45,
+              5
+            ],
+            "end": [
+              51,
+              20
+            ]
+          },
+          "references_count": {},
+          "children": null
+        }
+      ]
+    },
+    {
+      "symbol": "SimpleData",
+      "kind": "Class",
+      "signature": "@dataclass\nclass SimpleData:",
+      "preview": "    \"\"\"Dataclass with ClassVar field — all fields are Variable or ClassVar kind.\n\n    Overview should show children: null since no fields are callable kinds.\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          57,
+          1
+        ],
+        "end": [
+          66,
+          41
+        ]
+      },
+      "references_count": {},
+      "children": null
+    },
+    {
+      "symbol": "EmptyContainer",
+      "kind": "Class",
+      "signature": "class EmptyContainer:",
+      "preview": "    \"\"\"A class with no methods, no fields — just documentation.\n\n    Overview should show children: null.\n    \"\"\"\n    pass",
+      "range_line_char": {
+        "start": [
+          72,
+          1
+        ],
+        "end": [
+          77,
+          9
+        ]
+      },
+      "references_count": {},
+      "children": null
+    },
+    {
+      "symbol": "ProcessedData",
+      "kind": "Class",
+      "signature": "@dataclass\nclass ProcessedData:",
+      "preview": "    \"\"\"Dataclass mixing regular fields with ClassVar and default factories.\n\n    Overview: children: null (all fields are Variable/ClassVar kind).\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          83,
+          1
+        ],
+        "end": [
+          101,
+          77
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py": 1
+      },
+      "children": [
+        {
+          "symbol": "__post_init__",
+          "kind": "Method",
+          "signature": "    def __post_init__(self) -> None:",
+          "preview": "        \"\"\"Post-init hook — should appear as child? Depends on LSP.\"\"\"\n        ProcessedData._id_counter += 1",
+          "range_line_char": {
+            "start": [
+              95,
+              5
+            ],
+            "end": [
+              97,
+              39
+            ]
+          },
+          "references_count": {},
+          "children": null
+        },
+        {
+          "symbol": "summary",
+          "kind": "Method",
+          "signature": "    def summary(self) -> str:",
+          "preview": "        \"\"\"Returns a summary string — this IS a Method, should be child.\"\"\"\n        return f\"ProcessedData({len(self.items)} items, ratio={self.ratio})\"",
+          "range_line_char": {
+            "start": [
+              99,
+              5
+            ],
+            "end": [
+              101,
+              77
+            ]
+          },
+          "references_count": {},
+          "children": null
+        }
+      ]
+    }
+  ],
+  "symbol_count": 4,
+  "depth": 1,
+  "query": {
+    "command": "overview",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py",
+    "depth": 1
+  }
+}

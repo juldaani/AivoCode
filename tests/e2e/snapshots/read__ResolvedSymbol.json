@@ -1,0 +1,39 @@
+{
+  "symbol": "ResolvedSymbol",
+  "kind": "Class",
+  "body": "@dataclass(frozen=True, slots=True)\nclass ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"\n\n    name: str\n    kind: str\n    line: int\n    character: int = 1\n    range_start: tuple[int, int] = field(default=(1, 1))\n    range_end: tuple[int, int] = field(default=(1, 1))",
+  "range_line_char": {
+    "start": [
+      49,
+      1
+    ],
+    "end": [
+      61,
+      55
+    ]
+  },
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+  "imports": [
+    {
+      "line": 14,
+      "statement": "from __future__ import annotations"
+    },
+    {
+      "line": 16,
+      "statement": "from dataclasses import dataclass, field"
+    },
+    {
+      "line": 17,
+      "statement": "from enum import Enum"
+    },
+    {
+      "line": 18,
+      "statement": "from pathlib import Path"
+    }
+  ],
+  "query": {
+    "command": "read",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+    "symbol": "ResolvedSymbol"
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+  "imports": [
+    {
+      "line": 12,
+      "statement": "from __future__ import annotations"
+    },
+    {
+      "line": 14,
+      "statement": "from pathlib import Path"
+    },
+    {
+      "line": 16,
+      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+    },
+    {
+      "line": 22,
+      "statement": "from mock_pkg.fixtures_functions import (\n    _private_helper,\n    build_tree,\n    leaf_helper,\n    relativize,\n    resolve_symbol,\n    sync_wrapper,\n)"
+    }
+  ],
+  "symbols": [
+    {
+      "symbol": "caller_3",
+      "kind": "Function",
+      "signature": "def caller_3(text: str) -> str:",
+      "preview": "    \"\"\"Bottom of the same-file chain — calls cross-file leaf_helper.\"\"\"\n    return leaf_helper(text)  # cross-file outgoing",
+      "range_line_char": {
+        "start": [
+          36,
+          1
+        ],
+        "end": [
+          38,
+          29
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
+      },
+      "children": null
+    },
+    {
+      "symbol": "caller_2",
+      "kind": "Function",
+      "signature": "def caller_2(text: str) -> str:",
+      "preview": "    \"\"\"Middle of chain — calls caller_3.\"\"\"\n    return caller_3(text)",
+      "range_line_char": {
+        "start": [
+          41,
+          1
+        ],
+        "end": [
+          43,
+          26
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
+      },
+      "children": null
+    },
+    {
+      "symbol": "caller_1",
+      "kind": "Function",
+      "signature": "def caller_1(text: str, workspace: Path) -> str:",
+      "preview": "    \"\"\"Top of same-file chain — calls caller_2 and relativize.\"\"\"\n    rel = relativize(workspace, workspace)  # cross-file outgoing\n    inner = caller_2(text)\n    return f\"{inner} @ {rel}\"",
+      "range_line_char": {
+        "start": [
+          46,
+          1
+        ],
+        "end": [
+          50,
+          30
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
+      },
+      "children": null
+    },
+    {
+      "symbol": "chain_b",
+      "kind": "Function",
+      "signature": "def chain_b(name: str) -> str:",
+      "preview": "    \"\"\"Calls cross-file private helper.\"\"\"\n    return _private_helper(f\"  {name}  \")  # cross-file outgoing",
+      "range_line_char": {
+        "start": [
+          57,
+          1
+        ],
+        "end": [
+          59,
+          42
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
+      },
+      "children": null
+    },
+    {
+      "symbol": "chain_a",
+      "kind": "Function",
+      "signature": "def chain_a(name: str) -> str:",
+      "preview": "    \"\"\"Calls chain_b (same file).\"\"\"\n    return chain_b(name.upper())",
+      "range_line_char": {
+        "start": [
+          62,
+          1
+        ],
+        "end": [
+          64,
+          33
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
+      },
+      "children": null
+    },
+    {
+      "symbol": "entry_point",
+      "kind": "Function",
+      "signature": "async def entry_point(\n    name: str,\n    *,\n    file_path: str = \"/tmp/test.py\",\n    workspace: Path | None = None,\n) -> dict:",
+      "preview": "    \"\"\"Top-level entry that exercises all cross-file dependencies.\n\n    Calls from 4 different modules, plus internal calls, plus lazily\n    imported calls — tests outgoing-calls with mixed locality.\n    \"\"\"",
+      "range_line_char": {
+        "start": [
+          70,
+          1
+        ],
+        "end": [
+          110,
+          6
+        ]
+      },
+      "references_count": {
+        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
+      },
+      "children": null
+    }
+  ],
+  "symbol_count": 6,
+  "depth": 0,
+  "query": {
+    "command": "overview",
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+    "depth": 0
+  }
+}
