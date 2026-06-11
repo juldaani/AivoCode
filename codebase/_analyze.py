@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth
+from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth, relativize
 from codebase._snippet import read_snippet, read_range
 
 
@@ -107,7 +107,7 @@ async def _outgoing_calls(
         character=symbol.character,
         workspace=ws,
     )
-    if "error" in result:
+    if "error" in result or result.get("result") is None:
         return []
 
     calls: list[dict] = result.get("result", [])
@@ -144,7 +144,7 @@ async def _references(
         character=symbol.character,
         workspace=ws,
     )
-    if "error" in result:
+    if "error" in result or result.get("result") is None:
         return []
 
     refs: list[dict] = result.get("result", [])
@@ -178,7 +178,7 @@ async def _overview(
     tree = _symbol_tree_by_depth(symbols, depth)
     processed = await _process_overview_symbols(tree, fp, ws)
     return {
-        "file": str(fp),
+        "file": relativize(fp, ws),
         "symbols": processed,
         "symbol_count": len(processed),
         "depth": depth,
@@ -318,7 +318,9 @@ async def _explain(
         )
         if "result" in def_result:
             locs = def_result["result"]
-            if isinstance(locs, dict):
+            if locs is None:
+                locs = []
+            elif isinstance(locs, dict):
                 locs = [locs]
             for loc in locs:
                 uri = loc.get("uri", "")
@@ -338,8 +340,83 @@ async def _explain(
         "symbol": [symbol.kind, symbol.name],
         "body": body,
         "range_ln_ch": {"start": list(symbol.range_start), "end": list(symbol.range_end)},
-        "file": str(fp),
+        "file": relativize(fp, ws),
         "definers": definers,
+        "incoming_calls": incoming,
+        "outgoing_calls": outgoing,
+        "references": refs,
+    }
+
+
+# ── Search ─────────────────────────────────────────────────────────────────────
+
+
+async def _search(
+    query: str,
+    kind: str | None = None,
+    limit: int = 50,
+    workspace: Path | None = None,
+) -> dict:
+    from lsp import query_workspace_symbol, detect_workspace
+
+    ws = workspace or Path.cwd()
+    ws = detect_workspace(ws)
+    result = await query_workspace_symbol(query, workspace=ws)
+
+    if "error" in result or result.get("symbols") is None:
+        return {"query": query, "results": [], "count": 0}
+
+    results: list[dict] = []
+    for sym in result["symbols"]:
+        sym_kind = sym.get("kind", "")
+        # Apply kind filter if specified.
+        if kind is not None and sym_kind.lower() != kind.lower():
+            continue
+        loc = sym.get("location", {})
+        uri = loc.get("uri", "")
+        file_path = _uri_to_path(uri)
+        try:
+            rel = str(Path(file_path).relative_to(ws))
+        except ValueError:
+            rel = file_path
+        line = _extract_line(loc.get("range", {}))
+        entry: dict = {
+            "symbol": [sym_kind, sym.get("name", "")],
+            "file": rel,
+            "line": line,
+        }
+        container = sym.get("container_name")
+        if container:
+            entry["container"] = container
+        results.append(entry)
+        if len(results) >= limit:
+            break
+
+    return {"query": query, "results": results, "count": len(results)}
+
+
+# ── Impact ─────────────────────────────────────────────────────────────────────
+
+
+async def _impact(
+    symbol: ResolvedSymbol,
+    file_path: str | Path,
+    workspace: Path | None = None,
+) -> dict:
+    """Change impact: incoming + outgoing calls + references."""
+    from lsp import detect_workspace
+
+    ws = workspace or Path.cwd()
+    ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
+
+    incoming = await _incoming_calls(symbol, fp, ws)
+    outgoing = await _outgoing_calls(symbol, fp, ws)
+    refs = await _references(symbol, fp, ws)
+
+    return {
+        "symbol": [symbol.kind, symbol.name],
+        "file": relativize(fp, ws),
         "incoming_calls": incoming,
         "outgoing_calls": outgoing,
         "references": refs,

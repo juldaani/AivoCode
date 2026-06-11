@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from codebase import (
+    analyze_impact,
     explain_symbol,
     file_overview,
     find_references,
@@ -21,6 +22,7 @@ from codebase import (
     incoming_calls,
     outgoing_calls,
     read_symbol,
+    search_symbols,
 )
 from codebase._resolve import AmbiguousSymbolError, SymbolNotFoundError
 from lsp import detect_workspace
@@ -52,6 +54,13 @@ class SymbolBody(BaseModel):
 class OverviewBody(BaseModel):
     file: str
     depth: int = 0
+    workspace: str | None = None
+
+
+class SearchBody(BaseModel):
+    query: str
+    kind: str | None = None
+    limit: int = 50
     workspace: str | None = None
 
 
@@ -142,6 +151,28 @@ async def overview(body: OverviewBody):
 async def explain(body: SymbolBody):
     try:
         return await explain_symbol(
+            body.file, body.symbol_name,
+            line=body.line,
+            workspace=Path(body.workspace) if body.workspace else None,
+        )
+    except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
+        return _symbol_error_response(exc, body.file)
+
+
+@router.post("/search")
+async def search(body: SearchBody):
+    return await search_symbols(
+        body.query,
+        kind=body.kind,
+        limit=body.limit,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/impact")
+async def impact(body: SymbolBody):
+    try:
+        return await analyze_impact(
             body.file, body.symbol_name,
             line=body.line,
             workspace=Path(body.workspace) if body.workspace else None,

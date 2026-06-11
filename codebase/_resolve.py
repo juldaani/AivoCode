@@ -146,6 +146,18 @@ def _find_by_name_and_line(
     return None
 
 
+# ── Path helpers ───────────────────────────────────────────────────────────────
+
+
+def relativize(file_path: str | Path, workspace: Path) -> str:
+    """Return *file_path* relative to *workspace* root, or absolute if outside."""
+    fp = Path(file_path).resolve()
+    try:
+        return str(fp.relative_to(workspace.resolve()))
+    except ValueError:
+        return str(fp)
+
+
 # ── Public resolver ────────────────────────────────────────────────────────────
 
 

@@ -31,13 +31,15 @@ from pathlib import Path
 
 from codebase._analyze import (
     _explain,
+    _impact,
     _incoming_calls,
     _outgoing_calls,
     _overview,
     _references,
+    _search,
 )
 from codebase._read import _read_symbol
-from codebase._resolve import ResolvedSymbol, resolve_symbol
+from codebase._resolve import ResolvedSymbol, relativize, resolve_symbol
 from codebase._root import _root_dirs
 from codebase._tree import _build_tree
 
@@ -96,7 +98,7 @@ async def read_symbol(
 ) -> dict:
     """Read the full body text of *symbol_name* in *file_path*."""
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return _read_symbol(sym, file_path)
+    return _read_symbol(sym, file_path, workspace)
 
 
 async def incoming_calls(
@@ -107,10 +109,13 @@ async def incoming_calls(
     workspace: Path | None = None,
 ) -> dict:
     """List incoming call hierarchy for *symbol_name*."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     return {
         "symbol": [sym.kind, sym.name],
-        "file": str(Path(file_path).resolve()),
+        "file": relativize(file_path, ws_rel),
         "incoming_calls": await _incoming_calls(sym, file_path, workspace),
     }
 
@@ -123,10 +128,13 @@ async def outgoing_calls(
     workspace: Path | None = None,
 ) -> dict:
     """List outgoing call hierarchy for *symbol_name*."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     return {
         "symbol": [sym.kind, sym.name],
-        "file": str(Path(file_path).resolve()),
+        "file": relativize(file_path, ws_rel),
         "outgoing_calls": await _outgoing_calls(sym, file_path, workspace),
     }
 
@@ -139,10 +147,13 @@ async def find_references(
     workspace: Path | None = None,
 ) -> dict:
     """List all reference sites for *symbol_name* (includes definition)."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     return {
         "symbol": [sym.kind, sym.name],
-        "file": str(Path(file_path).resolve()),
+        "file": relativize(file_path, ws_rel),
         "references": await _references(sym, file_path, workspace),
     }
 
@@ -167,3 +178,29 @@ async def explain_symbol(
     """Full symbol report: body, definers, callers, callees, references."""
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     return await _explain(sym, file_path, workspace)
+
+
+async def search_symbols(
+    query: str,
+    *,
+    kind: str | None = None,
+    limit: int = 50,
+    workspace: Path | None = None,
+) -> dict:
+    """Search the workspace for symbols matching *query*."""
+    return await _search(query, kind=kind, limit=limit, workspace=workspace)
+
+
+async def analyze_impact(
+    file_path: str | Path,
+    symbol_name: str,
+    *,
+    line: int | None = None,
+    workspace: Path | None = None,
+) -> dict:
+    """Change impact: incoming calls + outgoing calls + references."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    return await _impact(sym, file_path, workspace)

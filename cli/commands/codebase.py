@@ -89,6 +89,21 @@ def _handle_explain(args: argparse.Namespace) -> None:
     _symbol_handler(args, "/codebase/explain")
 
 
+def _handle_search(args: argparse.Namespace) -> None:
+    body: dict = {
+        "query": args.query,
+        "kind": args.kind,
+        "limit": args.limit,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/search", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
+def _handle_impact(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/impact")
+
+
 # ── Shared argument definitions ────────────────────────────────────────────────
 
 def _add_symbol_args(parser: argparse.ArgumentParser) -> None:
@@ -163,3 +178,20 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
                              help="Full symbol report.")
     _add_symbol_args(exp)
     exp.set_defaults(func=_handle_explain)
+
+    # ── search ──────────────────────────────────────────────────────────
+    sp = cb_sub.add_parser("search", parents=[_GLOBAL_OPTIONS],
+                            help="Search symbols across the workspace.")
+    sp.add_argument("query", type=str, help="Search query string.")
+    sp.add_argument("--kind", type=str, default=None,
+                    help="Filter by symbol kind (e.g. 'Class', 'Function').")
+    sp.add_argument("--limit", type=int, default=50,
+                    help="Max results (default 50).")
+    sp.add_argument("--workspace", type=str)
+    sp.set_defaults(func=_handle_search)
+
+    # ── impact ──────────────────────────────────────────────────────────
+    imp = cb_sub.add_parser("impact", parents=[_GLOBAL_OPTIONS],
+                             help="Change impact analysis.")
+    _add_symbol_args(imp)
+    imp.set_defaults(func=_handle_impact)
