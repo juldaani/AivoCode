@@ -44,7 +44,15 @@ from codebase._root import _root_dirs
 from codebase._tree import _build_tree
 
 
-def get_repo_root_dirs(workspace: Path | None = None) -> list[str]:
+# ── Query helper ───────────────────────────────────────────────────────────────
+
+
+def _make_query(command: str, **kwargs: object) -> dict:
+    """Build a query metadata block, omitting ``None`` values."""
+    return {"command": command, **{k: v for k, v in kwargs.items() if v is not None}}
+
+
+def get_repo_root_dirs(workspace: Path | None = None) -> dict:
     """Return sorted list of top-level directory names in the workspace.
 
     Hidden directories (starting with ``.``) are excluded.
@@ -57,23 +65,28 @@ def get_repo_root_dirs(workspace: Path | None = None) -> list[str]:
 
     Returns
     -------
-    list[str]
-        Sorted directory names (not paths).  e.g. ``["cli", "lsp", "tests"]``.
+    dict
+        ``{"dirs": [...], "workspace": "...", "query": {...}}``.
     """
-    return _root_dirs(workspace)
+    ws = workspace or Path.cwd()
+    return {
+        "dirs": _root_dirs(ws),
+        "workspace": str(ws),
+        "query": _make_query("root"),
+    }
 
 
 def get_repo_tree(
     workspace: Path | None = None,
     *,
     suffix: str | None = None,
-) -> list:
+) -> dict:
     """Build a recursive file/directory tree for the workspace.
 
-    Returns a nested list structure where each entry is either:
+    Returns a nested structure where each entry is either:
 
     - ``"filename"`` for files, or
-    - ``["dirname/", [...children]]`` for directories.
+    - ``{"dirname/": [...children]}`` for directories.
 
     Hidden entries (``.git``, ``__pycache__``, etc.) are excluded.
 
@@ -86,7 +99,11 @@ def get_repo_tree(
         included.  Empty directories are pruned.
     """
     ws = workspace or Path.cwd()
-    return _build_tree(ws, suffix=suffix)
+    return {
+        "root": _build_tree(ws, suffix=suffix),
+        "workspace": str(ws),
+        "query": _make_query("tree", suffix=suffix),
+    }
 
 
 async def read_symbol(
@@ -95,6 +112,7 @@ async def read_symbol(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    command: str = "read",
 ) -> dict:
     """Read the full body text of *symbol_name* in *file_path*."""
     from lsp import detect_workspace
@@ -102,10 +120,10 @@ async def read_symbol(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = _read_symbol(sym, file_path, workspace)
-    result["query"] = {
-        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
-        "line": line,
-    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+        symbol=symbol_name, line=line,
+    )
     return result
 
 
@@ -115,6 +133,7 @@ async def incoming_calls(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    command: str = "incoming-calls",
 ) -> dict:
     """List incoming call hierarchy for *symbol_name*."""
     from lsp import detect_workspace
@@ -127,10 +146,10 @@ async def incoming_calls(
         "file": relativize(file_path, ws_rel),
         "incoming_calls": await _incoming_calls(sym, file_path, workspace),
     }
-    result["query"] = {
-        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
-        "line": line,
-    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+        symbol=symbol_name, line=line,
+    )
     return result
 
 
@@ -140,6 +159,7 @@ async def outgoing_calls(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    command: str = "outgoing-calls",
 ) -> dict:
     """List outgoing call hierarchy for *symbol_name*."""
     from lsp import detect_workspace
@@ -152,10 +172,10 @@ async def outgoing_calls(
         "file": relativize(file_path, ws_rel),
         "outgoing_calls": await _outgoing_calls(sym, file_path, workspace),
     }
-    result["query"] = {
-        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
-        "line": line,
-    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+        symbol=symbol_name, line=line,
+    )
     return result
 
 
@@ -165,6 +185,7 @@ async def find_references(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    command: str = "references",
 ) -> dict:
     """List all reference sites for *symbol_name* (includes definition)."""
     from lsp import detect_workspace
@@ -177,10 +198,10 @@ async def find_references(
         "file": relativize(file_path, ws_rel),
         "references": await _references(sym, file_path, workspace),
     }
-    result["query"] = {
-        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
-        "line": line,
-    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+        symbol=symbol_name, line=line,
+    )
     return result
 
 
@@ -189,9 +210,17 @@ async def file_overview(
     *,
     depth: int = 0,
     workspace: Path | None = None,
+    command: str = "overview",
 ) -> dict:
     """Build a file overview ToC with signatures and reference counts."""
-    return await _overview(file_path, depth=depth, workspace=workspace)
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    result = await _overview(file_path, depth=depth, workspace=workspace)
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel), depth=depth,
+    )
+    return result
 
 
 async def explain_symbol(
@@ -200,6 +229,7 @@ async def explain_symbol(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    command: str = "explain",
 ) -> dict:
     """Full symbol report: body, definers, callers, callees, references."""
     from lsp import detect_workspace
@@ -207,10 +237,10 @@ async def explain_symbol(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = await _explain(sym, file_path, workspace)
-    result["query"] = {
-        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
-        "line": line,
-    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+        symbol=symbol_name, line=line,
+    )
     return result
 
 
@@ -220,9 +250,12 @@ async def search_symbols(
     kind: str | None = None,
     limit: int = 50,
     workspace: Path | None = None,
+    command: str = "search",
 ) -> dict:
     """Search the workspace for symbols matching *query*."""
-    return await _search(query, kind=kind, limit=limit, workspace=workspace)
+    result = await _search(query, kind=kind, limit=limit, workspace=workspace)
+    result["query"] = _make_query(command, arg=query, kind=kind, limit=limit)
+    return result
 
 
 async def analyze_impact(
@@ -231,6 +264,7 @@ async def analyze_impact(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    command: str = "impact",
 ) -> dict:
     """Change impact: incoming calls + outgoing calls + references."""
     from lsp import detect_workspace
@@ -238,8 +272,8 @@ async def analyze_impact(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = await _impact(sym, file_path, workspace)
-    result["query"] = {
-        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
-        "line": line,
-    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+        symbol=symbol_name, line=line,
+    )
     return result

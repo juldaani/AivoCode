@@ -253,7 +253,8 @@ async def _process_overview_symbols(
         }
         children = sym.get("children")
         if children is not None:
-            entry["children"] = await _process_overview_symbols(children, file_path, workspace)
+            processed = await _process_overview_symbols(children, file_path, workspace)
+            entry["children"] = processed if processed else None
         else:
             entry["children"] = None
         enriched.append(entry)

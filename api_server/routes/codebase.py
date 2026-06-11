@@ -81,13 +81,13 @@ def _symbol_error_response(exc: AmbiguousSymbolError | SymbolNotFoundError, file
 @router.post("/root")
 async def root(body: RootBody):
     ws = detect_workspace(Path(body.workspace)) if body.workspace else Path.cwd()
-    return {"dirs": get_repo_root_dirs(ws), "workspace": str(ws)}
+    return get_repo_root_dirs(ws)
 
 
 @router.post("/tree")
 async def tree(body: TreeBody):
     ws = detect_workspace(Path(body.workspace)) if body.workspace else Path.cwd()
-    return {"root": get_repo_tree(ws, suffix=body.suffix), "workspace": str(ws)}
+    return get_repo_tree(ws, suffix=body.suffix)
 
 
 @router.post("/read")
