@@ -97,8 +97,16 @@ async def read_symbol(
     workspace: Path | None = None,
 ) -> dict:
     """Read the full body text of *symbol_name* in *file_path*."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return _read_symbol(sym, file_path, workspace)
+    result = _read_symbol(sym, file_path, workspace)
+    result["query"] = {
+        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
+        "line": line,
+    }
+    return result
 
 
 async def incoming_calls(
@@ -113,11 +121,17 @@ async def incoming_calls(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return {
-        "symbol": [sym.kind, sym.name],
+    result = {
+        "symbol": sym.name,
+        "kind": sym.kind,
         "file": relativize(file_path, ws_rel),
         "incoming_calls": await _incoming_calls(sym, file_path, workspace),
     }
+    result["query"] = {
+        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
+        "line": line,
+    }
+    return result
 
 
 async def outgoing_calls(
@@ -132,11 +146,17 @@ async def outgoing_calls(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return {
-        "symbol": [sym.kind, sym.name],
+    result = {
+        "symbol": sym.name,
+        "kind": sym.kind,
         "file": relativize(file_path, ws_rel),
         "outgoing_calls": await _outgoing_calls(sym, file_path, workspace),
     }
+    result["query"] = {
+        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
+        "line": line,
+    }
+    return result
 
 
 async def find_references(
@@ -151,11 +171,17 @@ async def find_references(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return {
-        "symbol": [sym.kind, sym.name],
+    result = {
+        "symbol": sym.name,
+        "kind": sym.kind,
         "file": relativize(file_path, ws_rel),
         "references": await _references(sym, file_path, workspace),
     }
+    result["query"] = {
+        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
+        "line": line,
+    }
+    return result
 
 
 async def file_overview(
@@ -176,8 +202,16 @@ async def explain_symbol(
     workspace: Path | None = None,
 ) -> dict:
     """Full symbol report: body, definers, callers, callees, references."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return await _explain(sym, file_path, workspace)
+    result = await _explain(sym, file_path, workspace)
+    result["query"] = {
+        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
+        "line": line,
+    }
+    return result
 
 
 async def search_symbols(
@@ -203,4 +237,9 @@ async def analyze_impact(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    return await _impact(sym, file_path, workspace)
+    result = await _impact(sym, file_path, workspace)
+    result["query"] = {
+        "symbol": symbol_name, "file": relativize(file_path, ws_rel),
+        "line": line,
+    }
+    return result

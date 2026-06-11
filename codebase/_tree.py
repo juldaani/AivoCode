@@ -79,7 +79,7 @@ def _walk(root: Path, suffix: str | None) -> list:
         if full.is_dir():
             children = _walk(full, suffix)
             if suffix is None or children:
-                entries.append([name + "/", children])
+                entries.append({name + "/": children})
         elif full.is_file():
             if suffix is None or name.endswith(suffix):
                 entries.append(name)

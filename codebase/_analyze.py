@@ -39,7 +39,8 @@ def _build_site(
         "snippet": read_snippet_chars(file_path, line),
     }
     if symbol_info:
-        entry["symbol"] = [symbol_info["kind"], symbol_info["name"]]
+        entry["symbol"] = symbol_info["name"]
+        entry["kind"] = symbol_info["kind"]
     return entry
 
 
@@ -192,8 +193,21 @@ async def _process_overview_symbols(
 ) -> list[dict]:
     from lsp import query_references
 
+    # Only include callable/type-defining symbols in overviews.
+    _OVERVIEW_KINDS: frozenset[str] = frozenset(
+        {
+            "Function", "Method", "Constructor",
+            "Class", "Interface", "Struct",
+            "Enum", "Event",
+        }
+    )
+
     enriched: list[dict] = []
     for sym in symbols:
+        kind = sym.get("kind", "")
+        if kind not in _OVERVIEW_KINDS:
+            continue
+
         line = sym.get("line", 1)
         if line is None:
             enriched.append(_empty_overview_entry(sym))
@@ -230,12 +244,11 @@ async def _process_overview_symbols(
             pass
 
         entry = {
-            "symbol": [
-                sym["kind"], sym["name"],
-                _sig_line_text(file_path, range_start[0], sig_end_line),
-                preview[:400] if preview else "",
-            ],
-            "range_ln_ch": {"start": list(range_start), "end": list(range_end)},
+            "symbol": sym["name"],
+            "kind": sym["kind"],
+            "signature": _sig_line_text(file_path, range_start[0], sig_end_line),
+            "preview": preview[:400] if preview else "",
+            "range_line_char": {"start": list(range_start), "end": list(range_end)},
             "references_count": ref_counts,
         }
         children = sym.get("children")
@@ -250,8 +263,11 @@ async def _process_overview_symbols(
 
 def _empty_overview_entry(sym: dict) -> dict:
     return {
-        "symbol": [sym.get("kind", ""), sym.get("name", ""), "", ""],
-        "range_ln_ch": {"start": [1, 1], "end": [1, 1]},
+        "symbol": sym.get("name", ""),
+        "kind": sym.get("kind", ""),
+        "signature": "",
+        "preview": "",
+        "range_line_char": {"start": [1, 1], "end": [1, 1]},
         "references_count": {},
         "children": None,
     }
@@ -337,9 +353,10 @@ async def _explain(
     refs = await _references(symbol, fp, ws)
 
     return {
-        "symbol": [symbol.kind, symbol.name],
+        "symbol": symbol.name,
+        "kind": symbol.kind,
         "body": body,
-        "range_ln_ch": {"start": list(symbol.range_start), "end": list(symbol.range_end)},
+        "range_line_char": {"start": list(symbol.range_start), "end": list(symbol.range_end)},
         "file": relativize(fp, ws),
         "definers": definers,
         "incoming_calls": incoming,
@@ -381,7 +398,8 @@ async def _search(
             rel = file_path
         line = _extract_line(loc.get("range", {}))
         entry: dict = {
-            "symbol": [sym_kind, sym.get("name", "")],
+            "symbol": sym.get("name", ""),
+            "kind": sym_kind,
             "file": rel,
             "line": line,
         }
@@ -415,7 +433,8 @@ async def _impact(
     refs = await _references(symbol, fp, ws)
 
     return {
-        "symbol": [symbol.kind, symbol.name],
+        "symbol": symbol.name,
+        "kind": symbol.kind,
         "file": relativize(fp, ws),
         "incoming_calls": incoming,
         "outgoing_calls": outgoing,

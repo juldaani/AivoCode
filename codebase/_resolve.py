@@ -220,7 +220,8 @@ async def resolve_symbol(
     else:
         candidates: list[dict] = [
             {
-                "symbol": [m["kind"], m["name"]],
+                "symbol": m["name"],
+                "kind": m["kind"],
                 "line": m["line"],
             }
             for m in matches

@@ -87,7 +87,7 @@ async def root(body: RootBody):
 @router.post("/tree")
 async def tree(body: TreeBody):
     ws = detect_workspace(Path(body.workspace)) if body.workspace else Path.cwd()
-    return {"tree": get_repo_tree(ws, suffix=body.suffix), "workspace": str(ws)}
+    return {"root": get_repo_tree(ws, suffix=body.suffix), "workspace": str(ws)}
 
 
 @router.post("/read")

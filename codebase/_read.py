@@ -21,14 +21,15 @@ def _read_symbol(
 ) -> dict:
     """Read the full body of *symbol* from *file_path*.
 
-    Returns a dict with ``symbol``, ``body``, ``range_ln_ch``, and ``file``.
+    Returns a dict with ``symbol``, ``body``, ``range_line_char``, and ``file``.
     """
     body = read_range(file_path, symbol.range_start[0], symbol.range_end[0])
     ws = workspace or Path.cwd()
     return {
-        "symbol": [symbol.kind, symbol.name],
+        "symbol": symbol.name,
+        "kind": symbol.kind,
         "body": body,
-        "range_ln_ch": {
+        "range_line_char": {
             "start": list(symbol.range_start),
             "end": list(symbol.range_end),
         },
