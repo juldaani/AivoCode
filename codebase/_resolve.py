@@ -100,8 +100,11 @@ def _symbol_tree_by_depth(symbols: list[dict], depth: int, current_depth: int = 
     for sym in symbols:
         entry = _symbol_to_entry(sym)
         children = sym.get("children") or []
-        if current_depth < depth and children:
-            entry["children"] = _symbol_tree_by_depth(children, depth, current_depth + 1)
+        if children:
+            if current_depth < depth:
+                entry["children"] = _symbol_tree_by_depth(children, depth, current_depth + 1)
+            else:
+                entry["children"] = {"count": len(children)}
         else:
             entry["children"] = None
         flat.append(entry)

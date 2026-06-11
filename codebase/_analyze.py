@@ -252,11 +252,14 @@ async def _process_overview_symbols(
             "references_count": ref_counts,
         }
         children = sym.get("children")
-        if children is not None:
+        if children is None:
+            entry["children"] = None
+        elif isinstance(children, dict):
+            # Depth-limited count marker from _symbol_tree_by_depth.
+            entry["children"] = children
+        else:
             processed = await _process_overview_symbols(children, file_path, workspace)
             entry["children"] = processed if processed else None
-        else:
-            entry["children"] = None
         enriched.append(entry)
 
     return enriched
