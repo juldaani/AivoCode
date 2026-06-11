@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth, relativize
-from codebase._snippet import read_snippet, read_range
+from codebase._snippet import read_range, read_snippet_chars
 
 
 # ── Per-site helpers ───────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ def _build_site(
     entry: dict = {
         "file": rel,
         "line": line,
-        "snippet": read_snippet(file_path, line),
+        "snippet": read_snippet_chars(file_path, line),
     }
     if symbol_info:
         entry["symbol"] = [symbol_info["kind"], symbol_info["name"]]

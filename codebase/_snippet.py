@@ -48,3 +48,33 @@ def read_range(file_path: str | Path, start_line: int, end_line: int) -> str:
     if start_idx >= end_idx:
         return ""
     return "\n".join(line.rstrip() for line in lines[start_idx:end_idx])
+
+
+def read_snippet_chars(
+    file_path: str | Path,
+    line: int,
+    max_chars: int = 200,
+    max_lines: int = 4,
+) -> str:
+    """Read up to *max_chars* of source text starting at *line* (1-indexed).
+
+    Reads at most *max_lines* from the file, joins them, and truncates
+    to *max_chars* characters.  Multi-line calls and signatures are
+    captured in a consistent window regardless of line-break style.
+
+    Lines are trimmed of trailing whitespace before joining.
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        return ""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start_idx = line - 1
+    if start_idx < 0 or start_idx >= len(lines):
+        return ""
+    end_idx = min(len(lines), start_idx + max_lines)
+    snippet = "\n".join(
+        ln.rstrip() for ln in lines[start_idx:end_idx]
+    )
+    if len(snippet) > max_chars:
+        snippet = snippet[:max_chars]
+    return snippet
