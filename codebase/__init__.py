@@ -88,7 +88,14 @@ async def read_symbol(
     workspace: Path | None = None,
     command: str = "read",
 ) -> dict:
-    """Read the full body text of *symbol_name* in *file_path*."""
+    """Read the full body text of *symbol_name* in *file_path*.
+
+    Returns a dict with ``symbol``, ``kind``, ``body``, ``range_line_char``,
+    ``file``, ``imports``, and ``query``.  The ``imports`` list contains all
+    import statements in the file, including lazy imports inside function
+    bodies.  Each entry has ``{line, statement, lazy}`` — ``lazy`` is
+    ``True`` for imports nested inside a ``def``/``class`` body.
+    """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
@@ -109,7 +116,11 @@ async def incoming_calls(
     workspace: Path | None = None,
     command: str = "incoming-calls",
 ) -> dict:
-    """List incoming call hierarchy for *symbol_name*."""
+    """List incoming call hierarchy for *symbol_name*.
+
+    Returns a dict with ``symbol``, ``kind``, ``file``, ``incoming_calls``,
+    and ``query``.  Each call entry includes a ``locality`` field
+    (``"same_file"``, ``"cross_file"``, or ``"external"``)."""
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
@@ -136,7 +147,13 @@ async def outgoing_calls(
     workspace_only: bool = True,
     command: str = "outgoing-calls",
 ) -> dict:
-    """List outgoing call hierarchy for *symbol_name*."""
+    """List outgoing call hierarchy for *symbol_name*.
+
+    By default (``workspace_only=True``), external calls (stdlib,
+    site-packages) are excluded.  Pass ``workspace_only=False`` to include
+    them.  Each call entry has a ``locality`` field: ``"same_file"``,
+    ``"cross_file"``, or ``"external"``.
+    """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
@@ -164,7 +181,10 @@ async def find_references(
     workspace: Path | None = None,
     command: str = "references",
 ) -> dict:
-    """List all reference sites for *symbol_name* (includes definition)."""
+    """List all reference sites for *symbol_name* (includes definition).
+
+    Each reference entry includes a ``locality`` field
+    (``"same_file"``, ``"cross_file"``, or ``"external"``)."""
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
@@ -189,7 +209,11 @@ async def file_overview(
     workspace: Path | None = None,
     command: str = "overview",
 ) -> dict:
-    """Build a file overview ToC with signatures and reference counts."""
+    """Build a file overview ToC with signatures and reference counts.
+
+    Returns ``file``, ``imports`` (top-level only, each with
+    ``{line, statement, lazy}``), ``symbols``, ``symbol_count``,
+    ``depth``, and ``query``."""
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
@@ -208,7 +232,11 @@ async def explain_symbol(
     workspace: Path | None = None,
     command: str = "explain",
 ) -> dict:
-    """Full symbol report: body, definers, callers, callees, references."""
+    """Full symbol report: body, definers, callers, callees, references.
+
+    Body text is truncated at 6000 characters (with a truncation note)
+    to keep responses agent-friendly.  Call and reference entries include
+    a ``locality`` field."""
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)

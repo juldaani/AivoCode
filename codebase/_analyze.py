@@ -92,6 +92,11 @@ async def _incoming_calls(
     file_path: str | Path,
     workspace: Path | None = None,
 ) -> list[dict]:
+    """Return a list of call sites that call *symbol*.
+
+    Each entry has ``{symbol, kind, file, line, snippet, locality}`` —
+    ``locality`` is ``"same_file"``, ``"cross_file"``, or ``"external"``.
+    """
     from lsp import query_call_hierarchy_incoming, detect_workspace
 
     ws = workspace or Path.cwd()
@@ -132,6 +137,13 @@ async def _outgoing_calls(
     *,
     workspace_only: bool = True,
 ) -> list[dict]:
+    """Return a list of call sites that *symbol* calls.
+
+    When ``workspace_only`` is ``True`` (default), calls to external
+    locations (stdlib, site-packages) are excluded.  Each entry has
+    ``{symbol, kind, file, line, snippet, locality}`` where ``locality``
+    is ``"same_file"``, ``"cross_file"``, or ``"external"``.
+    """
     from lsp import query_call_hierarchy_outgoing, detect_workspace
 
     ws = workspace or Path.cwd()
@@ -174,6 +186,11 @@ async def _references(
     file_path: str | Path,
     workspace: Path | None = None,
 ) -> list[dict]:
+    """Return all reference sites for *symbol* (includes definition).
+
+    Each entry has ``{file, line, snippet, locality}`` where ``locality``
+    is ``"same_file"``, ``"cross_file"``, or ``"external"``.
+    """
     from lsp import query_references, detect_workspace
 
     ws = workspace or Path.cwd()
@@ -205,6 +222,12 @@ async def _overview(
     depth: int = 0,
     workspace: Path | None = None,
 ) -> dict:
+    """Build a ToC of callable/type-defining symbols in *file_path*.
+
+    Returns ``{file, imports, symbols, symbol_count, depth}`` where
+    ``imports`` contains top-level import statements only
+    (``{line, statement, lazy: false}``).
+    """
     from lsp import query_document_symbols, detect_workspace
 
     ws = workspace or Path.cwd()
@@ -423,6 +446,12 @@ async def _explain(
     file_path: str | Path,
     workspace: Path | None = None,
 ) -> dict:
+    """Full symbol report: body, definers, incoming/outgoing calls, references.
+
+    Body text is truncated at 6000 characters with a truncation note
+    appended when the source exceeds that threshold.  Call and reference
+    entries include a ``locality`` field.
+    """
     from lsp import query_definition, detect_workspace
 
     ws = workspace or Path.cwd()
