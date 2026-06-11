@@ -88,21 +88,31 @@ def _deep_flatten(symbols: list[dict]) -> list[dict]:
     return flat
 
 
-def _symbol_tree_by_depth(symbols: list[dict], depth: int, current_depth: int = 0) -> list[dict]:
+def _symbol_tree_by_depth(
+    symbols: list[dict],
+    depth: int,
+    current_depth: int = 0,
+    kind_filter: frozenset[str] | None = None,
+) -> list[dict]:
     """Walk the symbol tree to *depth*, collecting all visible nodes.
 
-    At *depth*, children are set to ``null`` (leaf marker) rather than
-    omitted, so consumers can distinguish "has no children" from
-    "children were not requested."  Used by ``overview``, not by symbol
-    resolution.
+    At *depth*, children are shown as ``{"count": N}`` when the symbol
+    has children (filtered by *kind_filter* if given).  ``None`` means
+    genuinely no children.  Used by ``overview``, not by symbol resolution.
     """
     flat: list[dict] = []
     for sym in symbols:
         entry = _symbol_to_entry(sym)
-        children = sym.get("children") or []
+        raw_children = sym.get("children") or []
+        if kind_filter is not None:
+            children = [c for c in raw_children if c.get("kind") in kind_filter]
+        else:
+            children = raw_children
         if children:
             if current_depth < depth:
-                entry["children"] = _symbol_tree_by_depth(children, depth, current_depth + 1)
+                entry["children"] = _symbol_tree_by_depth(
+                    children, depth, current_depth + 1, kind_filter,
+                )
             else:
                 entry["children"] = {"count": len(children)}
         else:

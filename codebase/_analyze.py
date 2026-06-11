@@ -18,6 +18,16 @@ from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth, relativize
 from codebase._snippet import read_range, read_snippet_chars
 
 
+# Only include callable/type-defining symbols in overviews.
+_OVERVIEW_KINDS: frozenset[str] = frozenset(
+    {
+        "Function", "Method", "Constructor",
+        "Class", "Interface", "Struct",
+        "Enum", "Event",
+    }
+)
+
+
 # ── Per-site helpers ───────────────────────────────────────────────────────────
 
 
@@ -176,7 +186,7 @@ async def _overview(
         return {"error": result["error"], "file": str(fp), "symbols": [], "symbol_count": 0, "depth": depth}
 
     symbols: list[dict] = result.get("symbols", [])
-    tree = _symbol_tree_by_depth(symbols, depth)
+    tree = _symbol_tree_by_depth(symbols, depth, kind_filter=_OVERVIEW_KINDS)
     processed = await _process_overview_symbols(tree, fp, ws)
     return {
         "file": relativize(fp, ws),
@@ -192,15 +202,6 @@ async def _process_overview_symbols(
     workspace: Path,
 ) -> list[dict]:
     from lsp import query_references
-
-    # Only include callable/type-defining symbols in overviews.
-    _OVERVIEW_KINDS: frozenset[str] = frozenset(
-        {
-            "Function", "Method", "Constructor",
-            "Class", "Interface", "Struct",
-            "Enum", "Event",
-        }
-    )
 
     enriched: list[dict] = []
     for sym in symbols:
