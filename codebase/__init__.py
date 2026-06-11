@@ -133,6 +133,7 @@ async def outgoing_calls(
     *,
     line: int | None = None,
     workspace: Path | None = None,
+    workspace_only: bool = True,
     command: str = "outgoing-calls",
 ) -> dict:
     """List outgoing call hierarchy for *symbol_name*."""
@@ -144,7 +145,9 @@ async def outgoing_calls(
         "symbol": sym.name,
         "kind": sym.kind,
         "file": relativize(file_path, ws_rel),
-        "outgoing_calls": await _outgoing_calls(sym, file_path, workspace),
+        "outgoing_calls": await _outgoing_calls(
+            sym, file_path, workspace, workspace_only=workspace_only,
+        ),
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),

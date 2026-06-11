@@ -61,7 +61,15 @@ def _handle_incoming(args: argparse.Namespace) -> None:
 
 
 def _handle_outgoing(args: argparse.Namespace) -> None:
-    _symbol_handler(args, "/codebase/outgoing-calls")
+    body: dict = {
+        "file": args.file,
+        "symbol_name": args.symbol,
+        "line": getattr(args, "line", None),
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+        "workspace_only": args.workspace_only,
+    }
+    result = asyncio.run(_post("/codebase/outgoing-calls", body))
+    _print_json(result, pretty=args.pretty_format)
 
 
 def _handle_references(args: argparse.Namespace) -> None:
@@ -143,7 +151,9 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     ocp = cb_sub.add_parser("outgoing-calls", parents=[_GLOBAL_OPTIONS],
                              help="What does this symbol call?")
     _add_symbol_args(ocp)
-    ocp.set_defaults(func=_handle_outgoing)
+    ocp.add_argument("--include-external", action="store_false", dest="workspace_only",
+                      help="Include external (stdlib/site-packages) calls in output.")
+    ocp.set_defaults(func=_handle_outgoing, workspace_only=True)
 
     # ── references ─────────────────────────────────────────────────────
     refp = cb_sub.add_parser("references", parents=[_GLOBAL_OPTIONS],

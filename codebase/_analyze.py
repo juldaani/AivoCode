@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from codebase._read import _extract_imports
 from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth, relativize
 from codebase._snippet import read_range, read_snippet_chars
 
@@ -36,12 +37,21 @@ def _build_site(
     line: int,
     workspace_root: Path,
     symbol_info: dict | None = None,
+    source_file: Path | None = None,
 ) -> dict:
+    """Build a reference/call site entry with optional locality tagging.
+
+    When *source_file* is provided, a ``locality`` field is added:
+    ``"same_file"``, ``"cross_file"`` (within workspace), or ``"external"``
+    (outside workspace).
+    """
     file_path = _uri_to_path(file_uri)
     try:
         rel = str(Path(file_path).relative_to(workspace_root))
+        in_workspace = True
     except ValueError:
         rel = file_path
+        in_workspace = False
 
     entry: dict = {
         "file": rel,
@@ -51,6 +61,16 @@ def _build_site(
     if symbol_info:
         entry["symbol"] = symbol_info["name"]
         entry["kind"] = symbol_info["kind"]
+
+    if source_file is not None:
+        if in_workspace:
+            if Path(file_path).resolve() == source_file.resolve():
+                entry["locality"] = "same_file"
+            else:
+                entry["locality"] = "cross_file"
+        else:
+            entry["locality"] = "external"
+
     return entry
 
 
@@ -76,8 +96,9 @@ async def _incoming_calls(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
     result = await query_call_hierarchy_incoming(
-        Path(file_path),
+        fp,
         line=symbol.line,
         character=symbol.character,
         workspace=ws,
@@ -99,6 +120,7 @@ async def _incoming_calls(
                 sites.append(_build_site(
                     uri, line, ws,
                     {"kind": kind, "name": name},
+                    source_file=fp,
                 ))
     return sites
 
@@ -107,13 +129,16 @@ async def _outgoing_calls(
     symbol: ResolvedSymbol,
     file_path: str | Path,
     workspace: Path | None = None,
+    *,
+    workspace_only: bool = True,
 ) -> list[dict]:
     from lsp import query_call_hierarchy_outgoing, detect_workspace
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
     result = await query_call_hierarchy_outgoing(
-        Path(file_path),
+        fp,
         line=symbol.line,
         character=symbol.character,
         workspace=ws,
@@ -130,10 +155,14 @@ async def _outgoing_calls(
         uri = to_.get("uri", "")
         to_range = to_.get("range", {})
         to_line = _extract_line(to_range)
-        sites.append(_build_site(
+        site = _build_site(
             uri, to_line, ws,
             {"kind": kind, "name": name},
-        ))
+            source_file=fp,
+        )
+        if workspace_only and site.get("locality") == "external":
+            continue
+        sites.append(site)
     return sites
 
 
@@ -149,8 +178,9 @@ async def _references(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
     result = await query_references(
-        Path(file_path),
+        fp,
         line=symbol.line,
         character=symbol.character,
         workspace=ws,
@@ -163,7 +193,7 @@ async def _references(
     for ref in refs:
         uri = ref.get("uri", "")
         line = _extract_line(ref.get("range", {}))
-        sites.append(_build_site(uri, line, ws))
+        sites.append(_build_site(uri, line, ws, source_file=fp))
     return sites
 
 
@@ -190,6 +220,7 @@ async def _overview(
     processed = await _process_overview_symbols(tree, fp, ws)
     return {
         "file": relativize(fp, ws),
+        "imports": _extract_imports(fp),
         "symbols": processed,
         "symbol_count": len(processed),
         "depth": depth,
@@ -330,6 +361,11 @@ async def _explain(
     fp = Path(file_path).resolve()
 
     body = read_range(fp, symbol.range_start[0], symbol.range_end[0])
+    # Truncate huge bodies (e.g. large classes) to keep agent-friendly.
+    max_chars = 6000
+    if len(body) > max_chars:
+        remaining = len(body) - max_chars
+        body = f"{body[:max_chars]}\n... [truncated at {max_chars} chars, {remaining} more chars not shown]"
 
     # Definition.
     definers: list[dict] = []

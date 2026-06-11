@@ -46,6 +46,12 @@ class SymbolBody(BaseModel):
     workspace: str | None = None
 
 
+class OutgoingBody(SymbolBody):
+    """Extends SymbolBody with workspace_only filtering."""
+
+    workspace_only: bool = True
+
+
 class OverviewBody(BaseModel):
     file: str
     depth: int = 0
@@ -104,12 +110,13 @@ async def incoming(body: SymbolBody):
 
 
 @router.post("/outgoing-calls")
-async def outgoing(body: SymbolBody):
+async def outgoing(body: OutgoingBody):
     try:
         return await outgoing_calls(
             body.file, body.symbol_name,
             line=body.line,
             workspace=Path(body.workspace) if body.workspace else None,
+            workspace_only=body.workspace_only,
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
         return _symbol_error_response(exc, body.file)
