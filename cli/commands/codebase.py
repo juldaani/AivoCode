@@ -5,7 +5,6 @@ aivocode REST API server.  No business logic lives here — all
 intelligence is server-side.
 
 Commands
-- ``aivocode codebase root``         — list top-level workspace dirs
 - ``aivocode codebase tree``         — recursive file/dir listing
 - ``aivocode codebase read``         — read a symbol's body text
 - ``aivocode codebase incoming-calls`` — who calls this symbol?
@@ -45,12 +44,6 @@ def _symbol_handler(args: argparse.Namespace, endpoint: str) -> None:
 
 
 # ── Handlers ───────────────────────────────────────────────────────────────────
-
-
-def _handle_root(args: argparse.Namespace) -> None:
-    body = {"workspace": _resolve_workspace(args.workspace)}
-    result = asyncio.run(_post("/codebase/root", body))
-    _print_json(result, pretty=args.pretty_format)
 
 
 def _handle_tree(args: argparse.Namespace) -> None:
@@ -126,12 +119,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     cb_sub = cb_parser.add_subparsers(title="commands", dest="codebase_command")
     cb_sub.required = True
-
-    # ── root ───────────────────────────────────────────────────────────
-    rp = cb_sub.add_parser("root", parents=[_GLOBAL_OPTIONS],
-                            help="List top-level directories.")
-    rp.add_argument("--workspace", type=str)
-    rp.set_defaults(func=_handle_root)
 
     # ── tree ───────────────────────────────────────────────────────────
     tp = cb_sub.add_parser("tree", parents=[_GLOBAL_OPTIONS],

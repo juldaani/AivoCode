@@ -12,14 +12,13 @@ Why this exists
   low-level LSP calls into high-level "understanding primitives."
 
 How to use
-    from codebase import get_repo_root_dirs
-    dirs = get_repo_root_dirs(Path("/workspaces/my-project"))
-    # → ["api_server", "cli", "lsp", "tests"]
+    from codebase import get_repo_tree
+    tree = get_repo_tree(Path("/workspaces/my-project"))
+    # → {"root": [...], "workspace": "...", "query": {...}}
 
 Public API
 ----------
-- get_repo_tree : build a recursive ``["dirname/", [...]]`` tree.
-- get_repo_root_dirs : list top-level directories in a workspace.
+- get_repo_tree : build a recursive ``{"dirname/": [...]}`` tree.
 
 See Also
 - lsp/  — raw LSP protocol layer (hover, definition, references, etc.)
@@ -40,7 +39,6 @@ from codebase._analyze import (
 )
 from codebase._read import _read_symbol
 from codebase._resolve import ResolvedSymbol, relativize, resolve_symbol
-from codebase._root import _root_dirs
 from codebase._tree import _build_tree
 
 
@@ -50,30 +48,6 @@ from codebase._tree import _build_tree
 def _make_query(command: str, **kwargs: object) -> dict:
     """Build a query metadata block, omitting ``None`` values."""
     return {"command": command, **{k: v for k, v in kwargs.items() if v is not None}}
-
-
-def get_repo_root_dirs(workspace: Path | None = None) -> dict:
-    """Return sorted list of top-level directory names in the workspace.
-
-    Hidden directories (starting with ``.``) are excluded.
-
-    Parameters
-    ----------
-    workspace : Path or None
-        Absolute path to the workspace root.  When ``None``, uses the
-        current working directory.
-
-    Returns
-    -------
-    dict
-        ``{"dirs": [...], "workspace": "...", "query": {...}}``.
-    """
-    ws = workspace or Path.cwd()
-    return {
-        "dirs": _root_dirs(ws),
-        "workspace": str(ws),
-        "query": _make_query("root"),
-    }
 
 
 def get_repo_tree(

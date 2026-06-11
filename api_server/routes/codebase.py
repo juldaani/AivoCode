@@ -17,7 +17,6 @@ from codebase import (
     explain_symbol,
     file_overview,
     find_references,
-    get_repo_root_dirs,
     get_repo_tree,
     incoming_calls,
     outgoing_calls,
@@ -31,10 +30,6 @@ router = APIRouter(prefix="/codebase", tags=["codebase"])
 
 
 # ── Request models ────────────────────────────────────────────────────────────
-
-
-class RootBody(BaseModel):
-    workspace: str | None = None
 
 
 class TreeBody(BaseModel):
@@ -76,12 +71,6 @@ def _symbol_error_response(exc: AmbiguousSymbolError | SymbolNotFoundError, file
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
-
-
-@router.post("/root")
-async def root(body: RootBody):
-    ws = detect_workspace(Path(body.workspace)) if body.workspace else Path.cwd()
-    return get_repo_root_dirs(ws)
 
 
 @router.post("/tree")
