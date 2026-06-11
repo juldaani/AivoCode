@@ -4,27 +4,40 @@
   "body": "async def resolve_symbol(\n    file_path: str,\n    symbol_name: str,\n    *,\n    line: int | None = None,\n    workspace: Path | None = None,\n) -> ResolvedSymbol:\n    \"\"\"Async function with lazy imports inside.\n\n    The ``from lsp import query_document_symbols`` import is inside the\n    function body — tests that lazy imports appear as outgoing calls.\n    \"\"\"\n    from pathlib import Path as PathAlias  # lazy import — tests alias\n\n    ws = workspace or PathAlias.cwd()\n    # Simulated: in production this calls query_document_symbols.\n    return ResolvedSymbol(\n        name=symbol_name,\n        kind=\"Class\",\n        line=line or 1,\n    )",
   "range_line_char": {
     "start": [
-      54,
-      1
+      1,
+      54
     ],
     "end": [
-      74,
-      6
+      6,
+      74
     ]
   },
   "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
   "imports": [
     {
       "line": 13,
-      "statement": "from __future__ import annotations"
+      "statement": "from __future__ import annotations",
+      "lazy": false
     },
     {
       "line": 15,
-      "statement": "from pathlib import Path"
+      "statement": "from pathlib import Path",
+      "lazy": false
     },
     {
       "line": 17,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)",
+      "lazy": false
+    },
+    {
+      "line": 66,
+      "statement": "from pathlib import Path as PathAlias",
+      "lazy": true
+    },
+    {
+      "line": 88,
+      "statement": "from pathlib import Path as P",
+      "lazy": true
     }
   ],
   "query": {

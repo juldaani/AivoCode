@@ -59,17 +59,39 @@ def _run(lsp_server: str, *args: str) -> dict:
 _update_mode: bool = False
 
 
+def _normalize(obj: object) -> object:
+    """Return a deterministic version of *obj* with lists sorted.
+
+    LSP results can return lists in non-deterministic order (references,
+    symbols, incoming/outgoing calls).  We sort every list by its
+    ``json.dumps`` representation so that snapshots are comparable across
+    runs without false-positive ordering diffs.
+
+    Also strips ``references_count`` from overview entries — this field
+    varies between LSP daemon runs and is validated by schema tests instead.
+    """
+    if isinstance(obj, dict):
+        # Strip non-deterministic fields.
+        stripped = {k: v for k, v in obj.items() if k != "references_count"}
+        return {k: _normalize(v) for k, v in stripped.items()}
+    if isinstance(obj, list):
+        # Sort by stable JSON key.
+        return sorted((_normalize(v) for v in obj), key=lambda x: json.dumps(x, sort_keys=True))
+    return obj
+
+
 def _assert_snapshot(name: str, data: dict) -> None:
     """Compare *data* against the committed snapshot file *name*.json."""
+    normalized = _normalize(data)
     path = _SNAPSHOT_DIR / f"{name}.json"
     if _update_mode or not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        path.write_text(json.dumps(normalized, indent=2, ensure_ascii=False) + "\n",
                         encoding="utf-8")
         return
 
     expected = json.loads(path.read_text(encoding="utf-8"))
-    assert data == expected, (
+    assert normalized == expected, (
         f"Snapshot mismatch for '{name}'.  Run with --update-snapshots to regenerate."
     )
 

@@ -3,22 +3,43 @@
   "imports": [
     {
       "line": 14,
-      "statement": "from __future__ import annotations"
+      "statement": "from __future__ import annotations",
+      "lazy": false
     },
     {
       "line": 16,
-      "statement": "from dataclasses import dataclass, field"
+      "statement": "from dataclasses import dataclass, field",
+      "lazy": false
     },
     {
       "line": 17,
-      "statement": "from enum import Enum"
+      "statement": "from enum import Enum",
+      "lazy": false
     },
     {
       "line": 18,
-      "statement": "from pathlib import Path"
+      "statement": "from pathlib import Path",
+      "lazy": false
     }
   ],
   "symbols": [
+    {
+      "symbol": "ResolvedSymbol",
+      "kind": "Class",
+      "signature": "@dataclass(frozen=True, slots=True)\nclass ResolvedSymbol:",
+      "preview": "    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          1,
+          49
+        ],
+        "end": [
+          55,
+          61
+        ]
+      },
+      "children": null
+    },
     {
       "symbol": "LookupErrorBase",
       "kind": "Class",
@@ -26,16 +47,13 @@
       "preview": "    \"\"\"Base for symbol lookup errors.  No own methods — children: null.\"\"\"\n    pass",
       "range_line_char": {
         "start": [
-          24,
-          1
+          1,
+          24
         ],
         "end": [
           26,
           9
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 2
       },
       "children": null
     },
@@ -46,15 +64,14 @@
       "preview": "    \"\"\"Raised when a symbol name is not found in the target file.\"\"\"\n    pass",
       "range_line_char": {
         "start": [
-          29,
-          1
+          1,
+          29
         ],
         "end": [
           31,
           9
         ]
       },
-      "references_count": {},
       "children": null
     },
     {
@@ -64,36 +81,36 @@
       "preview": "    \"\"\"Raised when a symbol name matches multiple candidates.\n\n    Has an explicit __init__ — children should include it.\n    \"\"\"\n",
       "range_line_char": {
         "start": [
-          34,
-          1
+          1,
+          34
         ],
         "end": [
           43,
           82
         ]
       },
-      "references_count": {},
       "children": {
         "count": 1
       }
     },
     {
-      "symbol": "ResolvedSymbol",
+      "symbol": "SymbolKind",
       "kind": "Class",
-      "signature": "@dataclass(frozen=True, slots=True)\nclass ResolvedSymbol:",
-      "preview": "    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"\n",
+      "signature": "class SymbolKind(str, Enum):",
+      "preview": "    \"\"\"Symbol kinds from LSP protocol — overview includes Enum kind.\"\"\"\n\n    FILE = \"File\"\n    MODULE = \"Module\"\n    NAMESPACE = \"Namespace\"",
       "range_line_char": {
         "start": [
-          49,
-          1
+          1,
+          134
         ],
         "end": [
-          61,
-          55
+          146,
+          82
         ]
       },
-      "references_count": {},
-      "children": null
+      "children": {
+        "count": 1
+      }
     },
     {
       "symbol": "GreeterBase",
@@ -102,41 +119,16 @@
       "preview": "    \"\"\"Base class for greeters — referenced from fixtures_callchain.py.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Return a polite greeting.\"\"\"\n        return f\"Hello, {name}\"",
       "range_line_char": {
         "start": [
-          67,
-          1
+          1,
+          67
         ],
         "end": [
-          76,
-          42
+          42,
+          76
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 1
       },
       "children": {
         "count": 2
-      }
-    },
-    {
-      "symbol": "LoudGreeter",
-      "kind": "Class",
-      "signature": "class LoudGreeter(GreeterBase):",
-      "preview": "    \"\"\"Loud greeter — overrides greet, adds factory methods.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Override: shout the greeting.\"\"\"\n        return super().greet(name).upper()",
-      "range_line_char": {
-        "start": [
-          79,
-          1
-        ],
-        "end": [
-          100,
-          36
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 8
-      },
-      "children": {
-        "count": 4
       }
     },
     {
@@ -146,15 +138,14 @@
       "preview": "    \"\"\"Even louder — three levels of inheritance.\"\"\"\n\n    def greet(self, name: str) -> str:\n        return super().greet(name) + \"!!!\"\n",
       "range_line_char": {
         "start": [
-          103,
-          1
+          1,
+          103
         ],
         "end": [
           110,
           54
         ]
       },
-      "references_count": {},
       "children": {
         "count": 2
       }
@@ -166,39 +157,35 @@
       "preview": "    \"\"\"Factory that creates and caches greeters.\n\n    Uses instance methods — tests outgoing-calls from factory methods.\n    \"\"\"\n",
       "range_line_char": {
         "start": [
-          113,
-          1
+          1,
+          113
         ],
         "end": [
           128,
           37
         ]
       },
-      "references_count": {},
       "children": {
         "count": 3
       }
     },
     {
-      "symbol": "SymbolKind",
+      "symbol": "LoudGreeter",
       "kind": "Class",
-      "signature": "class SymbolKind(str, Enum):",
-      "preview": "    \"\"\"Symbol kinds from LSP protocol — overview includes Enum kind.\"\"\"\n\n    FILE = \"File\"\n    MODULE = \"Module\"\n    NAMESPACE = \"Namespace\"",
+      "signature": "class LoudGreeter(GreeterBase):",
+      "preview": "    \"\"\"Loud greeter — overrides greet, adds factory methods.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Override: shout the greeting.\"\"\"\n        return super().greet(name).upper()",
       "range_line_char": {
         "start": [
-          134,
-          1
+          1,
+          79
         ],
         "end": [
-          146,
-          82
+          100,
+          36
         ]
       },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 3
-      },
       "children": {
-        "count": 1
+        "count": 4
       }
     }
   ],

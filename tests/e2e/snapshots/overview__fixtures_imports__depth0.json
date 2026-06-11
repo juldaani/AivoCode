@@ -3,38 +3,68 @@
   "imports": [
     {
       "line": 12,
-      "statement": "from __future__ import annotations"
+      "statement": "from __future__ import annotations",
+      "lazy": false
     },
     {
       "line": 16,
-      "statement": "import json as json_lib"
+      "statement": "import json as json_lib",
+      "lazy": false
     },
     {
       "line": 17,
-      "statement": "import os as os_lib"
+      "statement": "import os as os_lib",
+      "lazy": false
     },
     {
       "line": 21,
-      "statement": "import pathlib, sys, textwrap"
+      "statement": "import pathlib, sys, textwrap",
+      "lazy": false
     },
     {
       "line": 25,
-      "statement": "from pathlib import (\n    Path,\n    PurePath,\n    PurePosixPath,\n    PureWindowsPath,\n)"
+      "statement": "from pathlib import (\n    Path,\n    PurePath,\n    PurePosixPath,\n    PureWindowsPath,\n)",
+      "lazy": false
     },
     {
       "line": 34,
-      "statement": "from typing import TYPE_CHECKING"
+      "statement": "from typing import TYPE_CHECKING",
+      "lazy": false
     },
     {
       "line": 38,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n    SymbolKind,\n)"
+      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n    SymbolKind,\n)",
+      "lazy": false
     },
     {
       "line": 45,
-      "statement": "from mock_pkg.fixtures_functions import (\n    build_tree,\n    leaf_helper,\n    relativize,\n)"
+      "statement": "from mock_pkg.fixtures_functions import (\n    build_tree,\n    leaf_helper,\n    relativize,\n)",
+      "lazy": false
+    },
+    {
+      "line": 54,
+      "statement": "from mock_pkg.fixtures_callchain import entry_point",
+      "lazy": false
     }
   ],
   "symbols": [
+    {
+      "symbol": "ReExportedClass",
+      "kind": "Class",
+      "signature": "class ReExportedClass:",
+      "preview": "    \"\"\"A class that exists only to be re-exported via __all__.\"\"\"\n    pass",
+      "range_line_char": {
+        "start": [
+          1,
+          91
+        ],
+        "end": [
+          9,
+          93
+        ]
+      },
+      "children": null
+    },
     {
       "symbol": "normalize_and_greet",
       "kind": "Function",
@@ -42,16 +72,13 @@
       "preview": "    \"\"\"Normalize a name and return a greeting.\n\n    Calls leaf_helper (from fixtures_functions) and resolve_symbol-like logic.\n    \"\"\"\n    cleaned = leaf_helper(name)  # cross-file call",
       "range_line_char": {
         "start": [
-          64,
-          1
+          1,
+          64
         ],
         "end": [
-          71,
-          45
+          45,
+          71
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
       },
       "children": null
     },
@@ -62,40 +89,17 @@
       "preview": "    \"\"\"Wrapper that delegates to GreeterBase and calls build_tree.\n\n    Tests cross-file outgoing calls from a class method.\n    \"\"\"\n",
       "range_line_char": {
         "start": [
-          74,
-          1
+          1,
+          74
         ],
         "end": [
-          88,
-          42
+          42,
+          88
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
       },
       "children": {
         "count": 3
       }
-    },
-    {
-      "symbol": "ReExportedClass",
-      "kind": "Class",
-      "signature": "class ReExportedClass:",
-      "preview": "    \"\"\"A class that exists only to be re-exported via __all__.\"\"\"\n    pass",
-      "range_line_char": {
-        "start": [
-          91,
-          1
-        ],
-        "end": [
-          93,
-          9
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
-      },
-      "children": null
     }
   ],
   "symbol_count": 3,

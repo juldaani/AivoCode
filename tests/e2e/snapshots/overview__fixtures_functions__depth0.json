@@ -3,59 +3,21 @@
   "imports": [
     {
       "line": 13,
-      "statement": "from __future__ import annotations"
+      "statement": "from __future__ import annotations",
+      "lazy": false
     },
     {
       "line": 15,
-      "statement": "from pathlib import Path"
+      "statement": "from pathlib import Path",
+      "lazy": false
     },
     {
       "line": 17,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)",
+      "lazy": false
     }
   ],
   "symbols": [
-    {
-      "symbol": "_private_helper",
-      "kind": "Function",
-      "signature": "def _private_helper(name: str) -> str:",
-      "preview": "    \"\"\"Private helper — kind is Function, so overview includes it.\n\n    Called by build_tree and entry_point in fixtures_callchain.\n    \"\"\"\n    return name.strip()",
-      "range_line_char": {
-        "start": [
-          43,
-          1
-        ],
-        "end": [
-          48,
-          24
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 1
-      },
-      "children": null
-    },
-    {
-      "symbol": "resolve_symbol",
-      "kind": "Function",
-      "signature": "async def resolve_symbol(\n    file_path: str,",
-      "preview": "    symbol_name: str,\n    *,\n    line: int | None = None,\n    workspace: Path | None = None,\n) -> ResolvedSymbol:",
-      "range_line_char": {
-        "start": [
-          54,
-          1
-        ],
-        "end": [
-          74,
-          6
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2
-      },
-      "children": null
-    },
     {
       "symbol": "analyze_overview",
       "kind": "Function",
@@ -63,36 +25,13 @@
       "preview": "    *,\n    depth: int = 0,\n    workspace: Path | None = None,\n) -> dict:\n    \"\"\"Async function calling cross-package symbols and lazy imports.",
       "range_line_char": {
         "start": [
-          77,
-          1
+          1,
+          77
         ],
         "end": [
-          99,
-          52
+          52,
+          99
         ]
-      },
-      "references_count": {},
-      "children": null
-    },
-    {
-      "symbol": "relativize",
-      "kind": "Function",
-      "signature": "def relativize(file_path: str | Path, workspace: Path) -> str:",
-      "preview": "    \"\"\"Convert an absolute path to workspace-relative.\n\n    Called by build_tree, sync_wrapper, and entry_point in fixtures_callchain.\n    \"\"\"\n    fp = Path(file_path).resolve()",
-      "range_line_char": {
-        "start": [
-          105,
-          1
-        ],
-        "end": [
-          114,
-          23
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 2
       },
       "children": null
     },
@@ -103,37 +42,30 @@
       "preview": "    *,\n    suffix: str | None = None,\n) -> dict:\n    \"\"\"Build a file tree — calls _private_helper and relativize.\n",
       "range_line_char": {
         "start": [
-          117,
-          1
+          1,
+          117
         ],
         "end": [
           128,
           60
         ]
       },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 2
-      },
       "children": null
     },
     {
-      "symbol": "sync_wrapper",
+      "symbol": "relativize",
       "kind": "Function",
-      "signature": "def sync_wrapper(name: str, workspace: Path) -> str:",
-      "preview": "    \"\"\"Thin wrapper that delegates to relativize.\n\n    Tests outgoing-calls resolving to a workspace call.\n    \"\"\"\n    return relativize(workspace / f\"{name}.py\", workspace)",
+      "signature": "def relativize(file_path: str | Path, workspace: Path) -> str:",
+      "preview": "    \"\"\"Convert an absolute path to workspace-relative.\n\n    Called by build_tree, sync_wrapper, and entry_point in fixtures_callchain.\n    \"\"\"\n    fp = Path(file_path).resolve()",
       "range_line_char": {
         "start": [
-          131,
-          1
+          1,
+          105
         ],
         "end": [
-          136,
-          59
+          114,
+          23
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2
       },
       "children": null
     },
@@ -144,17 +76,64 @@
       "preview": "    \"\"\"Leaf function — called by fixtures_callchain, never calls anything else.\n\n    Tests empty outgoing-calls (no further calls inside).\n    \"\"\"\n    return text.lower()",
       "range_line_char": {
         "start": [
-          139,
-          1
+          1,
+          139
         ],
         "end": [
           144,
           24
         ]
       },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 2
+      "children": null
+    },
+    {
+      "symbol": "_private_helper",
+      "kind": "Function",
+      "signature": "def _private_helper(name: str) -> str:",
+      "preview": "    \"\"\"Private helper — kind is Function, so overview includes it.\n\n    Called by build_tree and entry_point in fixtures_callchain.\n    \"\"\"\n    return name.strip()",
+      "range_line_char": {
+        "start": [
+          1,
+          43
+        ],
+        "end": [
+          24,
+          48
+        ]
+      },
+      "children": null
+    },
+    {
+      "symbol": "sync_wrapper",
+      "kind": "Function",
+      "signature": "def sync_wrapper(name: str, workspace: Path) -> str:",
+      "preview": "    \"\"\"Thin wrapper that delegates to relativize.\n\n    Tests outgoing-calls resolving to a workspace call.\n    \"\"\"\n    return relativize(workspace / f\"{name}.py\", workspace)",
+      "range_line_char": {
+        "start": [
+          1,
+          131
+        ],
+        "end": [
+          136,
+          59
+        ]
+      },
+      "children": null
+    },
+    {
+      "symbol": "resolve_symbol",
+      "kind": "Function",
+      "signature": "async def resolve_symbol(\n    file_path: str,",
+      "preview": "    symbol_name: str,\n    *,\n    line: int | None = None,\n    workspace: Path | None = None,\n) -> ResolvedSymbol:",
+      "range_line_char": {
+        "start": [
+          1,
+          54
+        ],
+        "end": [
+          6,
+          74
+        ]
       },
       "children": null
     }

@@ -3,22 +3,43 @@
   "imports": [
     {
       "line": 12,
-      "statement": "from __future__ import annotations"
+      "statement": "from __future__ import annotations",
+      "lazy": false
     },
     {
       "line": 14,
-      "statement": "from pathlib import Path"
+      "statement": "from pathlib import Path",
+      "lazy": false
     },
     {
       "line": 16,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)",
+      "lazy": false
     },
     {
       "line": 22,
-      "statement": "from mock_pkg.fixtures_functions import (\n    _private_helper,\n    build_tree,\n    leaf_helper,\n    relativize,\n    resolve_symbol,\n    sync_wrapper,\n)"
+      "statement": "from mock_pkg.fixtures_functions import (\n    _private_helper,\n    build_tree,\n    leaf_helper,\n    relativize,\n    resolve_symbol,\n    sync_wrapper,\n)",
+      "lazy": false
     }
   ],
   "symbols": [
+    {
+      "symbol": "entry_point",
+      "kind": "Function",
+      "signature": "async def entry_point(\n    name: str,",
+      "preview": "    *,\n    file_path: str = \"/tmp/test.py\",\n    workspace: Path | None = None,\n) -> dict:\n    \"\"\"Top-level entry that exercises all cross-file dependencies.",
+      "range_line_char": {
+        "start": [
+          1,
+          70
+        ],
+        "end": [
+          110,
+          6
+        ]
+      },
+      "children": null
+    },
     {
       "symbol": "caller_3",
       "kind": "Function",
@@ -26,76 +47,13 @@
       "preview": "    \"\"\"Bottom of the same-file chain — calls cross-file leaf_helper.\"\"\"\n    return leaf_helper(text)  # cross-file outgoing",
       "range_line_char": {
         "start": [
-          36,
-          1
+          1,
+          36
         ],
         "end": [
-          38,
-          29
+          29,
+          38
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
-      },
-      "children": null
-    },
-    {
-      "symbol": "caller_2",
-      "kind": "Function",
-      "signature": "def caller_2(text: str) -> str:",
-      "preview": "    \"\"\"Middle of chain — calls caller_3.\"\"\"\n    return caller_3(text)",
-      "range_line_char": {
-        "start": [
-          41,
-          1
-        ],
-        "end": [
-          43,
-          26
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
-      },
-      "children": null
-    },
-    {
-      "symbol": "caller_1",
-      "kind": "Function",
-      "signature": "def caller_1(text: str, workspace: Path) -> str:",
-      "preview": "    \"\"\"Top of same-file chain — calls caller_2 and relativize.\"\"\"\n    rel = relativize(workspace, workspace)  # cross-file outgoing\n    inner = caller_2(text)\n    return f\"{inner} @ {rel}\"",
-      "range_line_char": {
-        "start": [
-          46,
-          1
-        ],
-        "end": [
-          50,
-          30
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
-      },
-      "children": null
-    },
-    {
-      "symbol": "chain_b",
-      "kind": "Function",
-      "signature": "def chain_b(name: str) -> str:",
-      "preview": "    \"\"\"Calls cross-file private helper.\"\"\"\n    return _private_helper(f\"  {name}  \")  # cross-file outgoing",
-      "range_line_char": {
-        "start": [
-          57,
-          1
-        ],
-        "end": [
-          59,
-          42
-        ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
       },
       "children": null
     },
@@ -106,36 +64,64 @@
       "preview": "    \"\"\"Calls chain_b (same file).\"\"\"\n    return chain_b(name.upper())",
       "range_line_char": {
         "start": [
-          62,
-          1
+          1,
+          62
         ],
         "end": [
-          64,
-          33
+          33,
+          64
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1
       },
       "children": null
     },
     {
-      "symbol": "entry_point",
+      "symbol": "chain_b",
       "kind": "Function",
-      "signature": "async def entry_point(\n    name: str,",
-      "preview": "    *,\n    file_path: str = \"/tmp/test.py\",\n    workspace: Path | None = None,\n) -> dict:\n    \"\"\"Top-level entry that exercises all cross-file dependencies.",
+      "signature": "def chain_b(name: str) -> str:",
+      "preview": "    \"\"\"Calls cross-file private helper.\"\"\"\n    return _private_helper(f\"  {name}  \")  # cross-file outgoing",
       "range_line_char": {
         "start": [
-          70,
-          1
+          1,
+          57
         ],
         "end": [
-          110,
-          6
+          42,
+          59
         ]
       },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
+      "children": null
+    },
+    {
+      "symbol": "caller_2",
+      "kind": "Function",
+      "signature": "def caller_2(text: str) -> str:",
+      "preview": "    \"\"\"Middle of chain — calls caller_3.\"\"\"\n    return caller_3(text)",
+      "range_line_char": {
+        "start": [
+          1,
+          41
+        ],
+        "end": [
+          26,
+          43
+        ]
+      },
+      "children": null
+    },
+    {
+      "symbol": "caller_1",
+      "kind": "Function",
+      "signature": "def caller_1(text: str, workspace: Path) -> str:",
+      "preview": "    \"\"\"Top of same-file chain — calls caller_2 and relativize.\"\"\"\n    rel = relativize(workspace, workspace)  # cross-file outgoing\n    inner = caller_2(text)\n    return f\"{inner} @ {rel}\"",
+      "range_line_char": {
+        "start": [
+          1,
+          46
+        ],
+        "end": [
+          30,
+          50
+        ]
       },
       "children": null
     }

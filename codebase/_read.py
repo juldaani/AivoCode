@@ -71,7 +71,12 @@ def _get_parser(language: str) -> "Parser | None":
 # ── Import extraction ─────────────────────────────────────────────────────────
 
 
-def _extract_imports(file_path: str | Path, language: str = "python") -> list[dict]:
+def _extract_imports(
+    file_path: str | Path,
+    language: str = "python",
+    *,
+    top_level_only: bool = True,
+) -> list[dict]:
     """Extract import statements from a source file using tree-sitter.
 
     Parameters
@@ -81,11 +86,16 @@ def _extract_imports(file_path: str | Path, language: str = "python") -> list[di
     language : str
         Language identifier (``"python"``, ``"typescript"``, etc.).
         Unsupported languages return ``[]``.
+    top_level_only : bool
+        When ``True`` (default), only top-level (module-scope) imports are
+        returned.  When ``False``, all imports are returned including lazy
+        imports inside function bodies — each gets ``lazy: True``.
 
     Returns
     -------
     list[dict]
-        Each entry has ``line`` (1-indexed) and ``statement`` (raw source text).
+        Each entry has ``line`` (1-indexed), ``statement`` (raw source text),
+        and ``lazy`` (``False`` for top-level, ``True`` for nested).
     """
     parser = _get_parser(language)
     if parser is None:
@@ -104,15 +114,34 @@ def _extract_imports(file_path: str | Path, language: str = "python") -> list[di
     tree = parser.parse(source)
     imports: list[dict] = []
 
-    # Only walk immediate children of the root node (top-level statements).
-    # This excludes lazy imports inside function bodies — agents want to see
-    # what the module depends on, not implementation details.
-    for child in tree.root_node.children:
-        if child.type in import_node_types:
-            text = source[child.start_byte:child.end_byte].decode()
-            line = child.start_point[0] + 1  # 0-indexed → 1-indexed
-            imports.append({"line": line, "statement": text})
+    # A node is "lazy" if its ancestor is a function/class definition
+    # (i.e. the import is inside a def/class body, not at module scope).
+    _BODY_NODES = frozenset({
+        "function_definition", "class_definition", "decorated_definition",
+        "function_declaration", "class_declaration", "method_definition",
+    })
 
+    def _is_lazy(node: "object") -> bool:
+        """Walk up the AST; True if any ancestor is a function/class body."""
+        parent = node.parent
+        while parent is not None:
+            if parent.type in _BODY_NODES:
+                return True
+            parent = parent.parent
+        return False
+
+    def _walk(node: "object") -> None:
+        if node.type in import_node_types:
+            text = source[node.start_byte:node.end_byte].decode()
+            line = node.start_point[0] + 1  # 0-indexed → 1-indexed
+            lazy = _is_lazy(node)
+            if not top_level_only or not lazy:
+                imports.append({"line": line, "statement": text, "lazy": lazy})
+
+        for child in node.children:
+            _walk(child)
+
+    _walk(tree.root_node)
     return imports
 
 
@@ -140,5 +169,5 @@ def _read_symbol(
             "end": list(symbol.range_end),
         },
         "file": relativize(file_path, ws),
-        "imports": _extract_imports(file_path),
+        "imports": _extract_imports(file_path, top_level_only=False),
     }

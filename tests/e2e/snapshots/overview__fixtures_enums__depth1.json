@@ -3,19 +3,23 @@
   "imports": [
     {
       "line": 15,
-      "statement": "from __future__ import annotations"
+      "statement": "from __future__ import annotations",
+      "lazy": false
     },
     {
       "line": 17,
-      "statement": "from dataclasses import dataclass, field"
+      "statement": "from dataclasses import dataclass, field",
+      "lazy": false
     },
     {
       "line": 18,
-      "statement": "from enum import Enum"
+      "statement": "from enum import Enum",
+      "lazy": false
     },
     {
       "line": 19,
-      "statement": "from typing import ClassVar"
+      "statement": "from typing import ClassVar",
+      "lazy": false
     }
   ],
   "symbols": [
@@ -26,16 +30,13 @@
       "preview": "    \"\"\"Enum for greeting styles — kind Enum, included in overview.\"\"\"\n\n    FRIENDLY = \"friendly\"\n    FORMAL = \"formal\"\n    CASUAL = \"casual\"",
       "range_line_char": {
         "start": [
-          38,
-          1
+          1,
+          38
         ],
         "end": [
-          51,
-          20
+          20,
+          51
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py": 2
       },
       "children": [
         {
@@ -49,50 +50,13 @@
               5
             ],
             "end": [
-              51,
-              20
+              20,
+              51
             ]
           },
-          "references_count": {},
           "children": null
         }
       ]
-    },
-    {
-      "symbol": "SimpleData",
-      "kind": "Class",
-      "signature": "@dataclass\nclass SimpleData:",
-      "preview": "    \"\"\"Dataclass with ClassVar field — all fields are Variable or ClassVar kind.\n\n    Overview should show children: null since no fields are callable kinds.\n    \"\"\"\n",
-      "range_line_char": {
-        "start": [
-          57,
-          1
-        ],
-        "end": [
-          66,
-          41
-        ]
-      },
-      "references_count": {},
-      "children": null
-    },
-    {
-      "symbol": "EmptyContainer",
-      "kind": "Class",
-      "signature": "class EmptyContainer:",
-      "preview": "    \"\"\"A class with no methods, no fields — just documentation.\n\n    Overview should show children: null.\n    \"\"\"\n    pass",
-      "range_line_char": {
-        "start": [
-          72,
-          1
-        ],
-        "end": [
-          77,
-          9
-        ]
-      },
-      "references_count": {},
-      "children": null
     },
     {
       "symbol": "ProcessedData",
@@ -101,16 +65,13 @@
       "preview": "    \"\"\"Dataclass mixing regular fields with ClassVar and default factories.\n\n    Overview: children: null (all fields are Variable/ClassVar kind).\n    \"\"\"\n",
       "range_line_char": {
         "start": [
-          83,
-          1
+          1,
+          83
         ],
         "end": [
           101,
           77
         ]
-      },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py": 1
       },
       "children": [
         {
@@ -120,15 +81,14 @@
           "preview": "        \"\"\"Post-init hook — should appear as child? Depends on LSP.\"\"\"\n        ProcessedData._id_counter += 1",
           "range_line_char": {
             "start": [
-              95,
-              5
+              5,
+              95
             ],
             "end": [
-              97,
-              39
+              39,
+              97
             ]
           },
-          "references_count": {},
           "children": null
         },
         {
@@ -138,18 +98,51 @@
           "preview": "        \"\"\"Returns a summary string — this IS a Method, should be child.\"\"\"\n        return f\"ProcessedData({len(self.items)} items, ratio={self.ratio})\"",
           "range_line_char": {
             "start": [
-              99,
-              5
+              5,
+              99
             ],
             "end": [
               101,
               77
             ]
           },
-          "references_count": {},
           "children": null
         }
       ]
+    },
+    {
+      "symbol": "EmptyContainer",
+      "kind": "Class",
+      "signature": "class EmptyContainer:",
+      "preview": "    \"\"\"A class with no methods, no fields — just documentation.\n\n    Overview should show children: null.\n    \"\"\"\n    pass",
+      "range_line_char": {
+        "start": [
+          1,
+          72
+        ],
+        "end": [
+          77,
+          9
+        ]
+      },
+      "children": null
+    },
+    {
+      "symbol": "SimpleData",
+      "kind": "Class",
+      "signature": "@dataclass\nclass SimpleData:",
+      "preview": "    \"\"\"Dataclass with ClassVar field — all fields are Variable or ClassVar kind.\n\n    Overview should show children: null since no fields are callable kinds.\n    \"\"\"\n",
+      "range_line_char": {
+        "start": [
+          1,
+          57
+        ],
+        "end": [
+          41,
+          66
+        ]
+      },
+      "children": null
     }
   ],
   "symbol_count": 4,

@@ -4,6 +4,12 @@
   "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
   "references": [
     {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 17,
+      "snippet": "    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,",
+      "locality": "cross_file"
+    },
+    {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
       "line": 67,
       "snippet": "class GreeterBase:\n    \"\"\"Base class for greeters — referenced from fixtures_callchain.py.\"\"\"\n\n    def greet(self, name: str) -> str:",
@@ -14,12 +20,6 @@
       "line": 79,
       "snippet": "class LoudGreeter(GreeterBase):\n    \"\"\"Loud greeter — overrides greet, adds factory methods.\"\"\"\n\n    def greet(self, name: str) -> str:",
       "locality": "same_file"
-    },
-    {
-      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
-      "line": 17,
-      "snippet": "    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,",
-      "locality": "cross_file"
     },
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
