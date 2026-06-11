@@ -8,57 +8,115 @@ Why this exists
 
 from __future__ import annotations
 
-import ast
+import importlib
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tree_sitter import Parser
 
 from codebase._resolve import ResolvedSymbol, relativize
 from codebase._snippet import read_range
 
 
-# ── Import extraction (Python-only for now, extensible via *language*) ───────
+# ── Tree-sitter registry ──────────────────────────────────────────────────────
+# Each language maps to (module_name, attr_name, import_node_types).
+# Grammars are lazy-loaded on first use so that missing packages
+# (e.g. tree-sitter-rust) do not prevent the tools from starting.
+
+_LANGUAGE_GRAMMAR: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "python":     ("tree_sitter_python",     "language",            ("import_statement", "import_from_statement", "future_import_statement")),
+    "typescript": ("tree_sitter_typescript", "language_typescript", ("import_statement",)),
+    "javascript": ("tree_sitter_typescript", "language_typescript", ("import_statement",)),
+    "tsx":        ("tree_sitter_typescript", "language_tsx",        ("import_statement",)),
+}
+
+_parser_cache: dict[str, "Parser"] = {}
+
+
+def _get_parser(language: str) -> "Parser | None":
+    """Return a cached tree-sitter ``Parser`` for *language*, or ``None``.
+
+    Grammars are imported lazily from ``_LANGUAGE_GRAMMAR`` and cached
+    so that each language is loaded at most once per process lifetime.
+    """
+    if language in _parser_cache:
+        return _parser_cache[language]
+
+    entry = _LANGUAGE_GRAMMAR.get(language)
+    if entry is None:
+        return None  # unsupported language → graceful fallback
+
+    module_name, attr_name, _node_types = entry
+    try:
+        from tree_sitter import Language, Parser
+        mod = importlib.import_module(module_name)
+        lang_fn = getattr(mod, attr_name)
+        ts_lang = Language(lang_fn())
+        parser = Parser(ts_lang)
+        _parser_cache[language] = parser
+        return parser
+    except (ImportError, AttributeError) as exc:
+        # Grammar package not installed → don't cache the failure,
+        # so retrying works if the package is installed later.
+        # Log once per language per process.
+        import logging
+        logging.getLogger(__name__).warning(
+            "tree-sitter grammar for '%s' not available (%s) — imports will be empty",
+            language, exc,
+        )
+        return None
+
+
+# ── Import extraction ─────────────────────────────────────────────────────────
 
 
 def _extract_imports(file_path: str | Path, language: str = "python") -> list[dict]:
-    """Extract import statements from a source file.
+    """Extract import statements from a source file using tree-sitter.
 
     Parameters
     ----------
     file_path : str or Path
         Path to the source file.
     language : str
-        Language identifier for future extension (TypeScript, Rust, etc.).
-        Currently only ``"python"`` is supported.
+        Language identifier (``"python"``, ``"typescript"``, etc.).
+        Unsupported languages return ``[]``.
 
     Returns
     -------
     list[dict]
         Each entry has ``line`` (1-indexed) and ``statement`` (raw source text).
     """
-    if language == "python":
-        return _extract_imports_python(file_path)
-    return []
+    parser = _get_parser(language)
+    if parser is None:
+        return []
 
+    entry = _LANGUAGE_GRAMMAR.get(language)
+    if entry is None:
+        return []
+    _, _, import_node_types = entry
 
-def _extract_imports_python(file_path: str | Path) -> list[dict]:
-    """Extract Python import statements using ``ast.parse()``."""
     try:
-        source = Path(file_path).read_text(encoding="utf-8")
+        source = Path(file_path).read_bytes()
     except OSError:
         return []
 
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
-
+    tree = parser.parse(source)
     imports: list[dict] = []
-    for node in ast.iter_child_nodes(tree):
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
-            segment = ast.get_source_segment(source, node)
-            if segment is not None:
-                imports.append({"line": node.lineno, "statement": segment})
+
+    # Only walk immediate children of the root node (top-level statements).
+    # This excludes lazy imports inside function bodies — agents want to see
+    # what the module depends on, not implementation details.
+    for child in tree.root_node.children:
+        if child.type in import_node_types:
+            text = source[child.start_byte:child.end_byte].decode()
+            line = child.start_point[0] + 1  # 0-indexed → 1-indexed
+            imports.append({"line": line, "statement": text})
 
     return imports
+
+
+# ── Symbol reader ──────────────────────────────────────────────────────────────
 
 
 def _read_symbol(

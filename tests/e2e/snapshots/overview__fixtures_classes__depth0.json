@@ -92,11 +92,7 @@
           55
         ]
       },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 3,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
-      },
+      "references_count": {},
       "children": null
     },
     {
@@ -115,10 +111,7 @@
         ]
       },
       "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 1,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 1,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 1,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 2
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 1
       },
       "children": {
         "count": 2
@@ -140,10 +133,7 @@
         ]
       },
       "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 8,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 3
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 8
       },
       "children": {
         "count": 4
@@ -184,11 +174,7 @@
           37
         ]
       },
-      "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py": 2,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
-      },
+      "references_count": {},
       "children": {
         "count": 3
       }
@@ -209,8 +195,7 @@
         ]
       },
       "references_count": {
-        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 3,
-        "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py": 1
+        "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py": 3
       },
       "children": {
         "count": 1

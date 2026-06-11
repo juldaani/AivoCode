@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codebase._read import _extract_imports
+from codebase._read import _extract_imports, _get_parser
 from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth, relativize
 from codebase._snippet import read_range, read_snippet_chars
 
@@ -310,40 +310,109 @@ def _empty_overview_entry(sym: dict) -> dict:
 
 
 def _extract_signature(file_path: Path, range_start_line: int, sel_start_line: int) -> int:
+    """Return the line number of the signature/header end for a symbol.
+
+    Uses tree-sitter to determine whether *range_start_line* is inside a
+    callable definition (function / class / interface / enum / struct), then
+    finds the colon (Python) or brace (TypeScript) that terminates the header.
+    Non-callable symbols (variables, constants) return *range_start_line*
+    unchanged.
+
+    The result is 1-indexed and used to split the symbol text into
+    ``signature`` (``range_start_line .. result``) and ``body``
+    (``result + 1 .. range_end``).
+    """
+    parser = _get_signature_parser(file_path)
+    if parser is None:
+        # No parser for this language — fall back to range bounds.
+        return range_start_line
+
     try:
-        lines = file_path.read_text(encoding="utf-8").splitlines()
+        source = file_path.read_bytes()
     except OSError:
         return range_start_line
 
-    if range_start_line < 1 or range_start_line > len(lines):
+    tree = parser.parse(source)
+
+    # Locate the tree-sitter node at the symbol's range start.
+    target_row = range_start_line - 1  # 1-indexed → 0-indexed
+    point = (target_row, 0)
+    node = tree.root_node.descendant_for_point_range(point, point)
+    if node is None:
         return range_start_line
 
-    first_line = lines[range_start_line - 1].strip()
-
-    # Only scan forward for def / class / decorator constructs.
-    # Everything else (variables, constants, etc.) → just that one line.
-    is_callable = (
-        first_line.startswith("def ")
-        or first_line.startswith("async def ")
-        or first_line.startswith("class ")
-        or first_line.startswith("@")
+    # Definition node types that we consider "callable" for the purpose
+    # of signature extraction.
+    _DEFINITION_TYPES: tuple[str, ...] = (
+        "function_definition",
+        "class_definition",
+        "decorated_definition",
+        "function_declaration",
+        "class_declaration",
+        "method_definition",
+        "abstract_class_declaration",
+        "interface_declaration",
+        "enum_declaration",
+        "struct_item",        # Rust via tree-sitter-rust
+        "impl_item",          # Rust
     )
-    if not is_callable:
-        return range_start_line
 
-    for i in range(range_start_line - 1, len(lines)):
-        actual_line = i + 1
-        stripped = lines[i].strip()
-        if actual_line >= sel_start_line and stripped.endswith(":"):
-            return actual_line
-        if actual_line > sel_start_line and not stripped:
-            return actual_line
+    # Walk up to the enclosing definition node.
+    def_node = node
+    while def_node is not None:
+        if def_node.type in _DEFINITION_TYPES:
+            break
+        def_node = def_node.parent
 
-    return range_start_line
+    if def_node is None:
+        return range_start_line  # not inside a callable definition
+
+    # Find the header terminator token: ':' for Python, '{' for C-family.
+    _HEADER_TERMINATORS = frozenset({":", "{"})
+
+    def _find_terminator(n) -> int | None:
+        for child in n.children:
+            if child.type in _HEADER_TERMINATORS:
+                return child.start_point[0] + 1  # 0-indexed → 1-indexed
+            result = _find_terminator(child)
+            if result is not None:
+                return result
+        return None
+
+    header_end = _find_terminator(def_node)
+    if header_end is not None:
+        return max(header_end, range_start_line)
+
+    # Fallback: use the definition node's end line.
+    return max(def_node.end_point[0] + 1, range_start_line)
 
 
 def _sig_line_text(file_path: Path, start_line: int, end_line: int) -> str:
     return read_range(file_path, start_line, end_line)
+
+
+# ── Language detection for tree-sitter ─────────────────────────────────────────
+
+
+_SUFFIX_TO_LANGUAGE: dict[str, str] = {
+    ".py": "python",
+    ".pyi": "python",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".js": "javascript",
+    ".jsx": "javascript",
+}
+
+
+def _language_from_suffix(file_path: Path) -> str:
+    """Map a file suffix to a tree-sitter language name."""
+    return _SUFFIX_TO_LANGUAGE.get(file_path.suffix, "python")
+
+
+def _get_signature_parser(file_path: Path):
+    """Return a tree-sitter ``Parser`` for *file_path*, or ``None``."""
+    language = _language_from_suffix(file_path)
+    return _get_parser(language)
 
 
 # ── Explain ────────────────────────────────────────────────────────────────────

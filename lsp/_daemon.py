@@ -116,7 +116,9 @@ def _log_path(workspace: Path) -> Path:
 
 
 # ── Default language entry (MVP: Python only) ────────────────────────────────
-# In the future this will come from lsp_config.toml or CLI arguments.
+# Language configuration is loaded from AIVOCODE_LSP_CONFIG_PATH or the
+# bundled /aivocode/.lsp_config.toml.  _DEFAULT_PYTHON_LANG is the
+# hardcoded fallback when no config file is found.
 
 _DEFAULT_PYTHON_LANG = LanguageEntry(
     name="python",
@@ -126,6 +128,63 @@ _DEFAULT_PYTHON_LANG = LanguageEntry(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _load_language_config() -> list[LanguageEntry]:
+    """Load language entries from the configured TOML file.
+
+    Resolution order:
+    1. ``AIVOCODE_LSP_CONFIG_PATH`` env var (absolute path to a TOML file).
+    2. ``/aivocode/.lsp_config.toml`` (bundled default in the production image).
+    3. Hardcoded ``_DEFAULT_PYTHON_LANG`` fallback.
+
+    Returns a list of ``LanguageEntry`` objects (always non-empty).
+    """
+    import tomllib
+
+    # 1. Env override
+    config_path = os.environ.get("AIVOCODE_LSP_CONFIG_PATH")
+    if config_path:
+        try:
+            data = tomllib.loads(Path(config_path).read_text(encoding="utf-8"))
+        except (FileNotFoundError, tomllib.TOMLDecodeError, OSError) as exc:
+            logger.warning(
+                "AIVOCODE_LSP_CONFIG_PATH=%s could not be read: %s — falling back",
+                config_path, exc,
+            )
+            return [_DEFAULT_PYTHON_LANG]
+
+    # 2. Bundled default
+    if not config_path:
+        bundled = Path("/aivocode/.lsp_config.toml")
+        if bundled.exists():
+            try:
+                data = tomllib.loads(bundled.read_text(encoding="utf-8"))
+            except tomllib.TOMLDecodeError as exc:
+                logger.warning("Bundled config %s is invalid: %s", bundled, exc)
+                return [_DEFAULT_PYTHON_LANG]
+        else:
+            return [_DEFAULT_PYTHON_LANG]
+
+    # Parse [[language]] entries.
+    entries: list[LanguageEntry] = []
+    for raw in data.get("language", []):
+        if not isinstance(raw, dict):
+            continue
+        name = raw.get("name", "")
+        suffixes = tuple(raw.get("suffixes", []))
+        server = raw.get("server", "")
+        server_args = tuple(raw.get("server_args", ["--stdio"]))
+        if name and suffixes and server:
+            entries.append(LanguageEntry(
+                name=name, suffixes=suffixes, server=server, server_args=server_args,
+            ))
+
+    if not entries:
+        logger.warning("No valid [[language]] entries found in config — falling back")
+        return [_DEFAULT_PYTHON_LANG]
+
+    return entries
 
 # ── Idle shutdown ─────────────────────────────────────────────────────────────
 # After _IDLE_TIMEOUT seconds of no client queries, the daemon shuts itself
@@ -178,13 +237,15 @@ def ensure_daemon(
     if _is_running(socket_path):
         # ── Freshness check: is the daemon running stale code? ─────────
         # Compare the socket's mtime (daemon start time) against the
-        # newest .py source file in the lsp/ package.  If any source
+        # newest .py source file in the aivocode packages.  If any source
         # file changed after the daemon started, the daemon is running
         # old code — kill it, clean up, and spawn a fresh one.
         try:
-            lsp_dir = Path(__file__).resolve().parent  # lsp/ package dir
+            repo_root = Path(__file__).resolve().parent.parent  # workspace root
             src_mtime = max(
-                p.stat().st_mtime for p in lsp_dir.rglob("*.py")
+                p.stat().st_mtime
+                for pkg in ("lsp", "codebase", "api_server", "cli")
+                for p in (repo_root / pkg).rglob("*.py")
             )
             if socket_path.stat().st_mtime < src_mtime:
                 logger.info(
@@ -931,8 +992,13 @@ if __name__ == "__main__":
 
     logger.info("Daemon starting: workspace=%s, socket=%s", _workspace, _socket)
 
+    # Load language config — select the first entry (MVP: single-client daemon).
+    # In the future, multi-language daemons will use the full list.
+    lang_entries = _load_language_config()
+    lang_entry = lang_entries[0]
+
     try:
-        asyncio.run(_run_daemon(_workspace, _socket, _DEFAULT_PYTHON_LANG))
+        asyncio.run(_run_daemon(_workspace, _socket, lang_entry))
     except asyncio.CancelledError:
         # Expected: server.close() cancels serve_forever(), which raises
         # CancelledError.  This is a normal shutdown path, not a crash.

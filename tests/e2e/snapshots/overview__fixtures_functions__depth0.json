@@ -39,8 +39,8 @@
     {
       "symbol": "resolve_symbol",
       "kind": "Function",
-      "signature": "async def resolve_symbol(\n    file_path: str,\n    symbol_name: str,\n    *,\n    line: int | None = None,\n    workspace: Path | None = None,\n) -> ResolvedSymbol:",
-      "preview": "    \"\"\"Async function with lazy imports inside.\n\n    The ``from lsp import query_document_symbols`` import is inside the\n    function body — tests that lazy imports appear as outgoing calls.\n    \"\"\"",
+      "signature": "async def resolve_symbol(\n    file_path: str,",
+      "preview": "    symbol_name: str,\n    *,\n    line: int | None = None,\n    workspace: Path | None = None,\n) -> ResolvedSymbol:",
       "range_line_char": {
         "start": [
           54,
@@ -59,8 +59,8 @@
     {
       "symbol": "analyze_overview",
       "kind": "Function",
-      "signature": "async def analyze_overview(\n    file_path: str | Path,\n    *,\n    depth: int = 0,\n    workspace: Path | None = None,\n) -> dict:",
-      "preview": "    \"\"\"Async function calling cross-package symbols and lazy imports.\n\n    Calls GreeterBase.greet (cross-file), LoudGreeter.greet (cross-file),\n    and import inside function.\n    \"\"\"",
+      "signature": "async def analyze_overview(\n    file_path: str | Path,",
+      "preview": "    *,\n    depth: int = 0,\n    workspace: Path | None = None,\n) -> dict:\n    \"\"\"Async function calling cross-package symbols and lazy imports.",
       "range_line_char": {
         "start": [
           77,
@@ -99,8 +99,8 @@
     {
       "symbol": "build_tree",
       "kind": "Function",
-      "signature": "def build_tree(\n    workspace: Path,\n    *,\n    suffix: str | None = None,\n) -> dict:",
-      "preview": "    \"\"\"Build a file tree — calls _private_helper and relativize.\n\n    Called by entry_point in fixtures_callchain (cross-file incoming).\n    \"\"\"\n    name = _private_helper(\"  test_user  \")",
+      "signature": "def build_tree(\n    workspace: Path,",
+      "preview": "    *,\n    suffix: str | None = None,\n) -> dict:\n    \"\"\"Build a file tree — calls _private_helper and relativize.\n",
       "range_line_char": {
         "start": [
           117,

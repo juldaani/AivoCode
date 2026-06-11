@@ -4,16 +4,16 @@
   "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
   "references": [
     {
-      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
-      "line": 20,
-      "snippet": "    ResolvedSymbol,\n)\nfrom mock_pkg.fixtures_functions import (\n    _private_helper,",
-      "locality": "cross_file"
-    },
-    {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
       "line": 50,
       "snippet": "class ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.",
       "locality": "same_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
+      "line": 20,
+      "snippet": "    ResolvedSymbol,\n)\nfrom mock_pkg.fixtures_functions import (\n    _private_helper,",
+      "locality": "cross_file"
     },
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",

@@ -1,0 +1,19 @@
+# AivoCode language server configuration.
+#
+# Each [[language]] entry maps a file suffix to an LSP server.
+# The daemon selects the right server automatically based on
+# the file being queried.
+#
+# Override path via AIVOCODE_LSP_CONFIG_PATH in .aivocode.env.
+
+[[language]]
+name = "python"
+suffixes = [".py", ".pyi"]
+server = "basedpyright-langserver"
+server_args = ["--stdio"]
+
+# [[language]]
+# name = "typescript"
+# suffixes = [".ts", ".tsx"]
+# server = "vtsls"
+# server_args = ["--stdio"]

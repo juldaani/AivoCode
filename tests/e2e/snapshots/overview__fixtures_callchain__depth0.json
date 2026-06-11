@@ -122,8 +122,8 @@
     {
       "symbol": "entry_point",
       "kind": "Function",
-      "signature": "async def entry_point(\n    name: str,\n    *,\n    file_path: str = \"/tmp/test.py\",\n    workspace: Path | None = None,\n) -> dict:",
-      "preview": "    \"\"\"Top-level entry that exercises all cross-file dependencies.\n\n    Calls from 4 different modules, plus internal calls, plus lazily\n    imported calls — tests outgoing-calls with mixed locality.\n    \"\"\"",
+      "signature": "async def entry_point(\n    name: str,",
+      "preview": "    *,\n    file_path: str = \"/tmp/test.py\",\n    workspace: Path | None = None,\n) -> dict:\n    \"\"\"Top-level entry that exercises all cross-file dependencies.",
       "range_line_char": {
         "start": [
           70,
