@@ -70,6 +70,17 @@ aivocode lsp start
 aivocode lsp status
 aivocode lsp stop
 
+# Explore a codebase (high-level agent tools)
+aivocode codebase tree --suffix .py
+aivocode codebase overview src/main.py
+aivocode codebase read src/main.py --symbol MyClass
+aivocode codebase explain src/main.py --symbol my_func
+aivocode codebase search "ClassName" --kind Class
+aivocode codebase incoming-calls src/main.py --symbol my_func
+aivocode codebase outgoing-calls src/main.py --symbol my_func
+aivocode codebase references src/main.py --symbol MyClass
+aivocode codebase impact src/main.py --symbol my_func
+
 # Pretty-printed output (available on every subcommand)
 aivocode lsp status --pretty-format
 ```
@@ -133,6 +144,15 @@ use `python -m cli` from the repo root to pick up uncommitted changes.
 | `POST` | `/lsp/start` | Ensure daemon is running `{"workspace": "..."}` |
 | `POST` | `/lsp/stop` | Graceful shutdown `{"workspace": "..."}` |
 | `GET` | `/lsp/status` | Daemon health `?workspace=...` |
+| `POST` | `/codebase/tree` | Recursive file tree `{"suffix?": ".py", "workspace?": "..."}` |
+| `POST` | `/codebase/overview` | File ToC `{"file": "...", "depth?": 0, "workspace?": "..."}` |
+| `POST` | `/codebase/read` | Read symbol body `{"file": "...", "symbol_name": "...", "line?": N}` |
+| `POST` | `/codebase/explain` | Full symbol report `{"file": "...", "symbol_name": "..."}` |
+| `POST` | `/codebase/search` | Workspace-wide search `{"query": "...", "kind?": "...", "limit?": 50}` |
+| `POST` | `/codebase/incoming-calls` | Who calls this `{"file": "...", "symbol_name": "..."}` |
+| `POST` | `/codebase/outgoing-calls` | What this calls `{"file": "...", "symbol_name": "...", "workspace_only?": true}` |
+| `POST` | `/codebase/references` | Usage sites `{"file": "...", "symbol_name": "..."}` |
+| `POST` | `/codebase/impact` | Change impact `{"file": "...", "symbol_name": "..."}` |
 | `POST` | `/web_ops/webfetch` | Fetch a URL `{"url": "...", "wait_until?": "load", ...}` |
 | `POST` | `/web_ops/websearch` | Search web/code `{"query": "...", "num_results?": 10, ...}` |
 
@@ -153,6 +173,7 @@ cli/                 CLI (thin HTTP client)
 ├── _utils.py         Shared: HTTP transport, --pretty-format
 └── commands/         One module per subcommand
     ├── lsp.py
+    ├── codebase.py
     ├── webfetch.py
     └── websearch.py
 
@@ -165,6 +186,14 @@ lsp/                 LSP library (core logic)
 ├── _workspace.py    Git workspace detection
 ├── _translate.py    File watcher → LSP events
 └── config.py        LanguageEntry, load_config (lsp_config.toml)
+
+codebase/            Agent‑facing exploration tools
+├── __init__.py      Public API: read_symbol, file_overview, explain_symbol, etc.
+├── _analyze.py      Call hierarchy, references, overview, search, impact
+├── _read.py         Symbol body reader + tree‑sitter import extraction
+├── _resolve.py      Name → position resolution + symbol tree builders
+├── _snippet.py      File snippet reader (snippet/preview/range)
+└── _tree.py         Recursive file/directory tree builder
 
 web_ops/             Web intelligence (future REST endpoints)
 file_watcher/        File system watcher (awatch_repos)

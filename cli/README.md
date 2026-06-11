@@ -26,6 +26,17 @@ export AIVOCODE_URL=http://localhost:8000
 aivocode lsp symbols src/main.py
 aivocode webfetch https://example.com
 aivocode websearch "python asyncio"
+
+# Codebase exploration (agent-facing tools)
+aivocode codebase tree --suffix .py
+aivocode codebase overview src/main.py
+aivocode codebase read src/main.py --symbol MyClass
+aivocode codebase explain src/main.py --symbol my_func
+aivocode codebase search "ClassName" --kind Class
+aivocode codebase incoming-calls src/main.py --symbol my_func
+aivocode codebase outgoing-calls src/main.py --symbol my_func
+aivocode codebase references src/main.py --symbol MyClass
+aivocode codebase impact src/main.py --symbol my_func
 ```
 
 ## Commands
@@ -35,6 +46,15 @@ aivocode lsp symbols <file> [--workspace PATH] [--pretty-format]
 aivocode lsp start [--workspace PATH] [--pretty-format]
 aivocode lsp stop [--workspace PATH] [--pretty-format]
 aivocode lsp status [--workspace PATH] [--pretty-format]
+aivocode codebase tree [--suffix .py] [--workspace PATH] [--pretty-format]
+aivocode codebase overview <file> [--depth N] [--workspace PATH] [--pretty-format]
+aivocode codebase read <file> --symbol NAME [--line N] [--workspace PATH] [--pretty-format]
+aivocode codebase explain <file> --symbol NAME [--line N] [--workspace PATH] [--pretty-format]
+aivocode codebase search <query> [--kind CLASS] [--limit N] [--workspace PATH] [--pretty-format]
+aivocode codebase incoming-calls <file> --symbol NAME [--line N] [--pretty-format]
+aivocode codebase outgoing-calls <file> --symbol NAME [--line N] [--include-external] [--pretty-format]
+aivocode codebase references <file> --symbol NAME [--line N] [--pretty-format]
+aivocode codebase impact <file> --symbol NAME [--line N] [--pretty-format]
 aivocode webfetch <url> [options] [--pretty-format]
 aivocode websearch <query> [options] [--pretty-format]
 ```
@@ -117,6 +137,7 @@ cli/
 ├── _utils.py            # Shared: HTTP transport, JSON output, --pretty-format
 └── commands/
     ├── lsp.py           # lsp subcommand (symbols, start, stop, status)
+    ├── codebase.py      # codebase subcommand (tree, overview, read, explain, search, impact)
     ├── webfetch.py      # webfetch subcommand
     └── websearch.py     # websearch subcommand
 ```
@@ -129,6 +150,15 @@ cli/
 | ``POST`` | ``/lsp/start`` | ``{"workspace": "..."}`` |
 | ``POST`` | ``/lsp/stop`` | ``{"workspace": "..."}`` |
 | ``GET`` | ``/lsp/status`` | ``?workspace=...`` |
+| ``POST`` | ``/codebase/tree`` | ``{"suffix?": ".py", "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/overview`` | ``{"file": "...", "depth?": 0, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/read`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/explain`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/search`` | ``{"query": "...", "kind?": "...", "limit?": 50, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/incoming-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/outgoing-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace_only?": true}`` |
+| ``POST`` | ``/codebase/references`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/impact`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
 | ``POST`` | ``/web_ops/webfetch`` | ``{"url": "...", "wait_until?": "load", ...}`` |
 | ``POST`` | ``/web_ops/websearch`` | ``{"query": "...", "num_results?": 10, ...}`` |
 | ``GET`` | ``/health`` | — |
