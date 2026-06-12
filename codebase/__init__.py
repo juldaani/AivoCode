@@ -311,8 +311,7 @@ async def analyze_impact(
     Parameters
     ----------
     depth : int
-        How many import hops for the file-level blast radius (default 10).
-        Controls both ``dependents`` and ``affected_tests`` in the response.
+        How many import hops for the file-level ``dependents`` (default 10).
     """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()

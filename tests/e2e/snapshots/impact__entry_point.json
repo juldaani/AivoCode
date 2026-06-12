@@ -107,12 +107,6 @@
         "file": "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py",
         "depth": 1
       }
-    ],
-    "affected_tests": [
-      {
-        "file": "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py",
-        "depth": 1
-      }
     ]
   },
   "query": {

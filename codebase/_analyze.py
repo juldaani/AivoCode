@@ -567,15 +567,15 @@ async def _impact(
     Composes two views of impact:
     1. ``symbol_level`` — immediate callers, callees, and references from LSP
        (depth 1, precise, symbol-aware).
-    2. ``file_level`` — transitive file dependents and affected test files from
-       the tree-sitter import graph (configurable *depth*, zero LSP cost).
+    2. ``file_level`` — transitive file dependents from the tree-sitter import
+       graph (configurable *depth*, zero LSP cost).  Includes test files.
 
     Together they answer "what breaks if I change this symbol?" — the LSP
     part for surgical precision and the import graph part for the full blast
-    radius including tests.
+    radius.
     """
     from lsp import detect_workspace
-    from lsp import query_import_dependents, query_import_affected_tests
+    from lsp import query_import_dependents
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
@@ -587,7 +587,6 @@ async def _impact(
 
     # File-level transitive dependents from the import graph (zero LSP).
     deps_result = await query_import_dependents(fp, depth=depth, workspace=ws)
-    tests_result = await query_import_affected_tests(fp, depth=depth, workspace=ws)
 
     return {
         "symbol": symbol.name,
@@ -600,6 +599,5 @@ async def _impact(
         },
         "file_level": {
             "dependents": deps_result.get("dependents", []),
-            "affected_tests": tests_result.get("affected_test_files", []),
         },
     }

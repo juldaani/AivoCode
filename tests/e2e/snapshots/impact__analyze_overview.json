@@ -77,28 +77,6 @@
         "file": "tests/data/mock_repos/python/tests/test_mock.py",
         "depth": 1
       }
-    ],
-    "affected_tests": [
-      {
-        "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
-        "depth": 1
-      },
-      {
-        "file": "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py",
-        "depth": 1
-      },
-      {
-        "file": "tests/data/mock_repos/python/mock_pkg/fixtures_relative.py",
-        "depth": 1
-      },
-      {
-        "file": "tests/data/mock_repos/python/mock_pkg/subpkg/deep_relative.py",
-        "depth": 1
-      },
-      {
-        "file": "tests/data/mock_repos/python/tests/test_mock.py",
-        "depth": 1
-      }
     ]
   },
   "query": {

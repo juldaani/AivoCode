@@ -325,11 +325,10 @@ def test_impact_shape(lsp_server: str, symbol_name: str) -> None:
     for key in ("incoming_calls", "outgoing_calls", "references"):
         assert key in sl, f"impact symbol_level missing '{key}'"
         assert isinstance(sl[key], list)
-    # file_level contains the import graph results
+    # file_level contains the import graph results (dependents includes tests)
     fl = result["file_level"]
-    for key in ("dependents", "affected_tests"):
-        assert key in fl, f"impact file_level missing '{key}'"
-        assert isinstance(fl[key], list)
+    assert "dependents" in fl, "impact file_level missing 'dependents'"
+    assert isinstance(fl["dependents"], list)
     # Each file-level entry has file and depth
     for entry in fl["dependents"]:
         assert "file" in entry
