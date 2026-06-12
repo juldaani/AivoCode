@@ -215,23 +215,38 @@ class ImportGraph:
         self._files_indexed += 1
 
     def _remove_file(self, rel: str) -> None:
-        """Remove all edges involving *rel* from the graph."""
+        """Remove all edges involving *rel* from the graph.
+
+        *rel* must be a workspace-relative path string (as returned by
+        ``_relativize``).  Only decrements ``_files_indexed`` when the
+        file was actually present in the graph (avoids drift for files
+        that were never indexed, e.g. non-code files that pass through
+        ``update()`` from watcher events).
+        """
+        # Track whether the file was actually in the graph so we only
+        # decrement _files_indexed for genuine removals.
+        was_in_graph = False
+
         # Remove forward edges: for each file rel imported, remove rel
         # from that file's reverse set.
         for imported in self._forward.pop(rel, ()):
+            was_in_graph = True
             rev = self._reverse.get(imported)
             if rev is not None:
                 rev.discard(rel)
 
         # Remove reverse edges (who imports rel).
-        self._reverse.pop(rel, None)
+        if self._reverse.pop(rel, None) is not None:
+            was_in_graph = True
 
         # Remove from module-path index.
         for mp, path in list(self._file_index.items()):
             if path == rel:
+                was_in_graph = True
                 del self._file_index[mp]
 
-        self._files_indexed = max(0, self._files_indexed - 1)
+        if was_in_graph:
+            self._files_indexed = max(0, self._files_indexed - 1)
 
     def _clear(self) -> None:
         """Reset all internal state."""

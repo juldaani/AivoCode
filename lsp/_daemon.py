@@ -972,6 +972,20 @@ async def _run_daemon(
                             },
                         }
 
+                    # ── graph_reindex ────────────────────────────────────
+                    case "graph_reindex":
+                        # Accept a JSON-encoded list of absolute file paths.
+                        files_raw = params.get("files", "[]")
+                        try:
+                            files_list: list[str] = json.loads(files_raw)
+                        except (json.JSONDecodeError, TypeError):
+                            files_list = []
+                        import_graph.update([Path(p) for p in files_list])
+                        resp = {
+                            "id": req_id,
+                            "result": import_graph.info(),
+                        }
+
                     case _:
                         resp = {
                             "id": req_id,

@@ -120,6 +120,13 @@ Examples:
 - Run a single test: `pytest path/to/test_file.py::TestClass::test_name`
 - Run by keyword: `pytest -k "keyword"`
 
+### Smoke / Probe File Naming
+- **Only real pytest tests may use a `test_` prefix.**  Smoke scripts, probe
+  scripts, one-off verification helpers, and any ad-hoc code under `tmp/`
+  must **not** start with `test_`.  Use a descriptive name instead
+  (e.g. `smoke_phase1.py`, `probe_graph.py`).  This keeps `affected-tests`
+  output accurate and prevents accidental pytest discovery.
+
 ### Executing code
 - Run Python code: `python -m module.path` or `python path/to/script.py`
 

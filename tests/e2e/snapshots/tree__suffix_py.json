@@ -86,6 +86,9 @@
                     {
                       "mock_pkg/": [
                         "__init__.py",
+                        "chain_leaf.py",
+                        "chain_middle.py",
+                        "chain_target.py",
                         "errors.py",
                         "fixtures_callchain.py",
                         "fixtures_circular_a.py",
@@ -107,7 +110,8 @@
                     },
                     {
                       "tests/": [
-                        "test_mock.py"
+                        "test_mock.py",
+                        "test_transitive_impact.py"
                       ]
                     }
                   ]
@@ -201,8 +205,8 @@
         },
         {
           "smoke/": [
-            "test_phase1.py",
-            "test_phase2.py"
+            "smoke_phase1.py",
+            "smoke_phase2.py"
           ]
         }
       ]

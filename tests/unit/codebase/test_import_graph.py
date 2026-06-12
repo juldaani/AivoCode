@@ -158,21 +158,96 @@ class TestDirectDependents:
 
 
 class TestAffectedTests:
-    def test_test_file_direct_dependent(self):
-        # Requires a handler that knows "tests/test_x.py" is a test file.
-        # This tests the graph traversal logic only — filtering relies on
-        # the handler which is tested separately.
-        g = _make_graph({
-            "tests/test_a.py": {"src/module.py"},
-            "src/helper.py": {"src/module.py"},
-        })
-        # Without a real handler, affected_tests will return empty (handler
-        # returns None for non-.py suffixes in the test environment).
-        # Here we just verify the method doesn't crash.
-        result = g.affected_tests("src/module.py", depth=4)
-        assert isinstance(result, list)
+    """Tests for ``affected_tests``: filtering + depth correctness.
+
+    Uses ``tmp_path`` with a real ``build_full()`` so the PythonHandler
+    can resolve imports and identify test files properly.
+    """
+
+    # ── helpers ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _setup_chain(tmp_path: Path) -> ImportGraph:
+        """Create a flat package with a transitive chain and build the graph.
+
+        Returns the built ``ImportGraph`` ready for queries.
+
+        Structure::
+
+            target.py         ←  query target
+            middle.py         ←  imports target
+            leaf.py           ←  imports middle (NOT target)
+            test_direct.py        ←  imports target  (test by prefix)
+            test_transitive.py    ←  imports middle  (test by prefix, NOT target)
+            test_other.py         ←  standalone  (test by prefix)
+            helper.py             ←  source file importing target
+        """
+        (tmp_path / "target.py").write_text("def f(): pass\n")
+        (tmp_path / "middle.py").write_text(
+            "from target import f\ndef g(): return f()\n"
+        )
+        (tmp_path / "leaf.py").write_text(
+            "from middle import g\ndef h(): return g()\n"
+        )
+        (tmp_path / "test_direct.py").write_text(
+            "from target import f\ndef test_f(): pass\n"
+        )
+        (tmp_path / "test_transitive.py").write_text(
+            "from middle import g\ndef test_g(): assert g()\n"
+        )
+        (tmp_path / "test_other.py").write_text("def test_nothing(): pass\n")
+        (tmp_path / "helper.py").write_text(
+            "from target import f\ndef helper(): return f()\n"
+        )
+
+        g = ImportGraph(tmp_path)
+        g.build_full()
+        return g
+
+    # ── tests ────────────────────────────────────────────────────────────
+
+    def test_direct_dependent_found(self, tmp_path):
+        """A test file directly importing the target is in affected_tests."""
+        g = self._setup_chain(tmp_path)
+        result = g.affected_tests("target.py", depth=4)
+        files = {t["file"] for t in result}
+        assert "test_direct.py" in files
+
+    def test_non_test_files_excluded(self, tmp_path):
+        """Source files that depend on the target are NOT in affected_tests."""
+        g = self._setup_chain(tmp_path)
+        result = g.affected_tests("target.py", depth=4)
+        files = {t["file"] for t in result}
+        # These are dependents but NOT test files → must be absent.
+        assert "middle.py" not in files
+        assert "leaf.py" not in files
+        assert "helper.py" not in files
+
+    def test_depth_values(self, tmp_path):
+        """Each affected-test entry has the correct depth."""
+        g = self._setup_chain(tmp_path)
+        result = g.affected_tests("target.py", depth=4)
+        depths = {t["file"]: t["depth"] for t in result}
+        assert depths["test_direct.py"] == 1  # direct importer
+
+    def test_transitive_depth_2(self, tmp_path):
+        """A test file at depth 2 (via ``middle``) that never imports the target."""
+        g = self._setup_chain(tmp_path)
+        result = g.affected_tests("target.py", depth=4)
+        files = {t["file"] for t in result}
+        depths = {t["file"]: t["depth"] for t in result}
+        assert "test_transitive.py" in files
+        assert depths["test_transitive.py"] == 2
+
+    def test_unrelated_test_not_included(self, tmp_path):
+        """A test file that never imports the target (directly or transitively)."""
+        g = self._setup_chain(tmp_path)
+        result = g.affected_tests("target.py", depth=4)
+        files = {t["file"] for t in result}
+        assert "test_other.py" not in files
 
     def test_no_dependents(self):
+        """Empty graph returns empty list."""
         g = _make_graph({"a.py": set()})
         result = g.affected_tests("a.py")
         assert result == []
@@ -240,6 +315,103 @@ class TestUpdate:
         assert "a.py" in g.dependencies("new_file.py")
         assert "new_file.py" in g.direct_dependents("a.py")
 
+    def test_empty_update_noop(self, tmp_path):
+        """``update([])`` is a no-op — counters and state unchanged."""
+        (tmp_path / "a.py").write_text("import b\n")
+        (tmp_path / "b.py").write_text("")
+
+        g = ImportGraph(tmp_path)
+        g.build_full()
+
+        info_before = g.info()
+        g.update([])
+        info_after = g.info()
+
+        assert info_before["files_indexed"] == info_after["files_indexed"]
+        assert info_before["files_skipped"] == info_after["files_skipped"]
+
+    def test_mixed_batch_add_modify_delete(self, tmp_path):
+        """Single ``update()`` call with a mix of add / modify / delete."""
+        (tmp_path / "target.py").write_text("def f(): pass\n")
+        (tmp_path / "mod.py").write_text("from target import f\n")
+
+        g = ImportGraph(tmp_path)
+        g.build_full()
+
+        # Prepare: files for add, modify, delete.
+        add_file = tmp_path / "added.py"
+        add_file.write_text("from target import f\n")
+        (tmp_path / "mod.py").write_text("import os\n")  # swap import
+        (tmp_path / "target.py").unlink()                # delete
+
+        g.update([add_file, tmp_path / "mod.py", tmp_path / "target.py"])
+
+        assert "added.py" in g.files()                       # added
+        assert "os" not in g.dependencies("mod.py")          # modify (external)
+        assert "target.py" not in g.files()                  # deleted
+        assert g.dependencies("target.py") == []              # deleted
+        assert "target.py" not in g.direct_dependents(
+            [d for d in g.files() if d != "target.py"][0]
+        )
+
+    def test_non_python_file_no_drift(self, tmp_path):
+        """``update()`` on a non-code file does NOT change ``_files_indexed``."""
+        (tmp_path / "a.py").write_text("def f(): pass\n")
+
+        g = ImportGraph(tmp_path)
+        g.build_full()
+        count_before = g.info()["files_indexed"]
+
+        # Non-Python file — no handler, no graph entry, should be a no-op.
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\n")
+        g.update([readme])
+
+        assert g.info()["files_indexed"] == count_before, \
+            "_files_indexed drifted for non-Python file"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# error accumulation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestErrorAccumulation:
+    """Verify ``_errors`` / ``_files_skipped`` when ``extract_imports`` raises."""
+
+    def test_extract_imports_error(self, tmp_path):
+        """Handler that raises populates ``_errors`` and ``_files_skipped``."""
+        from codebase._lang_handlers._python import PythonHandler
+        from codebase._lang_handlers import register_handler
+        from codebase._lang_handlers import _SUFFIX_REGISTRY as _reg
+
+        # Register a handler for a custom suffix that always raises.
+        # NOTE: must set *both* ``suffixes`` (used by the registry) and
+        # behave like a working handler for module_path / resolve_import.
+        class RaisingHandler(PythonHandler):
+            suffixes = (".raise",)
+
+            def extract_imports(self, file_path):
+                raise ValueError("simulated parse failure")
+
+        register_handler(RaisingHandler())
+        try:
+            bad_file = tmp_path / "bad.raise"
+            bad_file.write_text("not relevant")
+
+            g = ImportGraph(tmp_path)
+            g.build_full()
+
+            info = g.info()
+            assert info["files_skipped"] >= 1, \
+                f"Expected >= 1 skipped, got {info['files_skipped']}"
+            assert len(info["errors"]) >= 1, \
+                f"Expected >= 1 errors, got {info['errors']}"
+            assert "simulated parse failure" in info["errors"][0]["reason"]
+        finally:
+            # Unregister so other tests are not polluted.
+            _reg.pop(".raise", None)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # info
@@ -259,6 +431,30 @@ class TestInfo:
         assert info["files_skipped"] == 0
         assert info["errors"] == []
         assert info["built_at"] > 0
+
+    def test_build_idempotent(self, tmp_path):
+        """Calling ``build_full()`` twice produces the same graph."""
+        (tmp_path / "a.py").write_text("import b\n")
+        (tmp_path / "b.py").write_text("")
+
+        g = ImportGraph(tmp_path)
+        g.build_full()
+
+        info1 = g.info()
+        files1 = g.files()
+        deps1 = g.dependencies("a.py")
+
+        # Second build should clear and rebuild to the same state.
+        g.build_full()
+
+        info2 = g.info()
+        files2 = g.files()
+        deps2 = g.dependencies("a.py")
+
+        assert info1["files_indexed"] == info2["files_indexed"]
+        assert info2["files_skipped"] == 0
+        assert files1 == files2
+        assert deps1 == deps2
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

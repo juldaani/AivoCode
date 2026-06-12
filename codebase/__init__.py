@@ -60,6 +60,30 @@ def _make_query(command: str, **kwargs: object) -> dict:
     return {"command": command, **{k: v for k, v in kwargs.items() if v is not None}}
 
 
+def _format_info(info: dict) -> str | None:
+    """Convert graph info dict to an optional human-readable status string.
+
+    Returns ``None`` when there is nothing noteworthy to report (no errors,
+    no skipped files).  Otherwise returns a compact status string like
+    ``"103 files indexed, 2 errors"``.
+    """
+    indexed = info.get("files_indexed", 0)
+    skipped = info.get("files_skipped", 0)
+    errors = info.get("errors", [])
+
+    has_news = skipped > 0 or errors
+    if not has_news:
+        return None
+
+    parts = [f"{indexed} files indexed"]
+    if skipped:
+        parts.append(f"{skipped} skipped")
+    if errors:
+        parts.append(f"{len(errors)} errors")
+
+    return ", ".join(parts)
+
+
 def get_repo_tree(
     workspace: Path | None = None,
     *,
@@ -320,6 +344,11 @@ async def import_dependents(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), depth=depth,
     )
+    # Polish: remove duplicate depth, format info
+    result.pop("depth", None)
+    info = _format_info(result.pop("info", {}))
+    if info is not None:
+        result["info"] = info
     return result
 
 
@@ -341,6 +370,10 @@ async def import_dependencies(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
     )
+    # Polish: format info
+    info = _format_info(result.pop("info", {}))
+    if info is not None:
+        result["info"] = info
     return result
 
 
@@ -363,4 +396,9 @@ async def affected_test_files(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), depth=depth,
     )
+    # Polish: remove duplicate depth, format info
+    result.pop("depth", None)
+    info = _format_info(result.pop("info", {}))
+    if info is not None:
+        result["info"] = info
     return result
