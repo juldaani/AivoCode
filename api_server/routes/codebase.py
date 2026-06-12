@@ -72,7 +72,7 @@ class FileBody(BaseModel):
     """Shared model for file-level import-graph commands (no symbol name needed)."""
 
     file: str
-    depth: int = 1
+    depth: int | None = None
     workspace: str | None = None
 
 
@@ -193,11 +193,13 @@ async def impact(body: SymbolBody):
 
 @router.post("/import-dependents")
 async def import_dependents_route(body: FileBody):
-    return await import_dependents(
-        body.file,
-        depth=body.depth,
-        workspace=Path(body.workspace) if body.workspace else None,
-    )
+    kwargs: dict = {
+        "file_path": body.file,
+        "workspace": Path(body.workspace) if body.workspace else None,
+    }
+    if body.depth is not None:
+        kwargs["depth"] = body.depth
+    return await import_dependents(**kwargs)
 
 
 @router.post("/import-dependencies")
@@ -210,8 +212,10 @@ async def import_dependencies_route(body: FileBody):
 
 @router.post("/affected-tests")
 async def affected_tests_route(body: FileBody):
-    return await affected_test_files(
-        body.file,
-        depth=body.depth,
-        workspace=Path(body.workspace) if body.workspace else None,
-    )
+    kwargs: dict = {
+        "file_path": body.file,
+        "workspace": Path(body.workspace) if body.workspace else None,
+    }
+    if body.depth is not None:
+        kwargs["depth"] = body.depth
+    return await affected_test_files(**kwargs)

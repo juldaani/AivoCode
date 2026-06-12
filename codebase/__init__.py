@@ -380,7 +380,7 @@ async def import_dependencies(
 async def affected_test_files(
     file_path: str | Path,
     *,
-    depth: int = 4,
+    depth: int = 10,
     workspace: Path | None = None,
     command: str = "affected-tests",
 ) -> dict:

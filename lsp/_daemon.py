@@ -960,7 +960,7 @@ async def _run_daemon(
                     # ── import_affected_tests ──────────────────────────────
                     case "import_affected_tests":
                         file_str = _to_workspace_rel(params.get("file", ""), workspace)
-                        depth = int(params.get("depth", "4"))
+                        depth = int(params.get("depth", "10"))
                         result = import_graph.affected_tests(file_str, depth=depth)
                         resp = {
                             "id": req_id,

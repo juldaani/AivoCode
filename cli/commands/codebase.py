@@ -227,25 +227,29 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
 
     # ── import-dependents ───────────────────────────────────────────────
     idp = cb_sub.add_parser("import-dependents", parents=[_GLOBAL_OPTIONS],
-                             help="Who (transitively) imports this file?")
-    idp.add_argument("file", type=str, help="Source file path.")
+                             help="Files that import this file (use --depth for transitives).")
+    idp.add_argument("file", type=str, help="Source file to check.")
     idp.add_argument("--depth", "-d", type=int, default=1,
-                      help="Import hops (default 1 = direct only).")
-    idp.add_argument("--workspace", type=str)
+                      help="How many import hops to follow (1 = direct only, 0 = unlimited).")
+    idp.add_argument("--workspace", type=str,
+                      help="Workspace root path (auto-detected if omitted).")
     idp.set_defaults(func=_handle_import_dependents)
 
     # ── import-dependencies ─────────────────────────────────────────────
     idd = cb_sub.add_parser("import-dependencies", parents=[_GLOBAL_OPTIONS],
-                             help="What does this file import?")
-    idd.add_argument("file", type=str, help="Source file path.")
-    idd.add_argument("--workspace", type=str)
+                             help="What files does this file import?")
+    idd.add_argument("file", type=str, help="Source file to check.")
+    idd.add_argument("--workspace", type=str,
+                      help="Workspace root path (auto-detected if omitted).")
     idd.set_defaults(func=_handle_import_dependencies)
 
     # ── affected-tests ──────────────────────────────────────────────────
     atp = cb_sub.add_parser("affected-tests", parents=[_GLOBAL_OPTIONS],
-                             help="Which test files (transitively) import this file?")
-    atp.add_argument("file", type=str, help="Source file path.")
-    atp.add_argument("--depth", "-d", type=int, default=4,
-                      help="Import hops (default 4).")
-    atp.add_argument("--workspace", type=str)
+                             help="Which test files are affected if this file changes?")
+    atp.add_argument("file", type=str,
+                      help="File whose changes you want to check (e.g. the file you edited).")
+    atp.add_argument("--depth", "-d", type=int, default=10,
+                      help="How many import hops to follow (default 10).")
+    atp.add_argument("--workspace", type=str,
+                      help="Workspace root path (auto-detected if omitted).")
     atp.set_defaults(func=_handle_affected_tests)
