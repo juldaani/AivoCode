@@ -38,6 +38,12 @@
       "line": 42,
       "snippet": "    ResolvedSymbol,\n    SymbolKind,\n)\nfrom mock_pkg.fixtures_functions import (",
       "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/subpkg/deep_relative.py",
+      "line": 15,
+      "snippet": "from ..fixtures_classes import GreeterBase, ResolvedSymbol\nfrom ..fixtures_functions import build_tree, leaf_helper\nfrom ..fixtures_relative import relative_greet\n",
+      "locality": "cross_file"
     }
   ],
   "query": {

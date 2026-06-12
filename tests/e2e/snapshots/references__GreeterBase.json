@@ -38,6 +38,36 @@
       "line": 80,
       "snippet": "    def __init__(self, base: GreeterBase):\n        self._base = base\n\n    def greet_and_build(self, name: str, ws: pathlib.Path) -> str:",
       "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_relative.py",
+      "line": 15,
+      "snippet": "from .fixtures_classes import GreeterBase, LoudGreeter, SymbolKind\n\n# ── Relative dot — module import ────────────────────────────────────────────────\n",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/subpkg/deep_relative.py",
+      "line": 15,
+      "snippet": "from ..fixtures_classes import GreeterBase, ResolvedSymbol\nfrom ..fixtures_functions import build_tree, leaf_helper\nfrom ..fixtures_relative import relative_greet\n",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/subpkg/deep_relative.py",
+      "line": 25,
+      "snippet": "    greeter = GreeterBase()\n    base = greeter.greet(name)\n    rel = str(workspace / name)\n    return f\"[deep] {base} @ {rel}\"",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/tests/test_mock.py",
+      "line": 15,
+      "snippet": "from mock_pkg.fixtures_classes import GreeterBase, LoudGreeter\nfrom mock_pkg.fixtures_functions import build_tree, leaf_helper\nfrom mock_pkg.fixtures_relative import relative_greet\nfrom mock_pkg.subpk",
+      "locality": "cross_file"
+    },
+    {
+      "file": "tests/data/mock_repos/python/tests/test_mock.py",
+      "line": 26,
+      "snippet": "    g = GreeterBase()\n    result = g.greet(\"world\")\n    assert result == \"Hello, world\"\n",
+      "locality": "cross_file"
     }
   ],
   "query": {

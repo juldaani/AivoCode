@@ -105,6 +105,38 @@ def _handle_impact(args: argparse.Namespace) -> None:
     _symbol_handler(args, "/codebase/impact")
 
 
+# ── Import-graph handlers ───────────────────────────────────────────────────────
+
+
+def _handle_import_dependents(args: argparse.Namespace) -> None:
+    body = {
+        "file": args.file,
+        "depth": args.depth,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/import-dependents", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
+def _handle_import_dependencies(args: argparse.Namespace) -> None:
+    body = {
+        "file": args.file,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/import-dependencies", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
+def _handle_affected_tests(args: argparse.Namespace) -> None:
+    body = {
+        "file": args.file,
+        "depth": args.depth,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/affected-tests", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
 # ── Shared argument definitions ────────────────────────────────────────────────
 
 def _add_symbol_args(parser: argparse.ArgumentParser) -> None:
@@ -192,3 +224,28 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
                              help="Change impact analysis.")
     _add_symbol_args(imp)
     imp.set_defaults(func=_handle_impact)
+
+    # ── import-dependents ───────────────────────────────────────────────
+    idp = cb_sub.add_parser("import-dependents", parents=[_GLOBAL_OPTIONS],
+                             help="Who (transitively) imports this file?")
+    idp.add_argument("file", type=str, help="Source file path.")
+    idp.add_argument("--depth", "-d", type=int, default=1,
+                      help="Import hops (default 1 = direct only).")
+    idp.add_argument("--workspace", type=str)
+    idp.set_defaults(func=_handle_import_dependents)
+
+    # ── import-dependencies ─────────────────────────────────────────────
+    idd = cb_sub.add_parser("import-dependencies", parents=[_GLOBAL_OPTIONS],
+                             help="What does this file import?")
+    idd.add_argument("file", type=str, help="Source file path.")
+    idd.add_argument("--workspace", type=str)
+    idd.set_defaults(func=_handle_import_dependencies)
+
+    # ── affected-tests ──────────────────────────────────────────────────
+    atp = cb_sub.add_parser("affected-tests", parents=[_GLOBAL_OPTIONS],
+                             help="Which test files (transitively) import this file?")
+    atp.add_argument("file", type=str, help="Source file path.")
+    atp.add_argument("--depth", "-d", type=int, default=4,
+                      help="Import hops (default 4).")
+    atp.add_argument("--workspace", type=str)
+    atp.set_defaults(func=_handle_affected_tests)

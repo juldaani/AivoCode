@@ -37,6 +37,11 @@ aivocode codebase incoming-calls src/main.py --symbol my_func
 aivocode codebase outgoing-calls src/main.py --symbol my_func
 aivocode codebase references src/main.py --symbol MyClass
 aivocode codebase impact src/main.py --symbol my_func
+
+# Import-graph tools (zero LSP — file-level dependency analysis)
+aivocode codebase import-dependents src/main.py --depth 2
+aivocode codebase import-dependencies src/main.py
+aivocode codebase affected-tests src/main.py --depth 4
 ```
 
 ## Commands
@@ -55,6 +60,9 @@ aivocode codebase incoming-calls <file> --symbol NAME [--line N] [--pretty-forma
 aivocode codebase outgoing-calls <file> --symbol NAME [--line N] [--include-external] [--pretty-format]
 aivocode codebase references <file> --symbol NAME [--line N] [--pretty-format]
 aivocode codebase impact <file> --symbol NAME [--line N] [--pretty-format]
+aivocode codebase import-dependents <file> [--depth N] [--workspace PATH] [--pretty-format]
+aivocode codebase import-dependencies <file> [--workspace PATH] [--pretty-format]
+aivocode codebase affected-tests <file> [--depth N] [--workspace PATH] [--pretty-format]
 aivocode webfetch <url> [options] [--pretty-format]
 aivocode websearch <query> [options] [--pretty-format]
 ```
@@ -159,6 +167,9 @@ cli/
 | ``POST`` | ``/codebase/outgoing-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace_only?": true}`` |
 | ``POST`` | ``/codebase/references`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/impact`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/import-dependents`` | ``{"file": "...", "depth?": 1, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/import-dependencies`` | ``{"file": "...", "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/affected-tests`` | ``{"file": "...", "depth?": 4, "workspace?": "..."}`` |
 | ``POST`` | ``/web_ops/webfetch`` | ``{"url": "...", "wait_until?": "load", ...}`` |
 | ``POST`` | ``/web_ops/websearch`` | ``{"query": "...", "num_results?": 10, ...}`` |
 | ``GET`` | ``/health`` | — |

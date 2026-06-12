@@ -1,3 +1,8 @@
+[tool.pytest.ini_options]
+# Prevent pytest from descending into test-data directories
+# (they contain mock repos used by fixtures, not actual tests).
+norecursedirs = ["tests/data", "tmp"]
+
 [project]
 name = "aivocode"
 version = "0.1.0"

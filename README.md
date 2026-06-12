@@ -81,6 +81,11 @@ aivocode codebase outgoing-calls src/main.py --symbol my_func
 aivocode codebase references src/main.py --symbol MyClass
 aivocode codebase impact src/main.py --symbol my_func
 
+# Import-graph tools (zero LSP — file-level dependency analysis)
+aivocode codebase import-dependents src/main.py --depth 2
+aivocode codebase import-dependencies src/main.py
+aivocode codebase affected-tests src/main.py --depth 4
+
 # Pretty-printed output (available on every subcommand)
 aivocode lsp status --pretty-format
 ```
@@ -153,6 +158,9 @@ use `python -m cli` from the repo root to pick up uncommitted changes.
 | `POST` | `/codebase/outgoing-calls` | What this calls `{"file": "...", "symbol_name": "...", "workspace_only?": true}` |
 | `POST` | `/codebase/references` | Usage sites `{"file": "...", "symbol_name": "..."}` |
 | `POST` | `/codebase/impact` | Change impact `{"file": "...", "symbol_name": "..."}` |
+| `POST` | `/codebase/import-dependents` | Who imports this file `{"file": "...", "depth?": 1}` |
+| `POST` | `/codebase/import-dependencies` | What this file imports `{"file": "..."}` |
+| `POST` | `/codebase/affected-tests` | Test files importing this file `{"file": "...", "depth?": 4}` |
 | `POST` | `/web_ops/webfetch` | Fetch a URL `{"url": "...", "wait_until?": "load", ...}` |
 | `POST` | `/web_ops/websearch` | Search web/code `{"query": "...", "num_results?": 10, ...}` |
 
@@ -193,7 +201,12 @@ codebase/            Agent‑facing exploration tools
 ├── _read.py         Symbol body reader + tree‑sitter import extraction
 ├── _resolve.py      Name → position resolution + symbol tree builders
 ├── _snippet.py      File snippet reader (snippet/preview/range)
-└── _tree.py         Recursive file/directory tree builder
+├── _tree.py         Recursive file/directory tree builder
+├── _treesitter.py   Tree-sitter parser registry (lazy grammar loading)
+├── _import_graph.py Workspace-wide reverse import graph + dependency queries
+└── _lang_handlers/  Language-specific import extraction (Python, TS, ...)
+    ├── _base.py     LanguageHandler protocol + RawImport dataclass
+    └── _python.py   PythonHandler — tree-sitter import parsing + resolution
 
 web_ops/             Web intelligence (future REST endpoints)
 file_watcher/        File system watcher (awatch_repos)

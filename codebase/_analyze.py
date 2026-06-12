@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codebase._read import _extract_imports, _get_parser
+from codebase._read import _extract_imports
+from codebase._treesitter import _get_parser
 from codebase._resolve import ResolvedSymbol, _symbol_tree_by_depth, relativize
 from codebase._snippet import read_range, read_snippet_chars
 

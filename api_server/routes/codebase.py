@@ -13,11 +13,14 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from codebase import (
+    affected_test_files,
     analyze_impact,
     explain_symbol,
     file_overview,
     find_references,
     get_repo_tree,
+    import_dependencies,
+    import_dependents,
     incoming_calls,
     outgoing_calls,
     read_symbol,
@@ -62,6 +65,14 @@ class SearchBody(BaseModel):
     query: str
     kind: str | None = None
     limit: int = 50
+    workspace: str | None = None
+
+
+class FileBody(BaseModel):
+    """Shared model for file-level import-graph commands (no symbol name needed)."""
+
+    file: str
+    depth: int = 1
     workspace: str | None = None
 
 
@@ -175,3 +186,32 @@ async def impact(body: SymbolBody):
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
         return _symbol_error_response(exc, body.file)
+
+
+# ── Import-graph routes ────────────────────────────────────────────────────────
+
+
+@router.post("/import-dependents")
+async def import_dependents_route(body: FileBody):
+    return await import_dependents(
+        body.file,
+        depth=body.depth,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/import-dependencies")
+async def import_dependencies_route(body: FileBody):
+    return await import_dependencies(
+        body.file,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
+
+
+@router.post("/affected-tests")
+async def affected_tests_route(body: FileBody):
+    return await affected_test_files(
+        body.file,
+        depth=body.depth,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )

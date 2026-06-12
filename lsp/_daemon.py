@@ -460,6 +460,20 @@ async def _run_daemon(
             socket_path,
         )
 
+        # ── Import graph (for dependency analysis tools) ─────────────────
+        from codebase._import_graph import ImportGraph
+
+        import_graph = ImportGraph(workspace)
+        try:
+            import_graph.build_full()
+            logger.info(
+                "Import graph built: %d files indexed, %d skipped",
+                import_graph.info()["files_indexed"],
+                import_graph.info()["files_skipped"],
+            )
+        except Exception:
+            logger.exception("Failed to build import graph — tools will return empty")
+
         # ── Task 1: File watcher ───────────────────────────────────────
         async def _watcher_loop() -> None:
             from file_watcher import WatchConfig, awatch_repos
@@ -475,6 +489,15 @@ async def _run_daemon(
             try:
                 async for batch in awatch_repos([workspace], cfg):
                     await client.notify_file_changes(batch)
+                    # Keep the import graph in sync with file changes.
+                    try:
+                        import_graph.update(
+                            [e.abs_path for e in batch.events]
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to update import graph from watcher batch"
+                        )
             except asyncio.CancelledError:
                 pass
             except Exception:
@@ -538,6 +561,16 @@ async def _run_daemon(
                     "message": f"File not found for {context}: {file_str}",
                 },
             }
+
+        def _to_workspace_rel(file_str: str, ws: Path) -> str:
+            """Convert *file_str* to a workspace-relative path if absolute."""
+            fp = Path(file_str)
+            if fp.is_absolute():
+                try:
+                    return str(fp.resolve().relative_to(ws))
+                except ValueError:
+                    return file_str
+            return file_str
 
         async def _query_positional(
             req_id: int,
@@ -895,6 +928,49 @@ async def _run_daemon(
                                             "message": f"LSP error: {exc}",
                                         },
                                     }
+
+                    # ── import_dependents ───────────────────────────────────
+                    case "import_dependents":
+                        file_str = _to_workspace_rel(params.get("file", ""), workspace)
+                        depth = int(params.get("depth", "1"))
+                        result = import_graph.dependents(file_str, depth=depth)
+                        resp = {
+                            "id": req_id,
+                            "result": {
+                                "file": file_str,
+                                "dependents": result,
+                                "depth": depth,
+                                "info": import_graph.info(),
+                            },
+                        }
+
+                    # ── import_dependencies ────────────────────────────────
+                    case "import_dependencies":
+                        file_str = _to_workspace_rel(params.get("file", ""), workspace)
+                        result = import_graph.dependencies(file_str)
+                        resp = {
+                            "id": req_id,
+                            "result": {
+                                "file": file_str,
+                                "dependencies": result,
+                                "info": import_graph.info(),
+                            },
+                        }
+
+                    # ── import_affected_tests ──────────────────────────────
+                    case "import_affected_tests":
+                        file_str = _to_workspace_rel(params.get("file", ""), workspace)
+                        depth = int(params.get("depth", "4"))
+                        result = import_graph.affected_tests(file_str, depth=depth)
+                        resp = {
+                            "id": req_id,
+                            "result": {
+                                "file": file_str,
+                                "affected_test_files": result,
+                                "depth": depth,
+                                "info": import_graph.info(),
+                            },
+                        }
 
                     case _:
                         resp = {

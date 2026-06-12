@@ -35,10 +35,19 @@
       "codebase/": [
         "__init__.py",
         "_analyze.py",
+        "_import_graph.py",
         "_read.py",
         "_resolve.py",
         "_snippet.py",
-        "_tree.py"
+        "_tree.py",
+        "_treesitter.py",
+        {
+          "_lang_handlers/": [
+            "__init__.py",
+            "_base.py",
+            "_python.py"
+          ]
+        }
       ]
     },
     {
@@ -79,12 +88,26 @@
                         "__init__.py",
                         "errors.py",
                         "fixtures_callchain.py",
+                        "fixtures_circular_a.py",
+                        "fixtures_circular_b.py",
                         "fixtures_classes.py",
                         "fixtures_enums.py",
                         "fixtures_functions.py",
                         "fixtures_imports.py",
+                        "fixtures_relative.py",
                         "types.py",
-                        "utils.py"
+                        "utils.py",
+                        {
+                          "subpkg/": [
+                            "__init__.py",
+                            "deep_relative.py"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "tests/": [
+                        "test_mock.py"
                       ]
                     }
                   ]
@@ -99,6 +122,7 @@
             "conftest.py",
             "test_codebase_schema.py",
             "test_codebase_snapshots.py",
+            "test_import_graph_schema.py",
             "test_lsp_bridge.py",
             "test_lsp_cli.py",
             "test_web_ops_cli.py",
@@ -108,6 +132,7 @@
         {
           "integration/": [
             "__init__.py",
+            "test_import_graph.py",
             {
               "file_watcher/": [
                 "__init__.py",
@@ -134,6 +159,12 @@
         {
           "unit/": [
             "__init__.py",
+            {
+              "codebase/": [
+                "test_import_graph.py",
+                "test_lang_handler_python.py"
+              ]
+            },
             {
               "file_watcher/": [
                 "__init__.py",
@@ -166,6 +197,12 @@
         {
           "probe/": [
             "test_lsp_methods.py"
+          ]
+        },
+        {
+          "smoke/": [
+            "test_phase1.py",
+            "test_phase2.py"
           ]
         }
       ]

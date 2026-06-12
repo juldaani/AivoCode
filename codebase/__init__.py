@@ -19,6 +19,16 @@ How to use
 Public API
 ----------
 - get_repo_tree : build a recursive ``{"dirname/": [...]}`` tree.
+- read_symbol : read the full body of a symbol.
+- incoming_calls / outgoing_calls : call hierarchy.
+- find_references : where is this symbol used?
+- file_overview : file ToC with signatures and reference counts.
+- explain_symbol : full symbol report (body, callers, callees, references).
+- search_symbols : workspace-wide symbol search.
+- analyze_impact : change impact (incoming + outgoing + references).
+- import_dependents : who (transitively) imports this file? (zero LSP)
+- import_dependencies : what does this file import? (zero LSP)
+- affected_test_files : which test files are affected? (zero LSP)
 
 See Also
 - lsp/  — raw LSP protocol layer (hover, definition, references, etc.)
@@ -280,5 +290,77 @@ async def analyze_impact(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
+    )
+    return result
+
+
+# ── Import-graph tools ─────────────────────────────────────────────────────────
+
+
+async def import_dependents(
+    file_path: str | Path,
+    *,
+    depth: int = 1,
+    workspace: Path | None = None,
+    command: str = "import-dependents",
+) -> dict:
+    """Return files that (transitively) import *file_path*.
+
+    Uses the import graph maintained by the daemon — zero LSP queries.
+    Each entry includes ``file`` and ``depth``.
+    """
+    from lsp import detect_workspace
+    from lsp import query_import_dependents
+
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    result = await query_import_dependents(
+        Path(file_path), depth=depth, workspace=workspace,
+    )
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel), depth=depth,
+    )
+    return result
+
+
+async def import_dependencies(
+    file_path: str | Path,
+    *,
+    workspace: Path | None = None,
+    command: str = "import-dependencies",
+) -> dict:
+    """Return the files that *file_path* directly imports."""
+    from lsp import detect_workspace
+    from lsp import query_import_dependencies
+
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    result = await query_import_dependencies(
+        Path(file_path), workspace=workspace,
+    )
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel),
+    )
+    return result
+
+
+async def affected_test_files(
+    file_path: str | Path,
+    *,
+    depth: int = 4,
+    workspace: Path | None = None,
+    command: str = "affected-tests",
+) -> dict:
+    """Return test files that (transitively) import *file_path*."""
+    from lsp import detect_workspace
+    from lsp import query_import_affected_tests
+
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    result = await query_import_affected_tests(
+        Path(file_path), depth=depth, workspace=workspace,
+    )
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel), depth=depth,
     )
     return result

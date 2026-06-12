@@ -417,6 +417,82 @@ async def query_diagnostics(
     return result
 
 
+# ── Import graph queries ──────────────────────────────────────────────────────
+
+
+async def _query_import(
+    file_path: Path,
+    *,
+    method: str,
+    extra_params: dict[str, str] | None = None,
+    workspace: Path | None = None,
+) -> dict:
+    """Send an import-graph query to the daemon (no line/character needed)."""
+    ws = workspace if workspace is not None else detect_workspace(file_path)
+    abs_path = file_path if file_path.is_absolute() else (ws / file_path).resolve()
+
+    params: dict[str, str] = {"file": str(abs_path)}
+    if extra_params:
+        params.update(extra_params)
+
+    try:
+        daemon_result = _send_query(ws, method, params)
+    except (RuntimeError, ConnectionError, OSError) as exc:
+        return {
+            "file": str(abs_path),
+            "workspace": str(ws),
+            "error": str(exc),
+        }
+
+    result: dict = {**daemon_result}
+    if "workspace" not in result:
+        result["workspace"] = str(ws)
+    return result
+
+
+async def query_import_dependents(
+    file_path: Path,
+    *,
+    depth: int = 1,
+    workspace: Path | None = None,
+) -> dict:
+    """Query the daemon for files that (transitively) import *file_path*."""
+    return await _query_import(
+        file_path,
+        method="import_dependents",
+        extra_params={"depth": str(depth)},
+        workspace=workspace,
+    )
+
+
+async def query_import_dependencies(
+    file_path: Path,
+    *,
+    workspace: Path | None = None,
+) -> dict:
+    """Query the daemon for files that *file_path* imports."""
+    return await _query_import(
+        file_path,
+        method="import_dependencies",
+        workspace=workspace,
+    )
+
+
+async def query_import_affected_tests(
+    file_path: Path,
+    *,
+    depth: int = 4,
+    workspace: Path | None = None,
+) -> dict:
+    """Query the daemon for test files (transitively) importing *file_path*."""
+    return await _query_import(
+        file_path,
+        method="import_affected_tests",
+        extra_params={"depth": str(depth)},
+        workspace=workspace,
+    )
+
+
 __all__ = [
     # Low-level building blocks (existing)
     "LspClient",
@@ -439,4 +515,8 @@ __all__ = [
     "query_rename_edits",
     "query_workspace_symbol",
     "query_diagnostics",
+    # Import graph queries
+    "query_import_dependents",
+    "query_import_dependencies",
+    "query_import_affected_tests",
 ]
