@@ -229,6 +229,12 @@ pytest tests/e2e/test_lsp_bridge.py -v
 
 # E2E: CLI + REST API (starts server, tests all lsp subcommands)
 pytest tests/e2e/test_lsp_cli.py -v
+
+# Import graph (unit + integration + schema)
+pytest tests/unit/codebase/test_import_graph.py tests/integration/test_import_graph.py tests/e2e/test_import_graph_schema.py -v
+
+# Import graph daemon integration (requires running daemon)
+pytest tests/integration/test_import_graph.py::TestGraphReindex -v
 ```
 
 ## Key Design Decisions
