@@ -302,18 +302,26 @@ async def analyze_impact(
     symbol_name: str,
     *,
     line: int | None = None,
+    depth: int = 10,
     workspace: Path | None = None,
     command: str = "impact",
 ) -> dict:
-    """Change impact: incoming calls + outgoing calls + references."""
+    """Change impact: symbol-level LSP callers + file-level import graph blast radius.
+
+    Parameters
+    ----------
+    depth : int
+        How many import hops for the file-level blast radius (default 10).
+        Controls both ``dependents`` and ``affected_tests`` in the response.
+    """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
-    result = await _impact(sym, file_path, workspace)
+    result = await _impact(sym, file_path, workspace, depth=depth)
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
-        symbol=symbol_name, line=line,
+        symbol=symbol_name, line=line, depth=depth,
     )
     return result
 

@@ -314,12 +314,28 @@ def test_explain_does_not_truncate_small_function(lsp_server: str) -> None:
 
 @pytest.mark.parametrize("symbol_name", ["_overview", "_sig_line_text"])
 def test_impact_shape(lsp_server: str, symbol_name: str) -> None:
-    result = _run(lsp_server, "impact", FILES["analyze"], "--symbol", symbol_name)
-    for key in ("symbol", "kind", "file", "incoming_calls", "outgoing_calls", "references", "query"):
+    result = _run(
+        lsp_server, "impact", FILES["analyze"], "--symbol", symbol_name, "--depth", "3",
+    )
+    # Top-level keys
+    for key in ("symbol", "kind", "file", "symbol_level", "file_level", "query"):
         assert key in result, f"impact missing '{key}'"
-    assert isinstance(result["incoming_calls"], list)
-    assert isinstance(result["outgoing_calls"], list)
-    assert isinstance(result["references"], list)
+    # symbol_level contains the LSP-derived lists
+    sl = result["symbol_level"]
+    for key in ("incoming_calls", "outgoing_calls", "references"):
+        assert key in sl, f"impact symbol_level missing '{key}'"
+        assert isinstance(sl[key], list)
+    # file_level contains the import graph results
+    fl = result["file_level"]
+    for key in ("dependents", "affected_tests"):
+        assert key in fl, f"impact file_level missing '{key}'"
+        assert isinstance(fl[key], list)
+    # Each file-level entry has file and depth
+    for entry in fl["dependents"]:
+        assert "file" in entry
+        assert "depth" in entry
+    # depth is reflected in the query block
+    assert result["query"].get("depth") == 3
 
 
 # ── cross-cutting ──────────────────────────────────────────────────────────────

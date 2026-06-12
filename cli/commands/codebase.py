@@ -102,7 +102,15 @@ def _handle_search(args: argparse.Namespace) -> None:
 
 
 def _handle_impact(args: argparse.Namespace) -> None:
-    _symbol_handler(args, "/codebase/impact")
+    body: dict = {
+        "file": args.file,
+        "symbol_name": args.symbol,
+        "line": getattr(args, "line", None),
+        "depth": args.depth,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/impact", body))
+    _print_json(result, pretty=args.pretty_format)
 
 
 # ── Import-graph handlers ───────────────────────────────────────────────────────
@@ -221,8 +229,10 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
 
     # ── impact ──────────────────────────────────────────────────────────
     imp = cb_sub.add_parser("impact", parents=[_GLOBAL_OPTIONS],
-                             help="Change impact analysis.")
+                             help="Change impact: symbol callers + file-level blast radius.")
     _add_symbol_args(imp)
+    imp.add_argument("--depth", "-d", type=int, default=10,
+                      help="How many import hops for file-level blast radius (default 10).")
     imp.set_defaults(func=_handle_impact)
 
     # ── import-dependents ───────────────────────────────────────────────

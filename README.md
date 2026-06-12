@@ -86,7 +86,7 @@ import graph** (no LSP, no daemon wait time).
 | **incoming-calls** | Who calls this? — enriched with snippets and file locality | `callHierarchy/incomingCalls` + snippet reader + locality tagging |
 | **outgoing-calls** | What does this call? — enriched with snippets, optional workspace-only filter | `callHierarchy/outgoingCalls` + snippet reader + locality filtering |
 | **references** | Where is this used? — enriched with snippets and file locality | `references` request + snippet reader + locality tagging |
-| **impact** | Change impact analysis: inbound + outbound + references | Combines incoming-calls + outgoing-calls + references in one response |
+| **impact** | Change impact: symbol callers + file blast radius + affected tests | Combines LSP call hierarchy + references with import graph transitive dependents and affected tests. `--depth` controls file-level transitivity (default 10) |
 | **import-dependents** | Which files (transitively) import this file? | BFS traversal of the reverse import graph; `--depth` controls transitivity |
 | **import-dependencies** | What files does this file import directly? | Direct lookup in the forward import graph |
 | **affected-tests** | Which test files are affected if this file changes? | Runs import-dependents then filters to test files by naming convention |

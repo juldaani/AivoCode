@@ -46,6 +46,7 @@ class SymbolBody(BaseModel):
     file: str
     symbol_name: str
     line: int | None = None
+    depth: int | None = None
     workspace: str | None = None
 
 
@@ -182,6 +183,7 @@ async def impact(body: SymbolBody):
         return await analyze_impact(
             body.file, body.symbol_name,
             line=body.line,
+            depth=body.depth if body.depth is not None else 10,
             workspace=Path(body.workspace) if body.workspace else None,
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
