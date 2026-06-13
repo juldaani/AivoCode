@@ -113,6 +113,24 @@ def _handle_impact(args: argparse.Namespace) -> None:
     _print_json(result, pretty=args.pretty_format)
 
 
+def _handle_definition(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/definition")
+
+
+def _handle_hover(args: argparse.Namespace) -> None:
+    _symbol_handler(args, "/codebase/hover")
+
+
+def _handle_diagnostics(args: argparse.Namespace) -> None:
+    body: dict = {
+        "file": args.file,
+        "max": args.max,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/diagnostics", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
 # ── Import-graph handlers ───────────────────────────────────────────────────────
 
 
@@ -200,6 +218,28 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
                               help="Where is this symbol used?")
     _add_symbol_args(refp)
     refp.set_defaults(func=_handle_references)
+
+    # ── definition ──────────────────────────────────────────────────────
+    defp = cb_sub.add_parser("definition", parents=[_GLOBAL_OPTIONS],
+                              help="Go-to-definition with snippet.")
+    _add_symbol_args(defp)
+    defp.set_defaults(func=_handle_definition)
+
+    # ── hover ───────────────────────────────────────────────────────────
+    hvp = cb_sub.add_parser("hover", parents=[_GLOBAL_OPTIONS],
+                             help="Signature + docstring (works on external libs).")
+    _add_symbol_args(hvp)
+    hvp.set_defaults(func=_handle_hover)
+
+    # ── diagnostics ─────────────────────────────────────────────────────
+    dgp = cb_sub.add_parser("diagnostics", parents=[_GLOBAL_OPTIONS],
+                             help="File diagnostics with snippets.")
+    dgp.add_argument("file", type=str, help="Source file to check.")
+    dgp.add_argument("--max", type=int, default=50,
+                      help="Max diagnostics to return (default 50).")
+    dgp.add_argument("--workspace", type=str,
+                      help="Workspace root path (auto-detected if omitted).")
+    dgp.set_defaults(func=_handle_diagnostics)
 
     # ── overview ───────────────────────────────────────────────────────
     ovp = cb_sub.add_parser("overview", parents=[_GLOBAL_OPTIONS],

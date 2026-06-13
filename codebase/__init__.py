@@ -39,7 +39,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from codebase._analyze import (
+    _definition,
+    _diagnostics,
     _explain,
+    _hover,
     _impact,
     _incoming_calls,
     _outgoing_calls,
@@ -321,6 +324,88 @@ async def analyze_impact(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line, depth=depth,
+    )
+    return result
+
+
+async def find_definition(
+    file_path: str | Path,
+    symbol_name: str,
+    *,
+    line: int | None = None,
+    workspace: Path | None = None,
+    command: str = "definition",
+) -> dict:
+    """Return the definition site of *symbol_name* with snippet and locality.
+
+    If the symbol has no workspace-local definition (e.g. built-in or
+    external library), ``definition`` is ``null``.
+    """
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    result = {
+        "symbol": sym.name,
+        "kind": sym.kind,
+        "definition": await _definition(sym, file_path, workspace),
+    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel), symbol=symbol_name, line=line,
+    )
+    return result
+
+
+async def hover_symbol(
+    file_path: str | Path,
+    symbol_name: str,
+    *,
+    line: int | None = None,
+    workspace: Path | None = None,
+    command: str = "hover",
+) -> dict:
+    """Return hover info (signature + docstring as markdown) for *symbol_name*.
+
+    The ``hover`` field contains the raw LSP hover markdown — agents
+    natively understand this format.  ``null`` if no hover info is
+    available (e.g. built-ins without docstrings).
+    """
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    result = {
+        "symbol": sym.name,
+        "kind": sym.kind,
+        "hover": await _hover(sym, file_path, workspace),
+    }
+    result["query"] = _make_query(
+        command, file=relativize(file_path, ws_rel), symbol=symbol_name, line=line,
+    )
+    return result
+
+
+async def file_diagnostics(
+    file_path: str | Path,
+    *,
+    max_results: int = 50,
+    workspace: Path | None = None,
+    command: str = "diagnostics",
+) -> dict:
+    """Return diagnostics for *file_path* with snippets and severity counts.
+
+    Diagnostics are sorted by severity (errors first) then by line number.
+    Each diagnostic includes a one-line 200-char snippet.  ``counts``
+    reflects the full totals regardless of *max_results*.
+    """
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    fp = Path(file_path).resolve()
+    result = await _diagnostics(fp, workspace=workspace, max_results=max_results)
+    result["file"] = relativize(fp, ws_rel)
+    result["query"] = _make_query(
+        command, file=relativize(fp, ws_rel), max=max_results,
     )
     return result
 

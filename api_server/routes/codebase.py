@@ -16,9 +16,12 @@ from codebase import (
     affected_test_files,
     analyze_impact,
     explain_symbol,
+    file_diagnostics,
     file_overview,
+    find_definition,
     find_references,
     get_repo_tree,
+    hover_symbol,
     import_dependencies,
     import_dependents,
     incoming_calls,
@@ -74,6 +77,14 @@ class FileBody(BaseModel):
 
     file: str
     depth: int | None = None
+    workspace: str | None = None
+
+
+class DiagnosticsBody(BaseModel):
+    """Request model for /codebase/diagnostics."""
+
+    file: str
+    max: int = 50
     workspace: str | None = None
 
 
@@ -188,6 +199,39 @@ async def impact(body: SymbolBody):
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
         return _symbol_error_response(exc, body.file)
+
+
+@router.post("/definition")
+async def definition(body: SymbolBody):
+    try:
+        return await find_definition(
+            body.file, body.symbol_name,
+            line=body.line,
+            workspace=Path(body.workspace) if body.workspace else None,
+        )
+    except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
+        return _symbol_error_response(exc, body.file)
+
+
+@router.post("/hover")
+async def hover(body: SymbolBody):
+    try:
+        return await hover_symbol(
+            body.file, body.symbol_name,
+            line=body.line,
+            workspace=Path(body.workspace) if body.workspace else None,
+        )
+    except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
+        return _symbol_error_response(exc, body.file)
+
+
+@router.post("/diagnostics")
+async def diagnostics(body: DiagnosticsBody):
+    return await file_diagnostics(
+        body.file,
+        max_results=body.max,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
 
 
 # ── Import-graph routes ────────────────────────────────────────────────────────

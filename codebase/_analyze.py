@@ -601,3 +601,130 @@ async def _impact(
             "dependents": deps_result.get("dependents", []),
         },
     }
+
+
+# ── Definition ──────────────────────────────────────────────────────────────────
+
+
+async def _definition(
+    symbol: ResolvedSymbol,
+    file_path: str | Path,
+    workspace: Path | None = None,
+) -> dict | None:
+    """Return the definition site of *symbol* with snippet and locality.
+
+    Returns a single ``{file, line, snippet, locality}`` dict, or ``None``
+    if the symbol has no workspace-local definition (e.g. built-in or
+    external library).
+    """
+    from lsp import query_definition, detect_workspace
+
+    ws = workspace or Path.cwd()
+    ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
+
+    result = await query_definition(
+        fp, line=symbol.line, character=symbol.character, workspace=ws,
+    )
+    locations: list[dict] = result.get("result") or []
+    if not locations:
+        return None
+
+    loc = locations[0]
+    uri = loc.get("uri", "")
+    start = loc.get("range", {}).get("start", {})
+    line = (start.get("line", 0) or 0) + 1  # LSP 0-indexed → 1-indexed
+
+    return _build_site(uri, line, ws, source_file=fp)
+
+
+# ── Hover ───────────────────────────────────────────────────────────────────────
+
+
+async def _hover(
+    symbol: ResolvedSymbol,
+    file_path: str | Path,
+    workspace: Path | None = None,
+) -> str | None:
+    """Return the hover markdown string for *symbol*, or ``None``."""
+    from lsp import query_hover, detect_workspace
+
+    ws = workspace or Path.cwd()
+    ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
+
+    result = await query_hover(
+        fp, line=symbol.line, character=symbol.character, workspace=ws,
+    )
+    hover_data = result.get("result")
+    if hover_data is None:
+        return None
+    return hover_data.get("value", "")
+
+
+# ── Diagnostics ─────────────────────────────────────────────────────────────────
+
+
+_SEVERITY_NAMES: dict[int, str] = {
+    1: "Error",
+    2: "Warning",
+    3: "Information",
+    4: "Hint",
+}
+
+
+async def _diagnostics(
+    file_path: str | Path,
+    workspace: Path | None = None,
+    max_results: int = 50,
+) -> dict:
+    """Return diagnostics for *file_path* with snippets and severity counts.
+
+    Each diagnostic is enriched with a one-line ``snippet`` (200 chars,
+    same as other codebase tools).  Severity integers are converted to
+    human-readable names.  Results are sorted by severity (errors first)
+    then by line number.  The response includes full ``counts`` regardless
+    of *max_results*.
+    """
+    from lsp import query_diagnostics, detect_workspace
+
+    ws = workspace or Path.cwd()
+    ws = detect_workspace(ws)
+    fp = Path(file_path).resolve()
+
+    result = await query_diagnostics(fp, workspace=ws)
+    raw_diags: list[dict] = result.get("diagnostics", [])
+    raw_server: str = result.get("server", "")
+
+    # Build enriched diagnostics.
+    enriched: list[dict] = []
+    counts: dict[str, int] = {"error": 0, "warning": 0, "information": 0, "hint": 0}
+
+    for d in raw_diags:
+        sev_int = d.get("severity", 1)
+        sev_name = _SEVERITY_NAMES.get(sev_int, "Error")
+        counts[sev_name.lower()] = counts.get(sev_name.lower(), 0) + 1
+
+        start = d.get("range", {}).get("start", {})
+        line = (start.get("line", 0) or 0) + 1
+        character = (start.get("character", 0) or 0) + 1
+
+        enriched.append({
+            "severity": sev_name,
+            "message": d.get("message", ""),
+            "line": line,
+            "character": character,
+            "snippet": read_snippet_chars(str(fp), line),
+        })
+
+    # Sort: severity priority, then by line.
+    _sev_order = {"Error": 0, "Warning": 1, "Information": 2, "Hint": 3}
+    enriched.sort(key=lambda d: (_sev_order.get(d["severity"], 9), d["line"]))
+
+    truncated = enriched[:max_results]
+
+    return {
+        "lsp": raw_server,
+        "diagnostics": truncated,
+        "counts": counts,
+    }

@@ -86,6 +86,9 @@ import graph** (no LSP, no daemon wait time).
 | **incoming-calls** | Who calls this? — enriched with snippets and file locality | `callHierarchy/incomingCalls` + snippet reader + locality tagging |
 | **outgoing-calls** | What does this call? — enriched with snippets, optional workspace-only filter | `callHierarchy/outgoingCalls` + snippet reader + locality filtering |
 | **references** | Where is this used? — enriched with snippets and file locality | `references` request + snippet reader + locality tagging |
+| **definition** | Go-to-definition with snippet and locality | Resolves symbol position via LSP, then queries definition + adds snippet |
+| **hover** | Signature + docstring as markdown (works on external libs) | Resolves symbol, then returns the LSP hover markdown verbatim — agents natively parse this |
+| **diagnostics** | File diagnostics (errors, warnings) with snippets | `--max` controls output (default 50); sorted by severity; each entry has a 200-char snippet |
 | **impact** | Change impact: symbol callers + file blast radius | Combines LSP call hierarchy + references with import graph transitive dependents (including tests). `--depth` controls transitivity (default 10) |
 | **import-dependents** | Which files (transitively) import this file? | BFS traversal of the reverse import graph; `--depth` controls transitivity |
 | **import-dependencies** | What files does this file import directly? | Direct lookup in the forward import graph |
