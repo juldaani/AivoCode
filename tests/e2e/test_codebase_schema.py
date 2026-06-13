@@ -221,12 +221,15 @@ def test_incoming_calls_has_locality(lsp_server: str, symbol_name: str) -> None:
     )
     for key in ("symbol", "kind", "incoming_calls", "query", "meta"):
         assert key in result
-    for call in result["incoming_calls"]:
-        assert "locality" in call, f"incoming call missing 'locality': {call}"
-        assert call["locality"] in _LOCALITY_VALUES
-        assert "file" in call
-        assert "line" in call
-        assert "snippet" in call
+    for group in result["incoming_calls"]:
+        assert "locality" in group, f"incoming group missing 'locality': {group}"
+        assert group["locality"] in _LOCALITY_VALUES
+        assert "file" in group
+        assert "count" in group
+        assert "sites" in group
+        for site in group["sites"]:
+            assert "line" in site
+            assert "snippet" in site
 
 
 # ── outgoing-calls ────────────────────────────────────────────────────────────
@@ -239,15 +242,18 @@ def test_outgoing_calls_has_locality(lsp_server: str, symbol_name: str) -> None:
     )
     for key in ("symbol", "kind", "outgoing_calls", "query", "meta"):
         assert key in result
-    for call in result["outgoing_calls"]:
-        assert "locality" in call, f"outgoing call missing 'locality': {call}"
-        assert call["locality"] in ("same_file", "cross_file"), (
+    for group in result["outgoing_calls"]:
+        assert "locality" in group, f"outgoing group missing 'locality': {group}"
+        assert group["locality"] in ("same_file", "cross_file"), (
             f"default (--workspace-only) must not include external calls, "
-            f"got locality={call['locality']} for '{call.get('symbol')}'"
+            f"got locality={group['locality']}"
         )
-        assert "file" in call
-        assert "line" in call
-        assert "snippet" in call
+        assert "file" in group
+        assert "count" in group
+        assert "sites" in group
+        for site in group["sites"]:
+            assert "line" in site
+            assert "snippet" in site
 
 
 def test_outgoing_calls_include_external_flag_works(lsp_server: str) -> None:
@@ -273,12 +279,15 @@ def test_references_has_locality(lsp_server: str, symbol_name: str) -> None:
     for key in ("symbol", "kind", "references", "query", "meta"):
         assert key in result
     assert len(result["references"]) > 0, f"no references for {symbol_name}"
-    for ref in result["references"]:
-        assert "locality" in ref, f"ref missing 'locality': {ref}"
-        assert ref["locality"] in _LOCALITY_VALUES
-        assert "file" in ref
-        assert "line" in ref
-        assert "snippet" in ref
+    for group in result["references"]:
+        assert "locality" in group, f"ref group missing 'locality': {group}"
+        assert group["locality"] in _LOCALITY_VALUES
+        assert "file" in group
+        assert "count" in group
+        assert "sites" in group
+        for site in group["sites"]:
+            assert "line" in site
+            assert "snippet" in site
 
 
 # ── explain ────────────────────────────────────────────────────────────────────

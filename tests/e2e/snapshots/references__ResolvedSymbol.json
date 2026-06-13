@@ -4,45 +4,66 @@
   "references": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
-      "line": 20,
-      "snippet": "    ResolvedSymbol,\n)\nfrom mock_pkg.fixtures_functions import (\n    _private_helper,",
-      "locality": "cross_file"
+      "locality": "cross_file",
+      "count": 1,
+      "sites": [
+        {
+          "line": 20,
+          "snippet": "    ResolvedSymbol,\n)\nfrom mock_pkg.fixtures_functions import (\n    _private_helper,"
+        }
+      ]
     },
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
-      "line": 50,
-      "snippet": "class ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.",
-      "locality": "same_file"
-    },
-    {
-      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
-      "line": 21,
-      "snippet": "    ResolvedSymbol,\n)\n\n# ── Constant — Variable kind, excluded from overview ──────────────────────────",
-      "locality": "cross_file"
-    },
-    {
-      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
-      "line": 60,
-      "snippet": ") -> ResolvedSymbol:\n    \"\"\"Async function with lazy imports inside.\n\n    The ``from lsp import query_document_symbols`` import is inside the",
-      "locality": "cross_file"
-    },
-    {
-      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
-      "line": 70,
-      "snippet": "    return ResolvedSymbol(\n        name=symbol_name,\n        kind=\"Class\",\n        line=line or 1,",
-      "locality": "cross_file"
+      "locality": "same_file",
+      "count": 1,
+      "sites": [
+        {
+          "line": 50,
+          "snippet": "class ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null."
+        }
+      ]
     },
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py",
-      "line": 42,
-      "snippet": "    ResolvedSymbol,\n    SymbolKind,\n)\nfrom mock_pkg.fixtures_functions import (",
-      "locality": "cross_file"
+      "locality": "cross_file",
+      "count": 1,
+      "sites": [
+        {
+          "line": 42,
+          "snippet": "    ResolvedSymbol,\n    SymbolKind,\n)\nfrom mock_pkg.fixtures_functions import ("
+        }
+      ]
     },
     {
       "file": "tests/data/mock_repos/python/mock_pkg/subpkg/deep_relative.py",
-      "line": 15,
-      "snippet": "from ..fixtures_classes import GreeterBase, ResolvedSymbol\nfrom ..fixtures_functions import build_tree, leaf_helper\nfrom ..fixtures_relative import relative_greet\n",
-      "locality": "cross_file"
+      "locality": "cross_file",
+      "count": 1,
+      "sites": [
+        {
+          "line": 15,
+          "snippet": "from ..fixtures_classes import GreeterBase, ResolvedSymbol\nfrom ..fixtures_functions import build_tree, leaf_helper\nfrom ..fixtures_relative import relative_greet\n"
+        }
+      ]
+    },
+    {
+      "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
+      "locality": "cross_file",
+      "count": 3,
+      "sites": [
+        {
+          "line": 21,
+          "snippet": "    ResolvedSymbol,\n)\n\n# ── Constant — Variable kind, excluded from overview ──────────────────────────"
+        },
+        {
+          "line": 60,
+          "snippet": ") -> ResolvedSymbol:\n    \"\"\"Async function with lazy imports inside.\n\n    The ``from lsp import query_document_symbols`` import is inside the"
+        },
+        {
+          "line": 70,
+          "snippet": "    return ResolvedSymbol(\n        name=symbol_name,\n        kind=\"Class\",\n        line=line or 1,"
+        }
+      ]
     }
   ],
   "query": {

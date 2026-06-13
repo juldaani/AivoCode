@@ -85,6 +85,36 @@ def _extract_line(pos_dict: dict) -> int:
     return pos_dict.get("start", {}).get("line", 1)
 
 
+# ── Site grouping ───────────────────────────────────────────────────────────────
+
+
+def _group_sites(sites: list[dict]) -> list[dict]:
+    """Group a flat list of ``{file, line, snippet, ...}`` entries by file.
+
+    Each resulting group has ``{file, locality, count, sites}`` where
+    ``sites`` is the per-line detail (without the redundant ``file`` and
+    ``locality`` keys).  Groups are ordered by first sighting.
+    """
+    groups: dict[str, dict] = {}
+    order: list[str] = []
+    for site in sites:
+        f = site.get("file", "")
+        if f not in groups:
+            groups[f] = {
+                "file": f,
+                "locality": site.get("locality", "cross_file"),
+                "count": 0,
+                "sites": [],
+            }
+            order.append(f)
+        entry = dict(site)
+        entry.pop("file", None)
+        entry.pop("locality", None)
+        groups[f]["sites"].append(entry)
+        groups[f]["count"] += 1
+    return [groups[f] for f in order]
+
+
 # ── Call hierarchy ─────────────────────────────────────────────────────────────
 
 
@@ -93,10 +123,9 @@ async def _incoming_calls(
     file_path: str | Path,
     workspace: Path | None = None,
 ) -> list[dict]:
-    """Return a list of call sites that call *symbol*.
+    """Return call sites grouped by file.
 
-    Each entry has ``{symbol, kind, file, line, snippet, locality}`` —
-    ``locality`` is ``"same_file"``, ``"cross_file"``, or ``"external"``.
+    Each group has ``{file, locality, count, sites: [{line, snippet, symbol, kind}]}``.
     """
     from lsp import query_call_hierarchy_incoming, detect_workspace
 
@@ -128,7 +157,7 @@ async def _incoming_calls(
                     {"kind": kind, "name": name},
                     source_file=fp,
                 ))
-    return sites
+    return _group_sites(sites)
 
 
 async def _outgoing_calls(
@@ -138,12 +167,11 @@ async def _outgoing_calls(
     *,
     workspace_only: bool = True,
 ) -> list[dict]:
-    """Return a list of call sites that *symbol* calls.
+    """Return call sites grouped by file.
 
     When ``workspace_only`` is ``True`` (default), calls to external
-    locations (stdlib, site-packages) are excluded.  Each entry has
-    ``{symbol, kind, file, line, snippet, locality}`` where ``locality``
-    is ``"same_file"``, ``"cross_file"``, or ``"external"``.
+    locations (stdlib, site-packages) are excluded.  Each group has
+    ``{file, locality, count, sites: [{line, snippet, symbol, kind}]}``.
     """
     from lsp import query_call_hierarchy_outgoing, detect_workspace
 
@@ -176,7 +204,7 @@ async def _outgoing_calls(
         if workspace_only and site.get("locality") == "external":
             continue
         sites.append(site)
-    return sites
+    return _group_sites(sites)
 
 
 # ── References ─────────────────────────────────────────────────────────────────
@@ -189,8 +217,7 @@ async def _references(
 ) -> list[dict]:
     """Return all reference sites for *symbol* (includes definition).
 
-    Each entry has ``{file, line, snippet, locality}`` where ``locality``
-    is ``"same_file"``, ``"cross_file"``, or ``"external"``.
+    Grouped by file: ``{file, locality, count, sites: [{line, snippet}]}``.
     """
     from lsp import query_references, detect_workspace
 
@@ -212,7 +239,7 @@ async def _references(
         uri = ref.get("uri", "")
         line = _extract_line(ref.get("range", {}))
         sites.append(_build_site(uri, line, ws, source_file=fp))
-    return sites
+    return _group_sites(sites)
 
 
 # ── Overview ───────────────────────────────────────────────────────────────────
