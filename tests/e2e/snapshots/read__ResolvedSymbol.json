@@ -12,7 +12,6 @@
       61
     ]
   },
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
   "imports": [
     {
       "line": 14,
@@ -39,5 +38,10 @@
     "command": "read",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
     "symbol": "ResolvedSymbol"
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }

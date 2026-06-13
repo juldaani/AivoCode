@@ -1,7 +1,6 @@
 {
   "symbol": "analyze_overview",
   "kind": "Function",
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
   "symbol_level": {
     "incoming_calls": [],
     "outgoing_calls": [
@@ -84,5 +83,10 @@
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
     "symbol": "analyze_overview",
     "depth": 10
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }

@@ -12,7 +12,6 @@
       61
     ]
   },
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
   "definers": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
@@ -81,5 +80,10 @@
     "command": "explain",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
     "symbol": "ResolvedSymbol"
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }

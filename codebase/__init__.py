@@ -63,6 +63,29 @@ def _make_query(command: str, **kwargs: object) -> dict:
     return {"command": command, **{k: v for k, v in kwargs.items() if v is not None}}
 
 
+def _make_meta(
+    workspace: Path | str,
+    *,
+    lsp: str | None = None,
+    language: str | None = None,
+    info: str | None = None,
+) -> dict:
+    """Build the ``meta`` block shared by every codebase tool.
+
+    ``lsp`` is the language server name (``None`` for non-LSP tools like
+    import-graph).  ``info`` is an optional human-readable status string
+    (graph build health, errors, etc.).
+    """
+    meta: dict = {"root": str(workspace)}
+    if lsp:
+        meta["lsp"] = lsp
+    if language:
+        meta["language"] = language
+    if info is not None:
+        meta["info"] = info
+    return meta
+
+
 def _format_info(info: dict) -> str | None:
     """Convert graph info dict to an optional human-readable status string.
 
@@ -111,9 +134,9 @@ def get_repo_tree(
     """
     ws = workspace or Path.cwd()
     return {
-        "root": _build_tree(ws, suffix=suffix),
-        "workspace": str(ws),
+        "tree": _build_tree(ws, suffix=suffix),
         "query": _make_query("tree", suffix=suffix),
+        "meta": _make_meta(ws),
     }
 
 
@@ -142,6 +165,7 @@ async def read_symbol(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -155,9 +179,8 @@ async def incoming_calls(
 ) -> dict:
     """List incoming call hierarchy for *symbol_name*.
 
-    Returns a dict with ``symbol``, ``kind``, ``file``, ``incoming_calls``,
-    and ``query``.  Each call entry includes a ``locality`` field
-    (``"same_file"``, ``"cross_file"``, or ``"external"``)."""
+    Each call entry includes a ``locality`` field (``"same_file"``,
+    ``"cross_file"``, or ``"external"``)."""
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
@@ -165,13 +188,13 @@ async def incoming_calls(
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "file": relativize(file_path, ws_rel),
         "incoming_calls": await _incoming_calls(sym, file_path, workspace),
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -198,7 +221,6 @@ async def outgoing_calls(
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "file": relativize(file_path, ws_rel),
         "outgoing_calls": await _outgoing_calls(
             sym, file_path, workspace, workspace_only=workspace_only,
         ),
@@ -207,6 +229,7 @@ async def outgoing_calls(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -229,13 +252,13 @@ async def find_references(
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "file": relativize(file_path, ws_rel),
         "references": await _references(sym, file_path, workspace),
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -255,9 +278,12 @@ async def file_overview(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     result = await _overview(file_path, depth=depth, workspace=workspace)
+    overview_server = result.pop("_server", "")
+    overview_language = result.pop("_language", "")
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), depth=depth,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=overview_server, language=overview_language)
     return result
 
 
@@ -283,6 +309,7 @@ async def explain_symbol(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -295,8 +322,14 @@ async def search_symbols(
     command: str = "search",
 ) -> dict:
     """Search the workspace for symbols matching *query*."""
+    from lsp import detect_workspace
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
     result = await _search(query, kind=kind, limit=limit, workspace=workspace)
+    search_server = result.pop("_server", "")
+    search_language = result.pop("_language", "")
     result["query"] = _make_query(command, arg=query, kind=kind, limit=limit)
+    result["meta"] = _make_meta(ws_rel, lsp=search_server, language=search_language)
     return result
 
 
@@ -325,6 +358,7 @@ async def analyze_impact(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line, depth=depth,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -353,6 +387,7 @@ async def find_definition(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -382,6 +417,7 @@ async def hover_symbol(
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), symbol=symbol_name, line=line,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
     return result
 
 
@@ -403,10 +439,15 @@ async def file_diagnostics(
     ws_rel = detect_workspace(ws_rel)
     fp = Path(file_path).resolve()
     result = await _diagnostics(fp, workspace=workspace, max_results=max_results)
-    result["file"] = relativize(fp, ws_rel)
+    # Pop internal fields before building meta.
+    diag_lsp = result.pop("lsp", "")
+    diag_language = result.pop("_language", "")
+    lsp_meta = diag_lsp if diag_lsp else None
+    lang_meta = diag_language if diag_language else None
     result["query"] = _make_query(
         command, file=relativize(fp, ws_rel), max=max_results,
     )
+    result["meta"] = _make_meta(ws_rel, lsp=lsp_meta, language=lang_meta)
     return result
 
 
@@ -433,14 +474,15 @@ async def import_dependents(
     result = await query_import_dependents(
         Path(file_path), depth=depth, workspace=workspace,
     )
+    # Polish: remove internal keys.
+    result.pop("depth", None)
+    result.pop("file", None)
+    result.pop("workspace", None)
+    graph_info = _format_info(result.pop("info", {}))
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), depth=depth,
     )
-    # Polish: remove duplicate depth, format info
-    result.pop("depth", None)
-    info = _format_info(result.pop("info", {}))
-    if info is not None:
-        result["info"] = info
+    result["meta"] = _make_meta(ws_rel, info=graph_info)
     return result
 
 
@@ -459,13 +501,14 @@ async def import_dependencies(
     result = await query_import_dependencies(
         Path(file_path), workspace=workspace,
     )
+    # Polish: remove internal keys.
+    result.pop("file", None)
+    result.pop("workspace", None)
+    graph_info = _format_info(result.pop("info", {}))
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
     )
-    # Polish: format info
-    info = _format_info(result.pop("info", {}))
-    if info is not None:
-        result["info"] = info
+    result["meta"] = _make_meta(ws_rel, info=graph_info)
     return result
 
 
@@ -485,12 +528,13 @@ async def affected_test_files(
     result = await query_import_affected_tests(
         Path(file_path), depth=depth, workspace=workspace,
     )
+    # Polish: remove internal keys.
+    result.pop("depth", None)
+    result.pop("file", None)
+    result.pop("workspace", None)
+    graph_info = _format_info(result.pop("info", {}))
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), depth=depth,
     )
-    # Polish: remove duplicate depth, format info
-    result.pop("depth", None)
-    info = _format_info(result.pop("info", {}))
-    if info is not None:
-        result["info"] = info
+    result["meta"] = _make_meta(ws_rel, info=graph_info)
     return result

@@ -24,7 +24,7 @@ _FIXTURE = str((Path(__file__).parent.parent.parent / "tests" / "data" / "mock_r
 @pytest.mark.anyio
 async def test_import_dependents_top_level_keys():
     result = await import_dependents(_FIXTURE, depth=2)
-    assert set(result.keys()) >= {"file", "dependents", "workspace", "query"}
+    assert set(result.keys()) >= {"dependents", "query", "meta"}
 
 
 @pytest.mark.anyio
@@ -49,11 +49,12 @@ async def test_import_dependents_entry_shape():
 
 @pytest.mark.anyio
 async def test_import_dependents_info_optional_string():
-    """info is omitted when there is nothing to report, a string otherwise."""
+    """graph health lives in meta.info when there is something to report."""
     result = await import_dependents(_FIXTURE, depth=2)
-    if "info" in result:
-        assert isinstance(result["info"], str)
-        assert len(result["info"]) > 0
+    info_val = result.get("meta", {}).get("info")
+    if info_val is not None:
+        assert isinstance(info_val, str)
+        assert len(info_val) > 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -64,7 +65,7 @@ async def test_import_dependents_info_optional_string():
 @pytest.mark.anyio
 async def test_import_dependencies_top_level_keys():
     result = await import_dependencies(_FIXTURE)
-    assert set(result.keys()) >= {"file", "dependencies", "workspace", "query"}
+    assert set(result.keys()) >= {"dependencies", "query", "meta"}
 
 
 @pytest.mark.anyio
@@ -77,11 +78,12 @@ async def test_import_dependencies_list_of_strings():
 
 @pytest.mark.anyio
 async def test_import_dependencies_info_optional_string():
-    """info is omitted when there is nothing to report, a string otherwise."""
+    """graph health lives in meta.info when there is something to report."""
     result = await import_dependencies(_FIXTURE)
-    if "info" in result:
-        assert isinstance(result["info"], str)
-        assert len(result["info"]) > 0
+    info_val = result.get("meta", {}).get("info")
+    if info_val is not None:
+        assert isinstance(info_val, str)
+        assert len(info_val) > 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -92,7 +94,7 @@ async def test_import_dependencies_info_optional_string():
 @pytest.mark.anyio
 async def test_affected_test_files_top_level_keys():
     result = await affected_test_files(_FIXTURE, depth=4)
-    assert set(result.keys()) >= {"file", "affected_test_files", "workspace", "query"}
+    assert set(result.keys()) >= {"affected_test_files", "query", "meta"}
 
 
 @pytest.mark.anyio
@@ -124,8 +126,9 @@ async def test_affected_test_files_contains_test_mock():
 
 @pytest.mark.anyio
 async def test_affected_test_files_info_optional_string():
-    """info is omitted when there is nothing to report, a string otherwise."""
+    """graph health lives in meta.info when there is something to report."""
     result = await affected_test_files(_FIXTURE, depth=4)
-    if "info" in result:
-        assert isinstance(result["info"], str)
-        assert len(result["info"]) > 0
+    info_val = result.get("meta", {}).get("info")
+    if info_val is not None:
+        assert isinstance(info_val, str)
+        assert len(info_val) > 0

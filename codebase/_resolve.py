@@ -65,6 +65,8 @@ class ResolvedSymbol:
     range_start: tuple[int, int]  # (line, character)
     range_end: tuple[int, int]  # (line, character)
     children: list[dict] = field(default_factory=list)
+    lsp_server: str = ""  # e.g. "basedpyright-langserver"
+    language: str = ""  # e.g. "python"
 
 
 # ── Tree helpers ───────────────────────────────────────────────────────────────
@@ -249,4 +251,6 @@ async def resolve_symbol(
         range_start=s["range_start"],
         range_end=s["range_end"],
         children=s.get("children", []),
+        lsp_server=result.get("server", ""),
+        language=result.get("language", ""),
     )

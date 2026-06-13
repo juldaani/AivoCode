@@ -1,7 +1,6 @@
 {
   "symbol": "entry_point",
   "kind": "Function",
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
   "outgoing_calls": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
@@ -88,5 +87,10 @@
     "command": "outgoing-calls",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
     "symbol": "entry_point"
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }

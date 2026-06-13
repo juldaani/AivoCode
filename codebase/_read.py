@@ -87,6 +87,5 @@ def _read_symbol(
             "start": list(symbol.range_start),
             "end": list(symbol.range_end),
         },
-        "file": relativize(file_path, ws),
         "imports": _extract_imports(file_path, top_level_only=False),
     }

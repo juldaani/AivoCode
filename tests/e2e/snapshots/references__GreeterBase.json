@@ -1,7 +1,6 @@
 {
   "symbol": "GreeterBase",
   "kind": "Class",
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
   "references": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
@@ -74,5 +73,10 @@
     "command": "references",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
     "symbol": "GreeterBase"
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }

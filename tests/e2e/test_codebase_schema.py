@@ -71,9 +71,10 @@ def _run(lsp_server: str, *args: str) -> dict:
 
 def test_tree_has_root_and_query(lsp_server: str) -> None:
     result = _run(lsp_server, "tree", "--suffix", ".py")
-    assert "root" in result, "tree missing 'root' key"
-    assert isinstance(result["root"], list), "root must be a list"
+    assert "tree" in result, "tree missing 'tree' key"
+    assert isinstance(result["tree"], list), "tree must be a list"
     assert "query" in result, "tree missing 'query' key"
+    assert "meta" in result, "tree missing 'meta' key"
     q = result["query"]
     assert q.get("command") == "tree"
     assert "suffix" in q
@@ -82,7 +83,7 @@ def test_tree_has_root_and_query(lsp_server: str) -> None:
 def test_tree_no_suffix_shows_all_files(lsp_server: str) -> None:
     """Without --suffix, non-.py files (e.g. README.md) appear."""
     result = _run(lsp_server, "tree")
-    assert "root" in result
+    assert "tree" in result
     # Just verify it returns something — content is snapshot territory.
 
 
@@ -119,7 +120,7 @@ def test_search_empty_for_nonexistent(lsp_server: str) -> None:
 @pytest.mark.parametrize("file_key", ["resolve", "client", "analyze", "init"])
 def test_overview_shape(lsp_server: str, file_key: str) -> None:
     result = _run(lsp_server, "overview", FILES[file_key], "--depth", "0")
-    for key in ("file", "imports", "symbols", "symbol_count", "depth", "query"):
+    for key in ("imports", "symbols", "symbol_count", "depth", "query", "meta"):
         assert key in result, f"overview missing '{key}'"
     assert isinstance(result["imports"], list)
     assert isinstance(result["symbols"], list)
@@ -201,7 +202,7 @@ def test_overview_symbol_has_signature_and_preview(lsp_server: str, file_key: st
 @pytest.mark.parametrize("symbol_name", ["resolve_symbol", "ResolvedSymbol"])
 def test_read_has_imports_and_body(lsp_server: str, symbol_name: str) -> None:
     result = _run(lsp_server, "read", FILES["resolve"], "--symbol", symbol_name)
-    for key in ("symbol", "kind", "body", "range_line_char", "file", "imports", "query"):
+    for key in ("symbol", "kind", "body", "range_line_char", "imports", "query", "meta"):
         assert key in result, f"read missing '{key}'"
     assert len(result["body"]) > 0, f"body is empty for {symbol_name}"
     assert len(result["imports"]) > 0, "imports list is empty"
@@ -218,7 +219,7 @@ def test_incoming_calls_has_locality(lsp_server: str, symbol_name: str) -> None:
     result = _run(
         lsp_server, "incoming-calls", FILES["analyze"], "--symbol", symbol_name,
     )
-    for key in ("symbol", "kind", "file", "incoming_calls", "query"):
+    for key in ("symbol", "kind", "incoming_calls", "query", "meta"):
         assert key in result
     for call in result["incoming_calls"]:
         assert "locality" in call, f"incoming call missing 'locality': {call}"
@@ -236,7 +237,7 @@ def test_outgoing_calls_has_locality(lsp_server: str, symbol_name: str) -> None:
     result = _run(
         lsp_server, "outgoing-calls", FILES["analyze"], "--symbol", symbol_name,
     )
-    for key in ("symbol", "kind", "file", "outgoing_calls", "query"):
+    for key in ("symbol", "kind", "outgoing_calls", "query", "meta"):
         assert key in result
     for call in result["outgoing_calls"]:
         assert "locality" in call, f"outgoing call missing 'locality': {call}"
@@ -269,7 +270,7 @@ def test_references_has_locality(lsp_server: str, symbol_name: str) -> None:
     result = _run(
         lsp_server, "references", FILES["resolve"], "--symbol", symbol_name,
     )
-    for key in ("symbol", "kind", "file", "references", "query"):
+    for key in ("symbol", "kind", "references", "query", "meta"):
         assert key in result
     assert len(result["references"]) > 0, f"no references for {symbol_name}"
     for ref in result["references"]:
@@ -287,8 +288,8 @@ def test_references_has_locality(lsp_server: str, symbol_name: str) -> None:
 def test_explain_shape(lsp_server: str, symbol_name: str) -> None:
     result = _run(lsp_server, "explain", FILES["resolve"], "--symbol", symbol_name)
     for key in (
-        "symbol", "kind", "body", "range_line_char", "file",
-        "definers", "incoming_calls", "outgoing_calls", "references", "query",
+        "symbol", "kind", "body", "range_line_char",
+        "definers", "incoming_calls", "outgoing_calls", "references", "query", "meta",
     ):
         assert key in result, f"explain missing '{key}'"
     assert len(result["body"]) > 0
@@ -318,7 +319,7 @@ def test_impact_shape(lsp_server: str, symbol_name: str) -> None:
         lsp_server, "impact", FILES["analyze"], "--symbol", symbol_name, "--depth", "3",
     )
     # Top-level keys
-    for key in ("symbol", "kind", "file", "symbol_level", "file_level", "query"):
+    for key in ("symbol", "kind", "symbol_level", "file_level", "query", "meta"):
         assert key in result, f"impact missing '{key}'"
     # symbol_level contains the LSP-derived lists
     sl = result["symbol_level"]
@@ -374,13 +375,16 @@ def test_all_file_paths_are_relative(lsp_server: str, command: str, args: list[s
     """File paths in responses are workspace-relative, not absolute or file:// URIs."""
     result = _run(lsp_server, command, *args)
 
-    def _check(val: object) -> None:
+    def _check(val: object, key: str = "") -> None:
+        # meta.root is intentionally absolute — don't flag it.
+        if key == "root" and isinstance(val, str) and val.startswith("/"):
+            return
         if isinstance(val, str) and "/" in val:
             assert not val.startswith("/"), f"absolute path: {val}"
             assert not val.startswith("file://"), f"file:// URI: {val}"
         if isinstance(val, dict):
-            for v in val.values():
-                _check(v)
+            for k, v in val.items():
+                _check(v, k)
         if isinstance(val, list):
             for v in val:
                 _check(v)

@@ -237,17 +237,18 @@ async def _overview(
 
     result = await query_document_symbols(fp, workspace=ws)
     if "error" in result:
-        return {"error": result["error"], "file": str(fp), "symbols": [], "symbol_count": 0, "depth": depth}
+        return {"error": result["error"], "symbols": [], "symbol_count": 0, "depth": depth}
 
     symbols: list[dict] = result.get("symbols", [])
     tree = _symbol_tree_by_depth(symbols, depth, kind_filter=_OVERVIEW_KINDS)
     processed = await _process_overview_symbols(tree, fp, ws)
     return {
-        "file": relativize(fp, ws),
         "imports": _extract_imports(fp),
         "symbols": processed,
         "symbol_count": len(processed),
         "depth": depth,
+        "_server": result.get("server", ""),
+        "_language": result.get("language", ""),
     }
 
 
@@ -497,7 +498,6 @@ async def _explain(
         "kind": symbol.kind,
         "body": body,
         "range_line_char": {"start": list(symbol.range_start), "end": list(symbol.range_end)},
-        "file": relativize(fp, ws),
         "definers": definers,
         "incoming_calls": incoming,
         "outgoing_calls": outgoing,
@@ -550,7 +550,13 @@ async def _search(
         if len(results) >= limit:
             break
 
-    return {"query": query, "results": results, "count": len(results)}
+    return {
+        "query": query,
+        "results": results,
+        "count": len(results),
+        "_server": result.get("server", ""),
+        "_language": result.get("language", ""),
+    }
 
 
 # ── Impact ─────────────────────────────────────────────────────────────────────
@@ -591,7 +597,6 @@ async def _impact(
     return {
         "symbol": symbol.name,
         "kind": symbol.kind,
-        "file": relativize(fp, ws),
         "symbol_level": {
             "incoming_calls": incoming,
             "outgoing_calls": outgoing,
@@ -695,6 +700,7 @@ async def _diagnostics(
     result = await query_diagnostics(fp, workspace=ws)
     raw_diags: list[dict] = result.get("diagnostics", [])
     raw_server: str = result.get("server", "")
+    raw_language: str = result.get("language", "")
 
     # Build enriched diagnostics.
     enriched: list[dict] = []
@@ -727,4 +733,5 @@ async def _diagnostics(
         "lsp": raw_server,
         "diagnostics": truncated,
         "counts": counts,
+        "_language": raw_language,
     }

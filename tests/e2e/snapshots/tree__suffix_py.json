@@ -1,5 +1,5 @@
 {
-  "root": [
+  "tree": [
     {
       "api_server/": [
         "__init__.py",
@@ -221,9 +221,11 @@
       ]
     }
   ],
-  "workspace": "/workspaces/lsp-functionalities",
   "query": {
     "command": "tree",
     "suffix": ".py"
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities"
   }
 }

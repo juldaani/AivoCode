@@ -1,7 +1,6 @@
 {
   "symbol": "caller_1",
   "kind": "Function",
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
   "incoming_calls": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
@@ -16,5 +15,10 @@
     "command": "incoming-calls",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",
     "symbol": "caller_1"
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }

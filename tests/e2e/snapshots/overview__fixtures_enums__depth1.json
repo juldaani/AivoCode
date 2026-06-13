@@ -1,5 +1,4 @@
 {
-  "file": "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py",
   "imports": [
     {
       "line": 15,
@@ -151,5 +150,10 @@
     "command": "overview",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py",
     "depth": 1
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities",
+    "lsp": "basedpyright-langserver",
+    "language": "python"
   }
 }
