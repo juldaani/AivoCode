@@ -120,9 +120,9 @@ def test_search_empty_for_nonexistent(lsp_server: str) -> None:
 @pytest.mark.parametrize("file_key", ["resolve", "client", "analyze", "init"])
 def test_overview_shape(lsp_server: str, file_key: str) -> None:
     result = _run(lsp_server, "overview", FILES[file_key], "--depth", "0")
-    for key in ("imports", "symbols", "symbol_count", "depth", "query", "meta"):
+    for key in ("imports", "symbols", "symbol_count", "query", "meta"):
         assert key in result, f"overview missing '{key}'"
-    assert isinstance(result["imports"], list)
+    assert isinstance(result["imports"], dict)
     assert isinstance(result["symbols"], list)
     assert isinstance(result["symbol_count"], int)
     assert result["symbol_count"] == len(result["symbols"])
@@ -135,9 +135,11 @@ def test_overview_shape(lsp_server: str, file_key: str) -> None:
 @pytest.mark.parametrize("file_key", ["resolve", "client", "analyze", "init"])
 def test_overview_imports_format(lsp_server: str, file_key: str) -> None:
     result = _run(lsp_server, "overview", FILES[file_key], "--depth", "0")
-    for imp in result["imports"]:
-        assert "line" in imp, f"import missing 'line': {imp}"
-        assert "statement" in imp, f"import missing 'statement': {imp}"
+    imports = result["imports"]
+    assert set(imports.keys()) >= {"module", "lazy"}, f"imports missing groups: {imports.keys()}"
+    for imp in imports["module"]:
+        assert "line" in imp, f"module import missing 'line': {imp}"
+        assert "statement" in imp, f"module import missing 'statement': {imp}"
         assert isinstance(imp["line"], int)
         assert imp["line"] >= 1
 
@@ -205,8 +207,11 @@ def test_read_has_imports_and_body(lsp_server: str, symbol_name: str) -> None:
     for key in ("symbol", "kind", "body", "range_line_char", "imports", "query", "meta"):
         assert key in result, f"read missing '{key}'"
     assert len(result["body"]) > 0, f"body is empty for {symbol_name}"
-    assert len(result["imports"]) > 0, "imports list is empty"
-    for imp in result["imports"]:
+    imports = result["imports"]
+    assert isinstance(imports, dict), "imports must be grouped dict"
+    total = len(imports.get("module", [])) + len(imports.get("lazy", []))
+    assert total > 0, "imports is empty"
+    for imp in imports.get("module", []) + imports.get("lazy", []):
         assert "line" in imp
         assert "statement" in imp
 

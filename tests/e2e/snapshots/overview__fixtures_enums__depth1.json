@@ -1,26 +1,25 @@
 {
-  "imports": [
-    {
-      "line": 15,
-      "statement": "from __future__ import annotations",
-      "lazy": false
-    },
-    {
-      "line": 17,
-      "statement": "from dataclasses import dataclass, field",
-      "lazy": false
-    },
-    {
-      "line": 18,
-      "statement": "from enum import Enum",
-      "lazy": false
-    },
-    {
-      "line": 19,
-      "statement": "from typing import ClassVar",
-      "lazy": false
-    }
-  ],
+  "imports": {
+    "module": [
+      {
+        "line": 15,
+        "statement": "from __future__ import annotations"
+      },
+      {
+        "line": 17,
+        "statement": "from dataclasses import dataclass, field"
+      },
+      {
+        "line": 18,
+        "statement": "from enum import Enum"
+      },
+      {
+        "line": 19,
+        "statement": "from typing import ClassVar"
+      }
+    ],
+    "lazy": []
+  },
   "symbols": [
     {
       "symbol": "GreetingStyle",
@@ -145,7 +144,6 @@
     }
   ],
   "symbol_count": 4,
-  "depth": 1,
   "query": {
     "command": "overview",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_enums.py",

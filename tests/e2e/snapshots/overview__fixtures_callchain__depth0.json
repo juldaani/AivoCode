@@ -1,26 +1,25 @@
 {
-  "imports": [
-    {
-      "line": 12,
-      "statement": "from __future__ import annotations",
-      "lazy": false
-    },
-    {
-      "line": 14,
-      "statement": "from pathlib import Path",
-      "lazy": false
-    },
-    {
-      "line": 16,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)",
-      "lazy": false
-    },
-    {
-      "line": 22,
-      "statement": "from mock_pkg.fixtures_functions import (\n    _private_helper,\n    build_tree,\n    leaf_helper,\n    relativize,\n    resolve_symbol,\n    sync_wrapper,\n)",
-      "lazy": false
-    }
-  ],
+  "imports": {
+    "module": [
+      {
+        "line": 12,
+        "statement": "from __future__ import annotations"
+      },
+      {
+        "line": 14,
+        "statement": "from pathlib import Path"
+      },
+      {
+        "line": 16,
+        "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+      },
+      {
+        "line": 22,
+        "statement": "from mock_pkg.fixtures_functions import (\n    _private_helper,\n    build_tree,\n    leaf_helper,\n    relativize,\n    resolve_symbol,\n    sync_wrapper,\n)"
+      }
+    ],
+    "lazy": []
+  },
   "symbols": [
     {
       "symbol": "entry_point",
@@ -126,7 +125,6 @@
     }
   ],
   "symbol_count": 6,
-  "depth": 0,
   "query": {
     "command": "overview",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_callchain.py",

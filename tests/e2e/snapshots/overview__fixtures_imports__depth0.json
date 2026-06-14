@@ -1,61 +1,53 @@
 {
-  "imports": [
-    {
-      "line": 12,
-      "statement": "from __future__ import annotations",
-      "lazy": false
-    },
-    {
-      "line": 16,
-      "statement": "import json as json_lib",
-      "lazy": false
-    },
-    {
-      "line": 17,
-      "statement": "import os as os_lib",
-      "lazy": false
-    },
-    {
-      "line": 21,
-      "statement": "import pathlib, sys, textwrap",
-      "lazy": false
-    },
-    {
-      "line": 21,
-      "statement": "import pathlib, sys, textwrap",
-      "lazy": false
-    },
-    {
-      "line": 21,
-      "statement": "import pathlib, sys, textwrap",
-      "lazy": false
-    },
-    {
-      "line": 25,
-      "statement": "from pathlib import (\n    Path,\n    PurePath,\n    PurePosixPath,\n    PureWindowsPath,\n)",
-      "lazy": false
-    },
-    {
-      "line": 34,
-      "statement": "from typing import TYPE_CHECKING",
-      "lazy": false
-    },
-    {
-      "line": 38,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n    SymbolKind,\n)",
-      "lazy": false
-    },
-    {
-      "line": 45,
-      "statement": "from mock_pkg.fixtures_functions import (\n    build_tree,\n    leaf_helper,\n    relativize,\n)",
-      "lazy": false
-    },
-    {
-      "line": 54,
-      "statement": "from mock_pkg.fixtures_callchain import entry_point",
-      "lazy": false
-    }
-  ],
+  "imports": {
+    "module": [
+      {
+        "line": 12,
+        "statement": "from __future__ import annotations"
+      },
+      {
+        "line": 16,
+        "statement": "import json as json_lib"
+      },
+      {
+        "line": 17,
+        "statement": "import os as os_lib"
+      },
+      {
+        "line": 21,
+        "statement": "import pathlib, sys, textwrap"
+      },
+      {
+        "line": 21,
+        "statement": "import pathlib, sys, textwrap"
+      },
+      {
+        "line": 21,
+        "statement": "import pathlib, sys, textwrap"
+      },
+      {
+        "line": 25,
+        "statement": "from pathlib import (\n    Path,\n    PurePath,\n    PurePosixPath,\n    PureWindowsPath,\n)"
+      },
+      {
+        "line": 34,
+        "statement": "from typing import TYPE_CHECKING"
+      },
+      {
+        "line": 38,
+        "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n    SymbolKind,\n)"
+      },
+      {
+        "line": 45,
+        "statement": "from mock_pkg.fixtures_functions import (\n    build_tree,\n    leaf_helper,\n    relativize,\n)"
+      },
+      {
+        "line": 54,
+        "statement": "from mock_pkg.fixtures_callchain import entry_point"
+      }
+    ],
+    "lazy": []
+  },
   "symbols": [
     {
       "symbol": "ReExportedClass",
@@ -112,7 +104,6 @@
     }
   ],
   "symbol_count": 3,
-  "depth": 0,
   "query": {
     "command": "overview",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_imports.py",

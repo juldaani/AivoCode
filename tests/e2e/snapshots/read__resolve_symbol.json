@@ -12,33 +12,32 @@
       74
     ]
   },
-  "imports": [
-    {
-      "line": 13,
-      "statement": "from __future__ import annotations",
-      "lazy": false
-    },
-    {
-      "line": 15,
-      "statement": "from pathlib import Path",
-      "lazy": false
-    },
-    {
-      "line": 17,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)",
-      "lazy": false
-    },
-    {
-      "line": 66,
-      "statement": "from pathlib import Path as PathAlias",
-      "lazy": true
-    },
-    {
-      "line": 88,
-      "statement": "from pathlib import Path as P",
-      "lazy": true
-    }
-  ],
+  "imports": {
+    "module": [
+      {
+        "line": 13,
+        "statement": "from __future__ import annotations"
+      },
+      {
+        "line": 15,
+        "statement": "from pathlib import Path"
+      },
+      {
+        "line": 17,
+        "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+      }
+    ],
+    "lazy": [
+      {
+        "line": 66,
+        "statement": "from pathlib import Path as PathAlias"
+      },
+      {
+        "line": 88,
+        "statement": "from pathlib import Path as P"
+      }
+    ]
+  },
   "query": {
     "command": "read",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",

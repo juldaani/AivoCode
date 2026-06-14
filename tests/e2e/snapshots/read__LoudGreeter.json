@@ -12,28 +12,27 @@
       36
     ]
   },
-  "imports": [
-    {
-      "line": 14,
-      "statement": "from __future__ import annotations",
-      "lazy": false
-    },
-    {
-      "line": 16,
-      "statement": "from dataclasses import dataclass, field",
-      "lazy": false
-    },
-    {
-      "line": 17,
-      "statement": "from enum import Enum",
-      "lazy": false
-    },
-    {
-      "line": 18,
-      "statement": "from pathlib import Path",
-      "lazy": false
-    }
-  ],
+  "imports": {
+    "module": [
+      {
+        "line": 14,
+        "statement": "from __future__ import annotations"
+      },
+      {
+        "line": 16,
+        "statement": "from dataclasses import dataclass, field"
+      },
+      {
+        "line": 17,
+        "statement": "from enum import Enum"
+      },
+      {
+        "line": 18,
+        "statement": "from pathlib import Path"
+      }
+    ],
+    "lazy": []
+  },
   "query": {
     "command": "read",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",

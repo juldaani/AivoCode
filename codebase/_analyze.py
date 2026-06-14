@@ -264,7 +264,7 @@ async def _overview(
 
     result = await query_document_symbols(fp, workspace=ws)
     if "error" in result:
-        return {"error": result["error"], "symbols": [], "symbol_count": 0, "depth": depth}
+        return {"error": result["error"], "symbols": [], "symbol_count": 0}
 
     symbols: list[dict] = result.get("symbols", [])
     tree = _symbol_tree_by_depth(symbols, depth, kind_filter=_OVERVIEW_KINDS)
@@ -273,7 +273,6 @@ async def _overview(
         "imports": _extract_imports(fp),
         "symbols": processed,
         "symbol_count": len(processed),
-        "depth": depth,
         "_server": result.get("server", ""),
         "_language": result.get("language", ""),
     }
@@ -729,36 +728,38 @@ async def _diagnostics(
     raw_server: str = result.get("server", "")
     raw_language: str = result.get("language", "")
 
-    # Build enriched diagnostics.
-    enriched: list[dict] = []
+    # Group by severity — no snippets, just position + message.
+    grouped: dict[str, list[dict]] = {"error": [], "warning": [], "information": [], "hint": []}
     counts: dict[str, int] = {"error": 0, "warning": 0, "information": 0, "hint": 0}
 
     for d in raw_diags:
         sev_int = d.get("severity", 1)
         sev_name = _SEVERITY_NAMES.get(sev_int, "Error")
-        counts[sev_name.lower()] = counts.get(sev_name.lower(), 0) + 1
+        key = sev_name.lower()
+        counts[key] += 1
 
         start = d.get("range", {}).get("start", {})
         line = (start.get("line", 0) or 0) + 1
         character = (start.get("character", 0) or 0) + 1
 
-        enriched.append({
-            "severity": sev_name,
+        grouped[key].append({
             "message": d.get("message", ""),
             "line": line,
             "character": character,
-            "snippet": read_snippet_chars(str(fp), line),
         })
 
-    # Sort: severity priority, then by line.
-    _sev_order = {"Error": 0, "Warning": 1, "Information": 2, "Hint": 3}
-    enriched.sort(key=lambda d: (_sev_order.get(d["severity"], 9), d["line"]))
-
-    truncated = enriched[:max_results]
+    # Respect max_results: truncate each group proportionally.
+    remaining = max_results
+    for key in ("error", "warning", "information", "hint"):
+        if remaining <= 0:
+            grouped[key] = []
+        elif len(grouped[key]) > remaining:
+            grouped[key] = grouped[key][:remaining]
+        remaining -= len(grouped[key])
 
     return {
         "lsp": raw_server,
-        "diagnostics": truncated,
+        "diagnostics": grouped,
         "counts": counts,
         "_language": raw_language,
     }

@@ -1,21 +1,21 @@
 {
-  "imports": [
-    {
-      "line": 13,
-      "statement": "from __future__ import annotations",
-      "lazy": false
-    },
-    {
-      "line": 15,
-      "statement": "from pathlib import Path",
-      "lazy": false
-    },
-    {
-      "line": 17,
-      "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)",
-      "lazy": false
-    }
-  ],
+  "imports": {
+    "module": [
+      {
+        "line": 13,
+        "statement": "from __future__ import annotations"
+      },
+      {
+        "line": 15,
+        "statement": "from pathlib import Path"
+      },
+      {
+        "line": 17,
+        "statement": "from mock_pkg.fixtures_classes import (\n    GreeterBase,\n    GreeterFactory,\n    LoudGreeter,\n    ResolvedSymbol,\n)"
+      }
+    ],
+    "lazy": []
+  },
   "symbols": [
     {
       "symbol": "analyze_overview",
@@ -138,7 +138,6 @@
     }
   ],
   "symbol_count": 7,
-  "depth": 0,
   "query": {
     "command": "overview",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",

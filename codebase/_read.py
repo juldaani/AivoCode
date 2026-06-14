@@ -22,46 +22,30 @@ def _extract_imports(
     language: str = "python",
     *,
     top_level_only: bool = True,
-) -> list[dict]:
-    """Extract import statements from a source file using tree-sitter.
+) -> dict:
+    """Extract import statements, grouped by module-level vs lazy.
 
-    Delegates to the registered ``LanguageHandler`` for *language*.
-    Unsupported languages return ``[]``.
-
-    Parameters
-    ----------
-    file_path : str or Path
-        Path to the source file.
-    language : str
-        Language identifier (``"python"``, ``"typescript"``, etc.).
-    top_level_only : bool
-        When ``True`` (default), only top-level (module-scope) imports are
-        returned.  When ``False``, all imports are returned including lazy
-        imports inside function bodies — each gets ``lazy: True``.
-
-    Returns
-    -------
-    list[dict]
-        Each entry has ``line`` (1-indexed), ``statement`` (raw source text),
-        and ``lazy`` (``False`` for top-level, ``True`` for nested).
+    Returns ``{"module": [...], "lazy": [...]}`` where each entry has
+    ``{line, statement}``.  When *top_level_only* is ``True``, the
+    ``"lazy"`` group is always empty.
     """
     from codebase._lang_handlers import get_handler_by_language
 
     handler = get_handler_by_language(language)
     if handler is None:
-        return []
+        return {"module": [], "lazy": []}
 
     raw_imports = handler.extract_imports(Path(file_path))
-    result: list[dict] = []
+    module: list[dict] = []
+    lazy: list[dict] = []
     for ri in raw_imports:
-        if top_level_only and ri.lazy:
-            continue
-        result.append({
-            "line": ri.line,
-            "statement": ri.statement,
-            "lazy": ri.lazy,
-        })
-    return result
+        entry = {"line": ri.line, "statement": ri.statement}
+        if ri.lazy:
+            if not top_level_only:
+                lazy.append(entry)
+        else:
+            module.append(entry)
+    return {"module": module, "lazy": lazy}
 
 
 # ── Symbol reader ──────────────────────────────────────────────────────────────
