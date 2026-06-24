@@ -53,7 +53,7 @@ def _handle_tree(args: argparse.Namespace) -> None:
 
 
 def _handle_read(args: argparse.Namespace) -> None:
-    _symbol_handler(args, "/codebase/read")
+    _symbol_handler(args, "/codebase/read-symbol")
 
 
 def _handle_incoming(args: argparse.Namespace) -> None:
@@ -221,8 +221,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     tp.set_defaults(func=_handle_tree)
 
     # ── read ───────────────────────────────────────────────────────────
-    rdp = cb_sub.add_parser("read", parents=[_GLOBAL_OPTIONS],
-                             help="Read a symbol's body text.")
+    rdp = cb_sub.add_parser("read-symbol", parents=[_GLOBAL_OPTIONS],
+                             help="Read source body of a symbol.")
     _add_symbol_args(rdp)
     rdp.set_defaults(func=_handle_read)
 

@@ -80,16 +80,16 @@ import graph** (no LSP, no daemon wait time).
 |---|---|---|
 | **tree** | Recursive directory listing (like `find`) filtered by suffix | `os.scandir` walk; returns `{"dirname/": [files], ...}` |
 | **overview** | Table of contents: symbols with signatures, previews, reference counts | Queries document symbols, resolves references per symbol, extracts signatures via tree-sitter |
-| **read** | Full body text of a named symbol | Resolves the symbol's range from LSP, reads source from disk |
-| **explain** | Full report: body, definition, callers, callees, references | Composes read + incoming-calls + outgoing-calls + references |
+| **read-symbol** | Full source body of a named symbol (file-level + own lazy imports) | Resolves the symbol's range from LSP, reads source from disk, filters lazy imports to the symbol's body only |
+| **explain** | Full report: body, definers, type-definition, callers, callees, references | Composes read + definition (with bundled type-definition) + incoming-calls + outgoing-calls + references. `--max` controls total site budget (default 100, divided evenly across sub-lists) |
 | **search** | Search symbols by name with optional kind filter | Wraps workspace-symbol; adds kind and limit filtering |
-| **incoming-calls** | Who calls this? — enriched with snippets and file locality | `callHierarchy/incomingCalls` + snippet reader + locality tagging |
-| **outgoing-calls** | What does this call? — enriched with snippets, optional workspace-only filter | `callHierarchy/outgoingCalls` + snippet reader + locality filtering |
-| **references** | Where is this used? — enriched with snippets and file locality | `references` request + snippet reader + locality tagging |
-| **definition** | Go-to-definition with snippet and locality | Resolves symbol position via LSP, then queries definition + adds snippet |
+| **incoming-calls** | Who calls this? — enriched with snippets and file locality | `callHierarchy/incomingCalls` + snippet reader + locality tagging. `--max` (default 50) caps total sites before compaction; first 6 per file with snippets, rest as line numbers |
+| **outgoing-calls** | What does this call? — enriched with snippets, optional workspace-only filter | `callHierarchy/outgoingCalls` + snippet reader + locality filtering. `--max` (default 50) caps total sites before compaction |
+| **references** | Where is this used? — enriched with snippets and file locality | `references` request + snippet reader + locality tagging. `--max` (default 50) caps total sites before compaction |
+| **definition** | Go-to-definition + type-definition with snippet and locality (one call) | Resolves symbol position via LSP, queries both `definition` and `typeDefinition`, adds snippet + locality to each. `type_definition` is `null` for primitives |
 | **hover** | Signature + docstring as markdown (works on external libs) | Resolves symbol, then returns the LSP hover markdown verbatim — agents natively parse this |
 | **diagnostics** | File diagnostics (errors, warnings) with snippets | `--max` controls output (default 50); sorted by severity; each entry has a 200-char snippet |
-| **impact** | Change impact: symbol callers + file blast radius | Combines LSP call hierarchy + references with import graph transitive dependents (including tests). `--depth` controls transitivity (default 10) |
+| **impact** | Change impact: symbol callers + file blast radius | Combines LSP call hierarchy + references with import graph transitive dependents (including tests). `--depth` controls transitivity (default 10). `--max` controls total site budget (default 100) |
 | **import-dependents** | Which files (transitively) import this file? | BFS traversal of the reverse import graph; `--depth` controls transitivity |
 | **import-dependencies** | What files does this file import directly? | Direct lookup in the forward import graph |
 | **affected-tests** | Which test files are affected if this file changes? | Runs import-dependents then filters to test files by naming convention |
@@ -201,7 +201,7 @@ around the layer below:
 │  lsp/       │ │ codebase/  │ │ web_ops/            │
 │             │ │             │ │                     │
 │  Daemon     │ │ Overview    │ │ Fetch (Chrome +     │
-│  Symbols    │ │ Read        │ │   Crawl4AI)         │
+│  Symbols    │ │ ReadSymbol  │ │   Crawl4AI)         │
 │  References │ │ Explain     │ │ Search (Exa API)    │
 │  CallHier   │ │ Impact      │ │                     │
 │  Diagnostics│ │ ImportGraph │ │                     │
@@ -269,7 +269,10 @@ aivocode lsp stop
 
 # aivocode codebase — agent-facing exploration
 aivocode codebase overview mock_pkg/utils.py
+aivocode codebase read-symbol mock_pkg/utils.py --symbol my_func
 aivocode codebase explain mock_pkg/utils.py --symbol my_func
+aivocode codebase references mock_pkg/utils.py --symbol MyClass --max 30
+aivocode codebase impact mock_pkg/utils.py --symbol my_func --max 60
 aivocode codebase import-dependents mock_pkg/utils.py --depth 2
 aivocode codebase affected-tests mock_pkg/utils.py --depth 10
 

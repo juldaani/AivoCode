@@ -34,7 +34,7 @@
     "lazy": []
   },
   "query": {
-    "command": "read",
+    "command": "read-symbol",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
     "symbol": "LoudGreeter"
   },

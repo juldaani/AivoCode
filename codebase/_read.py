@@ -59,10 +59,23 @@ def _read_symbol(
     """Read the full body of *symbol* from *file_path*.
 
     Returns a dict with ``symbol``, ``body``, ``range_line_char``,
-    ``file``, and ``imports`` (all import statements in the file).
+    ``file``, and ``imports``.  *imports* includes all file-level
+    (module) imports plus only those lazy imports whose line falls
+    **within** the symbol's own body range — lazy imports from other
+    symbols in the same file are excluded.
     """
     body = read_range(file_path, symbol.range_start[0], symbol.range_end[0])
     ws = workspace or Path.cwd()
+
+    all_imports = _extract_imports(file_path, top_level_only=False)
+    # Keep only lazy imports whose line is inside this symbol's body.
+    symbol_start = symbol.range_start[0]
+    symbol_end = symbol.range_end[0]
+    all_imports["lazy"] = [
+        imp for imp in all_imports["lazy"]
+        if symbol_start <= imp["line"] <= symbol_end
+    ]
+
     return {
         "symbol": symbol.name,
         "kind": symbol.kind,
@@ -71,5 +84,5 @@ def _read_symbol(
             "start": list(symbol.range_start),
             "end": list(symbol.range_end),
         },
-        "imports": _extract_imports(file_path, top_level_only=False),
+        "imports": all_imports,
     }

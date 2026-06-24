@@ -31,15 +31,11 @@
       {
         "line": 66,
         "statement": "from pathlib import Path as PathAlias"
-      },
-      {
-        "line": 88,
-        "statement": "from pathlib import Path as P"
       }
     ]
   },
   "query": {
-    "command": "read",
+    "command": "read-symbol",
     "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
     "symbol": "resolve_symbol"
   },

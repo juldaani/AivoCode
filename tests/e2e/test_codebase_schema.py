@@ -203,7 +203,7 @@ def test_overview_symbol_has_signature_and_preview(lsp_server: str, file_key: st
 
 @pytest.mark.parametrize("symbol_name", ["resolve_symbol", "ResolvedSymbol"])
 def test_read_has_imports_and_body(lsp_server: str, symbol_name: str) -> None:
-    result = _run(lsp_server, "read", FILES["resolve"], "--symbol", symbol_name)
+    result = _run(lsp_server, "read-symbol", FILES["resolve"], "--symbol", symbol_name)
     for key in ("symbol", "kind", "body", "range_line_char", "imports", "query", "meta"):
         assert key in result, f"read missing '{key}'"
     assert len(result["body"]) > 0, f"body is empty for {symbol_name}"
@@ -366,7 +366,7 @@ def test_impact_shape(lsp_server: str, symbol_name: str) -> None:
 
 
 @pytest.mark.parametrize("command,args", [
-    ("read", [FILES["resolve"], "--symbol", "resolve_symbol"]),
+    ("read-symbol", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("incoming-calls", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("outgoing-calls", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("references", [FILES["resolve"], "--symbol", "ResolvedSymbol"]),
@@ -386,7 +386,7 @@ def test_all_outputs_have_query_block(lsp_server: str, command: str, args: list[
 
 
 @pytest.mark.parametrize("command,args", [
-    ("read", [FILES["resolve"], "--symbol", "resolve_symbol"]),
+    ("read-symbol", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("incoming-calls", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("outgoing-calls", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("references", [FILES["resolve"], "--symbol", "ResolvedSymbol"]),

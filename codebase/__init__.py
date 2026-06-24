@@ -147,7 +147,7 @@ async def read_symbol(
     *,
     line: int | None = None,
     workspace: Path | None = None,
-    command: str = "read",
+    command: str = "read-symbol",
 ) -> dict:
     """Read the full body text of *symbol_name* in *file_path*.
 

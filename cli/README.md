@@ -30,13 +30,13 @@ aivocode websearch "python asyncio"
 # Codebase exploration (agent-facing tools)
 aivocode codebase tree --suffix .py
 aivocode codebase overview src/main.py
-aivocode codebase read src/main.py --symbol MyClass
-aivocode codebase explain src/main.py --symbol my_func
+aivocode codebase read-symbol src/main.py --symbol MyClass
+aivocode codebase explain src/main.py --symbol my_func --max 60
 aivocode codebase search "ClassName" --kind Class
-aivocode codebase incoming-calls src/main.py --symbol my_func
-aivocode codebase outgoing-calls src/main.py --symbol my_func
-aivocode codebase references src/main.py --symbol MyClass
-aivocode codebase impact src/main.py --symbol my_func
+aivocode codebase incoming-calls src/main.py --symbol my_func --max 30
+aivocode codebase outgoing-calls src/main.py --symbol my_func --max 30
+aivocode codebase references src/main.py --symbol MyClass --max 50
+aivocode codebase impact src/main.py --symbol my_func --max 100
 
 # Import-graph tools (zero LSP — file-level dependency analysis)
 aivocode codebase import-dependents src/main.py --depth 2
@@ -53,13 +53,13 @@ aivocode lsp stop [--workspace PATH] [--pretty-format]
 aivocode lsp status [--workspace PATH] [--pretty-format]
 aivocode codebase tree [--suffix .py] [--workspace PATH] [--pretty-format]
 aivocode codebase overview <file> [--depth N] [--workspace PATH] [--pretty-format]
-aivocode codebase read <file> --symbol NAME [--line N] [--workspace PATH] [--pretty-format]
-aivocode codebase explain <file> --symbol NAME [--line N] [--workspace PATH] [--pretty-format]
-aivocode codebase search <query> [--kind CLASS] [--limit N] [--workspace PATH] [--pretty-format]
-aivocode codebase incoming-calls <file> --symbol NAME [--line N] [--pretty-format]
-aivocode codebase outgoing-calls <file> --symbol NAME [--line N] [--include-external] [--pretty-format]
-aivocode codebase references <file> --symbol NAME [--line N] [--pretty-format]
-aivocode codebase impact <file> --symbol NAME [--line N] [--pretty-format]
+aivocode codebase read-symbol <file> --symbol NAME [--line N] [--workspace PATH] [--pretty-format]
+aivocode codebase explain <file> --symbol NAME [--line N] [--max N] [--workspace PATH] [--pretty-format]
+aivocode codebase search <query> [--kind CLASS] [--limit N] [--path FILTER] [--workspace PATH] [--pretty-format]
+aivocode codebase incoming-calls <file> --symbol NAME [--line N] [--max N] [--pretty-format]
+aivocode codebase outgoing-calls <file> --symbol NAME [--line N] [--max N] [--include-external] [--pretty-format]
+aivocode codebase references <file> --symbol NAME [--line N] [--max N] [--pretty-format]
+aivocode codebase impact <file> --symbol NAME [--line N] [--depth N] [--max N] [--pretty-format]
 aivocode codebase import-dependents <file> [--depth N] [--workspace PATH] [--pretty-format]
 aivocode codebase import-dependencies <file> [--workspace PATH] [--pretty-format]
 aivocode codebase affected-tests <file> [--depth N] [--workspace PATH] [--pretty-format]
@@ -145,7 +145,7 @@ cli/
 ├── _utils.py            # Shared: HTTP transport, JSON output, --pretty-format
 └── commands/
     ├── lsp.py           # lsp subcommand (symbols, start, stop, status)
-    ├── codebase.py      # codebase subcommand (tree, overview, read, explain, search, impact)
+    ├── codebase.py      # codebase subcommand (tree, overview, read-symbol, explain, search, impact, etc.)
     ├── webfetch.py      # webfetch subcommand
     └── websearch.py     # websearch subcommand
 ```
@@ -160,13 +160,16 @@ cli/
 | ``GET`` | ``/lsp/status`` | ``?workspace=...`` |
 | ``POST`` | ``/codebase/tree`` | ``{"suffix?": ".py", "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/overview`` | ``{"file": "...", "depth?": 0, "workspace?": "..."}`` |
-| ``POST`` | ``/codebase/read`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
-| ``POST`` | ``/codebase/explain`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
-| ``POST`` | ``/codebase/search`` | ``{"query": "...", "kind?": "...", "limit?": 50, "workspace?": "..."}`` |
-| ``POST`` | ``/codebase/incoming-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
-| ``POST`` | ``/codebase/outgoing-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace_only?": true}`` |
-| ``POST`` | ``/codebase/references`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
-| ``POST`` | ``/codebase/impact`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/read-symbol`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/explain`` | ``{"file": "...", "symbol_name": "...", "line?": N, "max?": 100, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/search`` | ``{"query": "...", "kind?": "...", "limit?": 40, "path?": "...", "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/incoming-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "max?": 50, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/outgoing-calls`` | ``{"file": "...", "symbol_name": "...", "line?": N, "max?": 50, "workspace_only?": true}`` |
+| ``POST`` | ``/codebase/references`` | ``{"file": "...", "symbol_name": "...", "line?": N, "max?": 50, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/definition`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/hover`` | ``{"file": "...", "symbol_name": "...", "line?": N, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/diagnostics`` | ``{"file": "...", "max?": 50, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/impact`` | ``{"file": "...", "symbol_name": "...", "line?": N, "depth?": 10, "max?": 100, "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/import-dependents`` | ``{"file": "...", "depth?": 1, "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/import-dependencies`` | ``{"file": "...", "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/affected-tests`` | ``{"file": "...", "depth?": 4, "workspace?": "..."}`` |

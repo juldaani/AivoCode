@@ -110,7 +110,7 @@ async def tree(body: TreeBody):
     return get_repo_tree(ws, suffix=body.suffix)
 
 
-@router.post("/read")
+@router.post("/read-symbol")
 async def read(body: SymbolBody):
     try:
         return await read_symbol(

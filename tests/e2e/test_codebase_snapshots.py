@@ -147,18 +147,18 @@ def test_snapshot_overview_enums(lsp_server: str) -> None:
 
 
 def test_snapshot_read_resolve_symbol(lsp_server: str) -> None:
-    result = _run(lsp_server, "read", F_FUNCTIONS, "--symbol", "resolve_symbol")
-    _assert_snapshot("read__resolve_symbol", result)
+    result = _run(lsp_server, "read-symbol", F_FUNCTIONS, "--symbol", "resolve_symbol")
+    _assert_snapshot("read_symbol__resolve_symbol", result)
 
 
 def test_snapshot_read_ResolvedSymbol(lsp_server: str) -> None:
-    result = _run(lsp_server, "read", F_CLASSES, "--symbol", "ResolvedSymbol")
-    _assert_snapshot("read__ResolvedSymbol", result)
+    result = _run(lsp_server, "read-symbol", F_CLASSES, "--symbol", "ResolvedSymbol")
+    _assert_snapshot("read_symbol__ResolvedSymbol", result)
 
 
 def test_snapshot_read_LoudGreeter(lsp_server: str) -> None:
-    result = _run(lsp_server, "read", F_CLASSES, "--symbol", "LoudGreeter")
-    _assert_snapshot("read__LoudGreeter", result)
+    result = _run(lsp_server, "read-symbol", F_CLASSES, "--symbol", "LoudGreeter")
+    _assert_snapshot("read_symbol__LoudGreeter", result)
 
 
 # ── incoming-calls ────────────────────────────────────────────────────────────
