@@ -37,6 +37,7 @@ aivocode codebase incoming-calls src/main.py --symbol my_func --max 30
 aivocode codebase outgoing-calls src/main.py --symbol my_func --max 30
 aivocode codebase references src/main.py --symbol MyClass --max 50
 aivocode codebase impact src/main.py --symbol my_func --max 100
+aivocode codebase architecture --hotspots 15
 
 # Import-graph tools (zero LSP — file-level dependency analysis)
 aivocode codebase import-dependents src/main.py --depth 2
@@ -60,6 +61,7 @@ aivocode codebase incoming-calls <file> --symbol NAME [--line N] [--max N] [--pr
 aivocode codebase outgoing-calls <file> --symbol NAME [--line N] [--max N] [--include-external] [--pretty-format]
 aivocode codebase references <file> --symbol NAME [--line N] [--max N] [--pretty-format]
 aivocode codebase impact <file> --symbol NAME [--line N] [--depth N] [--max N] [--pretty-format]
+aivocode codebase architecture [--hotspots N] [--workspace PATH] [--pretty-format]
 aivocode codebase import-dependents <file> [--depth N] [--workspace PATH] [--pretty-format]
 aivocode codebase import-dependencies <file> [--workspace PATH] [--pretty-format]
 aivocode codebase affected-tests <file> [--depth N] [--workspace PATH] [--pretty-format]
@@ -145,7 +147,7 @@ cli/
 ├── _utils.py            # Shared: HTTP transport, JSON output, --pretty-format
 └── commands/
     ├── lsp.py           # lsp subcommand (symbols, start, stop, status)
-    ├── codebase.py      # codebase subcommand (tree, overview, read-symbol, explain, search, impact, etc.)
+    ├── codebase.py      # codebase subcommand (tree, overview, read-symbol, explain, search, architecture, etc.)
     ├── webfetch.py      # webfetch subcommand
     └── websearch.py     # websearch subcommand
 ```
@@ -173,6 +175,7 @@ cli/
 | ``POST`` | ``/codebase/import-dependents`` | ``{"file": "...", "depth?": 1, "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/import-dependencies`` | ``{"file": "...", "workspace?": "..."}`` |
 | ``POST`` | ``/codebase/affected-tests`` | ``{"file": "...", "depth?": 4, "workspace?": "..."}`` |
+| ``POST`` | ``/codebase/architecture`` | ``{"hotspots?": 20, "workspace?": "..."}`` |
 | ``POST`` | ``/web_ops/webfetch`` | ``{"url": "...", "wait_until?": "load", ...}`` |
 | ``POST`` | ``/web_ops/websearch`` | ``{"query": "...", "num_results?": 10, ...}`` |
 | ``GET`` | ``/health`` | — |

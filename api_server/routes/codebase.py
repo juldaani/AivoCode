@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from codebase import (
     affected_test_files,
     analyze_impact,
+    architecture,
     explain_symbol,
     file_diagnostics,
     file_overview,
@@ -87,6 +88,13 @@ class DiagnosticsBody(BaseModel):
 
     file: str
     max: int = 50
+    workspace: str | None = None
+
+
+class ArchitectureBody(BaseModel):
+    """Request model for /codebase/architecture."""
+
+    hotspots: int = 20
     workspace: str | None = None
 
 
@@ -243,6 +251,15 @@ async def diagnostics(body: DiagnosticsBody):
 
 
 # ── Import-graph routes ────────────────────────────────────────────────────────
+
+
+@router.post("/architecture")
+async def architecture_route(body: ArchitectureBody):
+    """Repo architecture: directory-level import graph, entry points, hotspots."""
+    return await architecture(
+        hotspots=body.hotspots,
+        workspace=Path(body.workspace) if body.workspace else None,
+    )
 
 
 @router.post("/import-dependents")

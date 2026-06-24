@@ -46,6 +46,15 @@ def _symbol_handler(args: argparse.Namespace, endpoint: str) -> None:
 # ── Handlers ───────────────────────────────────────────────────────────────────
 
 
+def _handle_architecture(args: argparse.Namespace) -> None:
+    body: dict = {
+        "hotspots": args.hotspots,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/architecture", body))
+    _print_json(result, pretty=args.pretty_format)
+
+
 def _handle_tree(args: argparse.Namespace) -> None:
     body = {"workspace": _resolve_workspace(args.workspace), "suffix": args.suffix}
     result = asyncio.run(_post("/codebase/tree", body))
@@ -313,6 +322,15 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     imp.add_argument("--max", type=int, default=100,
                       help="Total site budget across sub-lists (divided evenly, default 100).")
     imp.set_defaults(func=_handle_impact)
+
+    # ── architecture ─────────────────────────────────────────────────────
+    arch = cb_sub.add_parser("architecture", parents=[_GLOBAL_OPTIONS],
+                              help="Repo architecture: dir-level import graph, entry points, hotspots.")
+    arch.add_argument("--hotspots", type=int, default=20,
+                       help="Max hotspots to return (default 20).")
+    arch.add_argument("--workspace", type=str, default=None,
+                       help="Workspace root path (auto-detected if omitted).")
+    arch.set_defaults(func=_handle_architecture)
 
     # ── import-dependents ───────────────────────────────────────────────
     idp = cb_sub.add_parser("import-dependents", parents=[_GLOBAL_OPTIONS],

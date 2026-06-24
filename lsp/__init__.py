@@ -493,6 +493,28 @@ async def query_import_affected_tests(
     )
 
 
+async def query_architecture(
+    *,
+    hotspots: int = 20,
+    workspace: Path | None = None,
+) -> dict:
+    """Query the daemon for a high-level repo architecture report.
+
+    Returns directory-level import relationships, entry points, and
+    hotspot files — all computed from the import graph (zero LSP).
+    """
+    ws = workspace if workspace is not None else detect_workspace(Path.cwd())
+    try:
+        daemon_result = _send_query(ws, "architecture",
+                                     {"hotspots": str(hotspots)})
+    except (RuntimeError, ConnectionError, OSError) as exc:
+        return {"workspace": str(ws), "error": str(exc)}
+    result: dict = {**daemon_result}
+    if "workspace" not in result:
+        result["workspace"] = str(ws)
+    return result
+
+
 __all__ = [
     # Low-level building blocks (existing)
     "LspClient",
@@ -519,4 +541,5 @@ __all__ = [
     "query_import_dependents",
     "query_import_dependencies",
     "query_import_affected_tests",
+    "query_architecture",
 ]

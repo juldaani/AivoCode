@@ -1,0 +1,119 @@
+{
+  "structure": {
+    "api_server": {
+      "files": 6,
+      "imports": [
+        "codebase",
+        "lsp",
+        "web_ops"
+      ],
+      "imported_by": []
+    },
+    "cli": {
+      "files": 9,
+      "imports": [],
+      "imported_by": []
+    },
+    "codebase": {
+      "files": 12,
+      "imports": [
+        "lsp"
+      ],
+      "imported_by": [
+        "api_server",
+        "lsp",
+        "tests"
+      ]
+    },
+    "file_watcher": {
+      "files": 6,
+      "imports": [],
+      "imported_by": [
+        "lsp",
+        "tests"
+      ]
+    },
+    "lsp": {
+      "files": 9,
+      "imports": [
+        "codebase",
+        "file_watcher"
+      ],
+      "imported_by": [
+        "api_server",
+        "codebase",
+        "tests"
+      ]
+    },
+    "tests": {
+      "files": 60,
+      "imports": [
+        "codebase",
+        "file_watcher",
+        "lsp",
+        "web_ops"
+      ],
+      "imported_by": []
+    },
+    "web_ops": {
+      "files": 4,
+      "imports": [],
+      "imported_by": [
+        "api_server",
+        "tests"
+      ]
+    }
+  },
+  "entry_points": [
+    "api_server/__init__.py",
+    "api_server/app.py",
+    "api_server/routes/__init__.py",
+    "cli/__init__.py",
+    "cli/__main__.py",
+    "cli/commands/codebase.py",
+    "cli/commands/lsp.py",
+    "cli/commands/webfetch.py",
+    "cli/commands/websearch.py",
+    "file_watcher/how_to_use.py",
+    "web_ops/tst_web_fetch.py"
+  ],
+  "hotspots": [
+    {
+      "file": "file_watcher/filters.py",
+      "imported_by": 2,
+      "imported_by_transitive": 36
+    },
+    {
+      "file": "file_watcher/gitignore.py",
+      "imported_by": 3,
+      "imported_by_transitive": 36
+    },
+    {
+      "file": "file_watcher/types.py",
+      "imported_by": 10,
+      "imported_by_transitive": 39
+    },
+    {
+      "file": "file_watcher/watcher.py",
+      "imported_by": 4,
+      "imported_by_transitive": 34
+    },
+    {
+      "file": "lsp/_symbols.py",
+      "imported_by": 3,
+      "imported_by_transitive": 32
+    }
+  ],
+  "summary": {
+    "total_files": 106,
+    "total_dirs": 7
+  },
+  "workspace": "/workspaces/lsp-functionalities",
+  "query": {
+    "command": "architecture",
+    "hotspots": 5
+  },
+  "meta": {
+    "root": "/workspaces/lsp-functionalities"
+  }
+}

@@ -972,6 +972,17 @@ async def _run_daemon(
                             },
                         }
 
+                    # ── architecture ─────────────────────────────────────
+                    case "architecture":
+                        from codebase._arch import _compute_architecture
+
+                        hotspots = int(params.get("hotspots", "20"))
+                        result = _compute_architecture(import_graph, hotspots=hotspots)
+                        resp = {
+                            "id": req_id,
+                            "result": result,
+                        }
+
                     # ── graph_reindex ────────────────────────────────────
                     case "graph_reindex":
                         # Accept a JSON-encoded list of absolute file paths.

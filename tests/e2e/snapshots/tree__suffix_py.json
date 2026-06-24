@@ -35,6 +35,7 @@
       "codebase/": [
         "__init__.py",
         "_analyze.py",
+        "_arch.py",
         "_import_graph.py",
         "_read.py",
         "_resolve.py",
@@ -165,6 +166,7 @@
             "__init__.py",
             {
               "codebase/": [
+                "test_architecture.py",
                 "test_import_graph.py",
                 "test_lang_handler_python.py"
               ]

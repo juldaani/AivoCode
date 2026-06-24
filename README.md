@@ -93,6 +93,7 @@ import graph** (no LSP, no daemon wait time).
 | **import-dependents** | Which files (transitively) import this file? | BFS traversal of the reverse import graph; `--depth` controls transitivity |
 | **import-dependencies** | What files does this file import directly? | Direct lookup in the forward import graph |
 | **affected-tests** | Which test files are affected if this file changes? | Runs import-dependents then filters to test files by naming convention |
+| **architecture** | High-level repo overview: dir-level imports, entry points, hotspot files | Zero-LSP — pure import-graph computation. Lists non-test entry points, ranks files by transitive impact, groups dirs by import edges. `--hotspots` controls how many ranked files to return (default 20) |
 
 The import graph is built from tree-sitter ASTs — a two-pass workspace
 walk that indexes every module path and extracts import statements.
@@ -273,6 +274,7 @@ aivocode codebase read-symbol mock_pkg/utils.py --symbol my_func
 aivocode codebase explain mock_pkg/utils.py --symbol my_func
 aivocode codebase references mock_pkg/utils.py --symbol MyClass --max 30
 aivocode codebase impact mock_pkg/utils.py --symbol my_func --max 60
+aivocode codebase architecture --hotspots 10
 aivocode codebase import-dependents mock_pkg/utils.py --depth 2
 aivocode codebase affected-tests mock_pkg/utils.py --depth 10
 

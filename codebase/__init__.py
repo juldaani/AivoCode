@@ -559,6 +559,32 @@ async def file_diagnostics(
 # ── Import-graph tools ─────────────────────────────────────────────────────────
 
 
+async def architecture(
+    *,
+    hotspots: int = 20,
+    workspace: Path | None = None,
+    command: str = "architecture",
+) -> dict:
+    """Repo architecture: directory-level import graph, entry points, hotspots.
+
+    Pure import-graph computation — zero LSP calls.  Returns a
+    high-level structural view useful for onboarding an agent to a
+    codebase it has never seen before.
+
+    *hotspots* controls how many high-impact files are ranked (default 20).
+    """
+    from lsp import query_architecture, detect_workspace
+
+    ws_rel = workspace or Path.cwd()
+    ws_rel = detect_workspace(ws_rel)
+    result = await query_architecture(hotspots=hotspots, workspace=workspace)
+    result["query"] = _make_query(command)
+    if hotspots != 20:
+        result["query"]["hotspots"] = hotspots
+    result["meta"] = _make_meta(ws_rel)
+    return result
+
+
 async def import_dependents(
     file_path: str | Path,
     *,

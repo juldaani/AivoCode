@@ -375,6 +375,7 @@ def test_impact_shape(lsp_server: str, symbol_name: str) -> None:
     ("search", ["ResolvedSymbol"]),
     ("impact", [FILES["analyze"], "--symbol", "_overview"]),
     ("tree", ["--suffix", ".py"]),
+    ("architecture", ["--hotspots", "5"]),
 ])
 def test_all_outputs_have_query_block(lsp_server: str, command: str, args: list[str]) -> None:
     """Every codebase response includes a query block with command and no None values."""
@@ -394,14 +395,15 @@ def test_all_outputs_have_query_block(lsp_server: str, command: str, args: list[
     ("explain", [FILES["resolve"], "--symbol", "resolve_symbol"]),
     ("search", ["ResolvedSymbol"]),
     ("impact", [FILES["analyze"], "--symbol", "_overview"]),
+    ("architecture", ["--hotspots", "3"]),
 ])
 def test_all_file_paths_are_relative(lsp_server: str, command: str, args: list[str]) -> None:
     """File paths in responses are workspace-relative, not absolute or file:// URIs."""
     result = _run(lsp_server, command, *args)
 
     def _check(val: object, key: str = "") -> None:
-        # meta.root is intentionally absolute — don't flag it.
-        if key == "root" and isinstance(val, str) and val.startswith("/"):
+        # meta.root and workspace are intentionally absolute — don't flag them.
+        if key in ("root", "workspace") and isinstance(val, str) and val.startswith("/"):
             return
         if isinstance(val, str) and "/" in val:
             assert not val.startswith("/"), f"absolute path: {val}"
@@ -414,3 +416,34 @@ def test_all_file_paths_are_relative(lsp_server: str, command: str, args: list[s
                 _check(v)
 
     _check(result)
+
+
+# ── architecture ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("hotspots", [20, 5, 0])
+def test_architecture_shape(lsp_server: str, hotspots: int) -> None:
+    result = _run(lsp_server, "architecture", "--hotspots", str(hotspots))
+    for key in ("structure", "entry_points", "hotspots", "summary", "query", "meta"):
+        assert key in result, f"architecture missing '{key}'"
+
+    # Structure entries
+    for dir_name, info in result["structure"].items():
+        assert isinstance(info, dict)
+        for key in ("files", "imports", "imported_by"):
+            assert key in info, f"structure.{dir_name} missing '{key}'"
+        assert isinstance(info["imports"], list)
+        assert isinstance(info["imported_by"], list)
+
+    # Hotspot invariants
+    assert len(result["hotspots"]) <= hotspots
+    for h in result["hotspots"]:
+        assert "file" in h
+        assert "imported_by" in h
+        assert "imported_by_transitive" in h
+        assert h["imported_by_transitive"] >= 2
+        assert isinstance(h["imported_by_transitive"], int)
+
+    # Summary
+    assert "total_files" in result["summary"]
+    assert "total_dirs" in result["summary"]

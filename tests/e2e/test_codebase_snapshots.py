@@ -224,3 +224,11 @@ def test_snapshot_impact_analyze_overview(lsp_server: str) -> None:
 def test_snapshot_impact_entry_point(lsp_server: str) -> None:
     result = _run(lsp_server, "impact", F_CALLCHAIN, "--symbol", "entry_point")
     _assert_snapshot("impact__entry_point", result)
+
+
+# ── architecture ────────────────────────────────────────────────────────────────
+
+
+def test_snapshot_architecture(lsp_server: str) -> None:
+    result = _run(lsp_server, "architecture", "--hotspots", "5")
+    _assert_snapshot("architecture__hotspots5", result)
