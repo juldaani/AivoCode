@@ -95,6 +95,7 @@ def _handle_search(args: argparse.Namespace) -> None:
         "query": args.query,
         "kind": args.kind,
         "limit": args.limit,
+        "path": args.path,
         "workspace": _resolve_workspace(getattr(args, "workspace", None)),
     }
     result = asyncio.run(_post("/codebase/search", body))
@@ -262,8 +263,10 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     sp.add_argument("query", type=str, help="Search query string.")
     sp.add_argument("--kind", type=str, default=None,
                     help="Filter by symbol kind (e.g. 'Class', 'Function').")
-    sp.add_argument("--limit", type=int, default=50,
-                    help="Max results (default 50).")
+    sp.add_argument("--limit", type=int, default=40,
+                    help="Max results (default 40).")
+    sp.add_argument("--path", type=str, default=None,
+                     help="Only show results whose file path contains this substring.")
     sp.add_argument("--workspace", type=str)
     sp.set_defaults(func=_handle_search)
 

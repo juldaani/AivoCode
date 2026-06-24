@@ -197,22 +197,6 @@
       ]
     },
     {
-      "tmp/": [
-        {
-          "probe/": [
-            "test_lsp_methods.py"
-          ]
-        },
-        {
-          "smoke/": [
-            "smoke_impact.py",
-            "smoke_phase1.py",
-            "smoke_phase2.py"
-          ]
-        }
-      ]
-    },
-    {
       "web_ops/": [
         "__init__.py",
         "fetcher.py",

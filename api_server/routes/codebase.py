@@ -68,7 +68,8 @@ class OverviewBody(BaseModel):
 class SearchBody(BaseModel):
     query: str
     kind: str | None = None
-    limit: int = 50
+    limit: int = 40
+    path: str | None = None
     workspace: str | None = None
 
 
@@ -184,6 +185,7 @@ async def search(body: SearchBody):
         body.query,
         kind=body.kind,
         limit=body.limit,
+        path_filter=body.path,
         workspace=Path(body.workspace) if body.workspace else None,
     )
 

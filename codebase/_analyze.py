@@ -537,8 +537,9 @@ async def _explain(
 async def _search(
     query: str,
     kind: str | None = None,
-    limit: int = 50,
+    limit: int = 40,
     workspace: Path | None = None,
+    path_filter: str | None = None,
 ) -> dict:
     from lsp import query_workspace_symbol, detect_workspace
 
@@ -547,12 +548,15 @@ async def _search(
     result = await query_workspace_symbol(query, workspace=ws)
 
     if "error" in result or result.get("symbols") is None:
-        return {"query": query, "results": [], "count": 0}
+        return {
+            "query": query, "results": [], "count": 0,
+            "_server": result.get("server", ""), "_language": result.get("language", ""),
+        }
 
     results: list[dict] = []
+    total_matched: int = 0  # all that matched kind + path (before limit)
     for sym in result["symbols"]:
         sym_kind = sym.get("kind", "")
-        # Apply kind filter if specified.
         if kind is not None and sym_kind.lower() != kind.lower():
             continue
         loc = sym.get("location", {})
@@ -562,6 +566,9 @@ async def _search(
             rel = str(Path(file_path).relative_to(ws))
         except ValueError:
             rel = file_path
+        if path_filter is not None and path_filter not in rel:
+            continue
+        total_matched += 1
         line = _extract_line(loc.get("range", {}))
         entry: dict = {
             "symbol": sym.get("name", ""),
@@ -572,9 +579,24 @@ async def _search(
         container = sym.get("container_name")
         if container:
             entry["container"] = container
-        results.append(entry)
         if len(results) >= limit:
-            break
+            continue
+        results.append(entry)
+
+    # Build info message when capped.
+    info_msg: str | None = None
+    if total_matched > limit:
+        parts: list[str] = []
+        if kind is not None:
+            parts.append(f"kind={kind}")
+        if path_filter is not None:
+            parts.append(f"path='{path_filter}'")
+        filter_str = (", ".join(parts) + ", ") if parts else ""
+        info_msg = (
+            f"{len(results)} of {total_matched} results shown "
+            f"({filter_str}capped at limit {limit}) — "
+            f"increase --limit or narrow with --path / --kind to see more"
+        )
 
     return {
         "query": query,
@@ -582,6 +604,7 @@ async def _search(
         "count": len(results),
         "_server": result.get("server", ""),
         "_language": result.get("language", ""),
+        "_info_msg": info_msg,
     }
 
 

@@ -317,19 +317,37 @@ async def search_symbols(
     query: str,
     *,
     kind: str | None = None,
-    limit: int = 50,
+    limit: int = 40,
     workspace: Path | None = None,
+    path_filter: str | None = None,
     command: str = "search",
 ) -> dict:
-    """Search the workspace for symbols matching *query*."""
+    """Search the workspace for symbols matching *query*.
+
+    Parameters
+    ----------
+    limit : int
+        Max results to return (default 40).  When results are capped,
+        ``meta.info`` carries a human-readable message.
+    path_filter : str or None
+        Only return results whose relative file path contains this
+        substring (e.g. ``"codebase/"``, ``"_resolve.py"``).
+    """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
-    result = await _search(query, kind=kind, limit=limit, workspace=workspace)
+    result = await _search(
+        query, kind=kind, limit=limit, workspace=workspace, path_filter=path_filter,
+    )
     search_server = result.pop("_server", "")
     search_language = result.pop("_language", "")
+    search_info = result.pop("_info_msg", None)
     result["query"] = _make_query(command, arg=query, kind=kind, limit=limit)
-    result["meta"] = _make_meta(ws_rel, lsp=search_server, language=search_language)
+    if path_filter:
+        result["query"]["path"] = path_filter
+    result["meta"] = _make_meta(
+        ws_rel, lsp=search_server, language=search_language, info=search_info,
+    )
     return result
 
 
