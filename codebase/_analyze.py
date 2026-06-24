@@ -115,6 +115,49 @@ def _group_sites(sites: list[dict]) -> list[dict]:
     return [groups[f] for f in order]
 
 
+def _maybe_compact(
+    groups: list[dict],
+    *,
+    max_sites: int = 100,
+    per_file_n: int = 10,
+) -> tuple[list[dict], int, str | None]:
+    """Apply Rule E compaction when total sites exceed *max_sites*.
+
+    Each group keeps the first *per_file_n* entries with snippets in
+    ``sites`` and the remainder as bare line numbers in ``lines``.
+    Groups with ≤ *per_file_n* entries are left untouched.
+
+    Returns ``(groups, total, info_msg)`` — *info_msg* is ``None`` when
+    no compaction was necessary.
+    """
+    total_sites = sum(g["count"] for g in groups)
+    if total_sites <= max_sites:
+        return groups, total_sites, None
+
+    file_count = len(groups)
+    sites_snippets = 0
+    lines_count = 0
+
+    for g in groups:
+        g_sites = g.get("sites", [])
+        if len(g_sites) > per_file_n:
+            sites_snippets += per_file_n
+            g["lines"] = [s["line"] for s in g_sites[per_file_n:]]
+            g["sites"] = g_sites[:per_file_n]
+            lines_count += len(g["lines"])
+        else:
+            sites_snippets += len(g_sites)
+
+    info_msg = (
+        f"{total_sites} sites across {file_count} files "
+        f"({sites_snippets} with snippets, {lines_count} as line numbers).  "
+        f"per file: first {per_file_n} sites shown with snippets, "
+        f"remaining positions given as line numbers (use 'read' on any line "
+        f"for full context)."
+    )
+    return groups, total_sites, info_msg
+
+
 # ── Call hierarchy ─────────────────────────────────────────────────────────────
 
 

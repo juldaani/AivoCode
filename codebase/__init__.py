@@ -45,6 +45,7 @@ from codebase._analyze import (
     _hover,
     _impact,
     _incoming_calls,
+    _maybe_compact,
     _outgoing_calls,
     _overview,
     _references,
@@ -185,16 +186,20 @@ async def incoming_calls(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    groups = await _incoming_calls(sym, file_path, workspace)
+    compacted, _total, info_msg = _maybe_compact(groups)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "incoming_calls": await _incoming_calls(sym, file_path, workspace),
+        "incoming_calls": compacted,
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
-    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
+    result["meta"] = _make_meta(
+        ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
+    )
     return result
 
 
@@ -218,18 +223,22 @@ async def outgoing_calls(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    groups = await _outgoing_calls(
+        sym, file_path, workspace, workspace_only=workspace_only,
+    )
+    compacted, _total, info_msg = _maybe_compact(groups)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "outgoing_calls": await _outgoing_calls(
-            sym, file_path, workspace, workspace_only=workspace_only,
-        ),
+        "outgoing_calls": compacted,
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
-    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
+    result["meta"] = _make_meta(
+        ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
+    )
     return result
 
 
@@ -249,16 +258,20 @@ async def find_references(
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    groups = await _references(sym, file_path, workspace)
+    compacted, _total, info_msg = _maybe_compact(groups)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "references": await _references(sym, file_path, workspace),
+        "references": compacted,
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
-    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
+    result["meta"] = _make_meta(
+        ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
+    )
     return result
 
 
@@ -305,11 +318,22 @@ async def explain_symbol(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = await _explain(sym, file_path, workspace)
+    # Apply compaction to sub-lists; merge info messages.
+    infos: list[str] = []
+    result["incoming_calls"], _, ic_info = _maybe_compact(result["incoming_calls"])
+    result["outgoing_calls"], _, oc_info = _maybe_compact(result["outgoing_calls"])
+    result["references"], _, ref_info = _maybe_compact(result["references"])
+    for msg in (ic_info, oc_info, ref_info):
+        if msg:
+            infos.append(msg)
+    explain_info = "; ".join(infos) if infos else None
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
-    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
+    result["meta"] = _make_meta(
+        ws_rel, lsp=sym.lsp_server, language=sym.language, info=explain_info,
+    )
     return result
 
 
@@ -372,11 +396,23 @@ async def analyze_impact(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = await _impact(sym, file_path, workspace, depth=depth)
+    # Apply compaction to symbol_level sub-lists.
+    sl = result["symbol_level"]
+    infos: list[str] = []
+    sl["incoming_calls"], _, ic_info = _maybe_compact(sl["incoming_calls"])
+    sl["outgoing_calls"], _, oc_info = _maybe_compact(sl["outgoing_calls"])
+    sl["references"], _, ref_info = _maybe_compact(sl["references"])
+    for msg in (ic_info, oc_info, ref_info):
+        if msg:
+            infos.append(msg)
+    impact_info = "; ".join(infos) if infos else None
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line, depth=depth,
     )
-    result["meta"] = _make_meta(ws_rel, lsp=sym.lsp_server, language=sym.language)
+    result["meta"] = _make_meta(
+        ws_rel, lsp=sym.lsp_server, language=sym.language, info=impact_info,
+    )
     return result
 
 
