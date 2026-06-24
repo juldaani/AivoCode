@@ -57,7 +57,15 @@ def _handle_read(args: argparse.Namespace) -> None:
 
 
 def _handle_incoming(args: argparse.Namespace) -> None:
-    _symbol_handler(args, "/codebase/incoming-calls")
+    body: dict = {
+        "file": args.file,
+        "symbol_name": args.symbol,
+        "line": getattr(args, "line", None),
+        "max": args.max,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/incoming-calls", body))
+    _print_json(result, pretty=args.pretty_format)
 
 
 def _handle_outgoing(args: argparse.Namespace) -> None:
@@ -65,6 +73,7 @@ def _handle_outgoing(args: argparse.Namespace) -> None:
         "file": args.file,
         "symbol_name": args.symbol,
         "line": getattr(args, "line", None),
+        "max": args.max,
         "workspace": _resolve_workspace(getattr(args, "workspace", None)),
         "workspace_only": args.workspace_only,
     }
@@ -73,7 +82,15 @@ def _handle_outgoing(args: argparse.Namespace) -> None:
 
 
 def _handle_references(args: argparse.Namespace) -> None:
-    _symbol_handler(args, "/codebase/references")
+    body: dict = {
+        "file": args.file,
+        "symbol_name": args.symbol,
+        "line": getattr(args, "line", None),
+        "max": args.max,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/references", body))
+    _print_json(result, pretty=args.pretty_format)
 
 
 def _handle_overview(args: argparse.Namespace) -> None:
@@ -204,12 +221,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     icp = cb_sub.add_parser("incoming-calls", parents=[_GLOBAL_OPTIONS],
                              help="Who calls this symbol?")
     _add_symbol_args(icp)
+    icp.add_argument("--max", type=int, default=100,
+                      help="Max total sites before compaction (default 100).")
     icp.set_defaults(func=_handle_incoming)
 
     # ── outgoing-calls ─────────────────────────────────────────────────
     ocp = cb_sub.add_parser("outgoing-calls", parents=[_GLOBAL_OPTIONS],
                              help="What does this symbol call?")
     _add_symbol_args(ocp)
+    ocp.add_argument("--max", type=int, default=100,
+                      help="Max total sites before compaction (default 100).")
     ocp.add_argument("--include-external", action="store_false", dest="workspace_only",
                       help="Include external (stdlib/site-packages) calls in output.")
     ocp.set_defaults(func=_handle_outgoing, workspace_only=True)
@@ -218,6 +239,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     refp = cb_sub.add_parser("references", parents=[_GLOBAL_OPTIONS],
                               help="Where is this symbol used?")
     _add_symbol_args(refp)
+    refp.add_argument("--max", type=int, default=100,
+                      help="Max total sites before compaction (default 100).")
     refp.set_defaults(func=_handle_references)
 
     # ── definition ──────────────────────────────────────────────────────

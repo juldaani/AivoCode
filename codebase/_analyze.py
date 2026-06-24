@@ -125,10 +125,12 @@ def _maybe_compact(
 
     Each group keeps the first *per_file_n* entries with snippets in
     ``sites`` and the remainder as bare line numbers in ``lines``.
-    Groups with ≤ *per_file_n* entries are left untouched.
+    Groups with ``count <= per_file_n`` are left untouched (all in
+    ``sites``, no ``lines`` key).
 
     Returns ``(groups, total, info_msg)`` — *info_msg* is ``None`` when
-    no compaction was necessary.
+    no compaction was necessary **or** when the total exceeded the cap
+    but no per-file group actually triggered (all within *per_file_n*).
     """
     total_sites = sum(g["count"] for g in groups)
     if total_sites <= max_sites:
@@ -147,6 +149,10 @@ def _maybe_compact(
             lines_count += len(g["lines"])
         else:
             sites_snippets += len(g_sites)
+
+    # Only report compaction when at least one group generated line numbers.
+    if lines_count == 0:
+        return groups, total_sites, None
 
     info_msg = (
         f"{total_sites} sites across {file_count} files "

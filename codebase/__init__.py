@@ -175,6 +175,7 @@ async def incoming_calls(
     symbol_name: str,
     *,
     line: int | None = None,
+    max_sites: int = 100,
     workspace: Path | None = None,
     command: str = "incoming-calls",
 ) -> dict:
@@ -187,7 +188,7 @@ async def incoming_calls(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     groups = await _incoming_calls(sym, file_path, workspace)
-    compacted, _total, info_msg = _maybe_compact(groups)
+    compacted, _total, info_msg = _maybe_compact(groups, max_sites=max_sites)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
@@ -197,6 +198,8 @@ async def incoming_calls(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    if max_sites != 100:
+        result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
     )
@@ -208,6 +211,7 @@ async def outgoing_calls(
     symbol_name: str,
     *,
     line: int | None = None,
+    max_sites: int = 100,
     workspace: Path | None = None,
     workspace_only: bool = True,
     command: str = "outgoing-calls",
@@ -226,7 +230,7 @@ async def outgoing_calls(
     groups = await _outgoing_calls(
         sym, file_path, workspace, workspace_only=workspace_only,
     )
-    compacted, _total, info_msg = _maybe_compact(groups)
+    compacted, _total, info_msg = _maybe_compact(groups, max_sites=max_sites)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
@@ -247,6 +251,7 @@ async def find_references(
     symbol_name: str,
     *,
     line: int | None = None,
+    max_sites: int = 100,
     workspace: Path | None = None,
     command: str = "references",
 ) -> dict:
@@ -259,7 +264,7 @@ async def find_references(
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     groups = await _references(sym, file_path, workspace)
-    compacted, _total, info_msg = _maybe_compact(groups)
+    compacted, _total, info_msg = _maybe_compact(groups, max_sites=max_sites)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
@@ -269,6 +274,8 @@ async def find_references(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    if max_sites != 100:
+        result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
     )

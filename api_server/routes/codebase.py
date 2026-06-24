@@ -50,6 +50,7 @@ class SymbolBody(BaseModel):
     symbol_name: str
     line: int | None = None
     depth: int | None = None
+    max: int | None = None
     workspace: str | None = None
 
 
@@ -127,6 +128,7 @@ async def incoming(body: SymbolBody):
         return await incoming_calls(
             body.file, body.symbol_name,
             line=body.line,
+            max_sites=body.max if body.max is not None else 100,
             workspace=Path(body.workspace) if body.workspace else None,
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
@@ -139,6 +141,7 @@ async def outgoing(body: OutgoingBody):
         return await outgoing_calls(
             body.file, body.symbol_name,
             line=body.line,
+            max_sites=body.max if body.max is not None else 100,
             workspace=Path(body.workspace) if body.workspace else None,
             workspace_only=body.workspace_only,
         )
@@ -152,6 +155,7 @@ async def references(body: SymbolBody):
         return await find_references(
             body.file, body.symbol_name,
             line=body.line,
+            max_sites=body.max if body.max is not None else 100,
             workspace=Path(body.workspace) if body.workspace else None,
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
