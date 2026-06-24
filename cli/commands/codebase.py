@@ -104,7 +104,15 @@ def _handle_overview(args: argparse.Namespace) -> None:
 
 
 def _handle_explain(args: argparse.Namespace) -> None:
-    _symbol_handler(args, "/codebase/explain")
+    body: dict = {
+        "file": args.file,
+        "symbol_name": args.symbol,
+        "line": getattr(args, "line", None),
+        "max": args.max,
+        "workspace": _resolve_workspace(getattr(args, "workspace", None)),
+    }
+    result = asyncio.run(_post("/codebase/explain", body))
+    _print_json(result, pretty=args.pretty_format)
 
 
 def _handle_search(args: argparse.Namespace) -> None:
@@ -125,6 +133,7 @@ def _handle_impact(args: argparse.Namespace) -> None:
         "symbol_name": args.symbol,
         "line": getattr(args, "line", None),
         "depth": args.depth,
+        "max": args.max,
         "workspace": _resolve_workspace(getattr(args, "workspace", None)),
     }
     result = asyncio.run(_post("/codebase/impact", body))
@@ -221,16 +230,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     icp = cb_sub.add_parser("incoming-calls", parents=[_GLOBAL_OPTIONS],
                              help="Who calls this symbol?")
     _add_symbol_args(icp)
-    icp.add_argument("--max", type=int, default=100,
-                      help="Max total sites before compaction (default 100).")
+    icp.add_argument("--max", type=int, default=50,
+                      help="Max total sites before compaction (default 50).")
     icp.set_defaults(func=_handle_incoming)
 
     # ── outgoing-calls ─────────────────────────────────────────────────
     ocp = cb_sub.add_parser("outgoing-calls", parents=[_GLOBAL_OPTIONS],
                              help="What does this symbol call?")
     _add_symbol_args(ocp)
-    ocp.add_argument("--max", type=int, default=100,
-                      help="Max total sites before compaction (default 100).")
+    ocp.add_argument("--max", type=int, default=50,
+                      help="Max total sites before compaction (default 50).")
     ocp.add_argument("--include-external", action="store_false", dest="workspace_only",
                       help="Include external (stdlib/site-packages) calls in output.")
     ocp.set_defaults(func=_handle_outgoing, workspace_only=True)
@@ -239,8 +248,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     refp = cb_sub.add_parser("references", parents=[_GLOBAL_OPTIONS],
                               help="Where is this symbol used?")
     _add_symbol_args(refp)
-    refp.add_argument("--max", type=int, default=100,
-                      help="Max total sites before compaction (default 100).")
+    refp.add_argument("--max", type=int, default=50,
+                      help="Max total sites before compaction (default 50).")
     refp.set_defaults(func=_handle_references)
 
     # ── definition ──────────────────────────────────────────────────────
@@ -278,6 +287,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     exp = cb_sub.add_parser("explain", parents=[_GLOBAL_OPTIONS],
                              help="Full symbol report.")
     _add_symbol_args(exp)
+    exp.add_argument("--max", type=int, default=100,
+                      help="Total site budget across all sub-lists (divided evenly, default 100).")
     exp.set_defaults(func=_handle_explain)
 
     # ── search ──────────────────────────────────────────────────────────
@@ -299,6 +310,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     _add_symbol_args(imp)
     imp.add_argument("--depth", "-d", type=int, default=10,
                       help="How many import hops for file-level blast radius (default 10).")
+    imp.add_argument("--max", type=int, default=100,
+                      help="Total site budget across sub-lists (divided evenly, default 100).")
     imp.set_defaults(func=_handle_impact)
 
     # ── import-dependents ───────────────────────────────────────────────

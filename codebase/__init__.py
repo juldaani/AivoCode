@@ -175,7 +175,7 @@ async def incoming_calls(
     symbol_name: str,
     *,
     line: int | None = None,
-    max_sites: int = 100,
+    max_sites: int = 50,
     workspace: Path | None = None,
     command: str = "incoming-calls",
 ) -> dict:
@@ -198,7 +198,7 @@ async def incoming_calls(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
-    if max_sites != 100:
+    if max_sites != 50:
         result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
@@ -211,7 +211,7 @@ async def outgoing_calls(
     symbol_name: str,
     *,
     line: int | None = None,
-    max_sites: int = 100,
+    max_sites: int = 50,
     workspace: Path | None = None,
     workspace_only: bool = True,
     command: str = "outgoing-calls",
@@ -240,6 +240,8 @@ async def outgoing_calls(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    if max_sites != 50:
+        result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
     )
@@ -251,7 +253,7 @@ async def find_references(
     symbol_name: str,
     *,
     line: int | None = None,
-    max_sites: int = 100,
+    max_sites: int = 50,
     workspace: Path | None = None,
     command: str = "references",
 ) -> dict:
@@ -274,7 +276,7 @@ async def find_references(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
-    if max_sites != 100:
+    if max_sites != 50:
         result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=info_msg,
@@ -312,6 +314,7 @@ async def explain_symbol(
     symbol_name: str,
     *,
     line: int | None = None,
+    max_sites: int = 100,
     workspace: Path | None = None,
     command: str = "explain",
 ) -> dict:
@@ -319,17 +322,33 @@ async def explain_symbol(
 
     Body text is truncated at 6000 characters (with a truncation note)
     to keep responses agent-friendly.  Call and reference entries include
-    a ``locality`` field."""
+    a ``locality`` field.
+
+    *max_sites* controls the **total** site budget across all three
+    sub-lists (incoming calls, outgoing calls, references).  It is divided
+    evenly: each sub-list gets ``max_sites // 3``.  Default 100 means
+    ~33 sites per sub-list before compaction kicks in.
+    """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = await _explain(sym, file_path, workspace)
+
+    # Each sub-list gets an even share of the total site budget.
+    per_list = max_sites // 3
+
     # Apply compaction to sub-lists; merge info messages.
     infos: list[str] = []
-    result["incoming_calls"], _, ic_info = _maybe_compact(result["incoming_calls"])
-    result["outgoing_calls"], _, oc_info = _maybe_compact(result["outgoing_calls"])
-    result["references"], _, ref_info = _maybe_compact(result["references"])
+    result["incoming_calls"], _, ic_info = _maybe_compact(
+        result["incoming_calls"], max_sites=per_list,
+    )
+    result["outgoing_calls"], _, oc_info = _maybe_compact(
+        result["outgoing_calls"], max_sites=per_list,
+    )
+    result["references"], _, ref_info = _maybe_compact(
+        result["references"], max_sites=per_list,
+    )
     for msg in (ic_info, oc_info, ref_info):
         if msg:
             infos.append(msg)
@@ -338,6 +357,8 @@ async def explain_symbol(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line,
     )
+    if max_sites != 100:
+        result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=explain_info,
     )
@@ -388,6 +409,7 @@ async def analyze_impact(
     *,
     line: int | None = None,
     depth: int = 10,
+    max_sites: int = 100,
     workspace: Path | None = None,
     command: str = "impact",
 ) -> dict:
@@ -397,18 +419,33 @@ async def analyze_impact(
     ----------
     depth : int
         How many import hops for the file-level ``dependents`` (default 10).
+    max_sites : int
+        Total site budget across the three symbol-level sub-lists
+        (incoming calls, outgoing calls, references).  Divided evenly:
+        each sub-list gets ``max_sites // 3``.  Default 100 means ~33
+        sites per sub-list before compaction.
     """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
     result = await _impact(sym, file_path, workspace, depth=depth)
+
+    # Each sub-list gets an even share of the total site budget.
+    per_list = max_sites // 3
+
     # Apply compaction to symbol_level sub-lists.
     sl = result["symbol_level"]
     infos: list[str] = []
-    sl["incoming_calls"], _, ic_info = _maybe_compact(sl["incoming_calls"])
-    sl["outgoing_calls"], _, oc_info = _maybe_compact(sl["outgoing_calls"])
-    sl["references"], _, ref_info = _maybe_compact(sl["references"])
+    sl["incoming_calls"], _, ic_info = _maybe_compact(
+        sl["incoming_calls"], max_sites=per_list,
+    )
+    sl["outgoing_calls"], _, oc_info = _maybe_compact(
+        sl["outgoing_calls"], max_sites=per_list,
+    )
+    sl["references"], _, ref_info = _maybe_compact(
+        sl["references"], max_sites=per_list,
+    )
     for msg in (ic_info, oc_info, ref_info):
         if msg:
             infos.append(msg)
@@ -417,6 +454,8 @@ async def analyze_impact(
         command, file=relativize(file_path, ws_rel),
         symbol=symbol_name, line=line, depth=depth,
     )
+    if max_sites != 100:
+        result["query"]["max"] = max_sites
     result["meta"] = _make_meta(
         ws_rel, lsp=sym.lsp_server, language=sym.language, info=impact_info,
     )
@@ -431,19 +470,24 @@ async def find_definition(
     workspace: Path | None = None,
     command: str = "definition",
 ) -> dict:
-    """Return the definition site of *symbol_name* with snippet and locality.
+    """Return the definition and type-definition sites of *symbol_name*.
 
-    If the symbol has no workspace-local definition (e.g. built-in or
-    external library), ``definition`` is ``null``.
+    ``definition`` is the first (primary) definer site with
+    ``{file, line, snippet, locality}``, or ``null`` when there is no
+    workspace-local definition.  ``type_definition`` is the type's
+    definition site (same shape), or ``null`` for primitives, built-ins,
+    or when the type is external.
     """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()
     ws_rel = detect_workspace(ws_rel)
     sym = await resolve_symbol(file_path, symbol_name, line=line, workspace=workspace)
+    def_data = await _definition(sym, file_path, workspace)
     result = {
         "symbol": sym.name,
         "kind": sym.kind,
-        "definition": await _definition(sym, file_path, workspace),
+        "definition": def_data["definers"][0] if def_data["definers"] else None,
+        "type_definition": def_data["type_definition"],
     }
     result["query"] = _make_query(
         command, file=relativize(file_path, ws_rel), symbol=symbol_name, line=line,

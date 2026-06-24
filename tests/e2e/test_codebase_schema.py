@@ -303,10 +303,20 @@ def test_explain_shape(lsp_server: str, symbol_name: str) -> None:
     result = _run(lsp_server, "explain", FILES["resolve"], "--symbol", symbol_name)
     for key in (
         "symbol", "kind", "body", "range_line_char",
-        "definers", "incoming_calls", "outgoing_calls", "references", "query", "meta",
+        "definers", "type_definition", "incoming_calls", "outgoing_calls",
+        "references", "query", "meta",
     ):
         assert key in result, f"explain missing '{key}'"
     assert len(result["body"]) > 0
+    # type_definition is either null or a dict with file/line/locality.
+    td = result["type_definition"]
+    if td is not None:
+        assert isinstance(td, dict), f"type_definition should be dict or null, got {type(td)}"
+        for td_key in ("file", "line", "snippet", "locality"):
+            assert td_key in td, f"type_definition missing '{td_key}'"
+        assert td["locality"] in _LOCALITY_VALUES, (
+            f"type_definition locality '{td['locality']}' not in {_LOCALITY_VALUES}"
+        )
 
 
 def test_explain_truncates_large_class(lsp_server: str) -> None:

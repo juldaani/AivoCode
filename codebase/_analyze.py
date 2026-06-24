@@ -119,14 +119,14 @@ def _maybe_compact(
     groups: list[dict],
     *,
     max_sites: int = 100,
-    per_file_n: int = 10,
+    per_file_n: int = 6,
 ) -> tuple[list[dict], int, str | None]:
     """Apply Rule E compaction when total sites exceed *max_sites*.
 
     Each group keeps the first *per_file_n* entries with snippets in
-    ``sites`` and the remainder as bare line numbers in ``lines``.
-    Groups with ``count <= per_file_n`` are left untouched (all in
-    ``sites``, no ``lines`` key).
+    ``sites`` and the remainder as bare line numbers in
+    ``remaining_lines``.  Groups with ``count <= per_file_n`` are left
+    untouched (all in ``sites``, no ``remaining_lines`` key).
 
     Returns ``(groups, total, info_msg)`` — *info_msg* is ``None`` when
     no compaction was necessary **or** when the total exceeded the cap
@@ -138,25 +138,25 @@ def _maybe_compact(
 
     file_count = len(groups)
     sites_snippets = 0
-    lines_count = 0
+    remaining_count = 0
 
     for g in groups:
         g_sites = g.get("sites", [])
         if len(g_sites) > per_file_n:
             sites_snippets += per_file_n
-            g["lines"] = [s["line"] for s in g_sites[per_file_n:]]
+            g["remaining_lines"] = [s["line"] for s in g_sites[per_file_n:]]
             g["sites"] = g_sites[:per_file_n]
-            lines_count += len(g["lines"])
+            remaining_count += len(g["remaining_lines"])
         else:
             sites_snippets += len(g_sites)
 
-    # Only report compaction when at least one group generated line numbers.
-    if lines_count == 0:
+    # Only report compaction when at least one group generated remaining_lines.
+    if remaining_count == 0:
         return groups, total_sites, None
 
     info_msg = (
         f"{total_sites} sites across {file_count} files "
-        f"({sites_snippets} with snippets, {lines_count} as line numbers).  "
+        f"({sites_snippets} with snippets, {remaining_count} as line numbers).  "
         f"per file: first {per_file_n} sites shown with snippets, "
         f"remaining positions given as line numbers (use 'read' on any line "
         f"for full context)."
@@ -523,13 +523,17 @@ async def _explain(
     file_path: str | Path,
     workspace: Path | None = None,
 ) -> dict:
-    """Full symbol report: body, definers, incoming/outgoing calls, references.
+    """Full symbol report: body, definers, type_definition, calls, references.
 
     Body text is truncated at 6000 characters with a truncation note
     appended when the source exceeds that threshold.  Call and reference
     entries include a ``locality`` field.
+
+    Definition sites are obtained via the shared ``_definition`` helper,
+    which bundles both ordinary definition and type-definition locations
+    in one call.
     """
-    from lsp import query_definition, detect_workspace
+    from lsp import detect_workspace
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
@@ -542,27 +546,8 @@ async def _explain(
         remaining = len(body) - max_chars
         body = f"{body[:max_chars]}\n... [truncated at {max_chars} chars, {remaining} more chars not shown]"
 
-    # Definition.
-    definers: list[dict] = []
-    try:
-        def_result = await query_definition(
-            fp, line=symbol.line, character=symbol.character, workspace=ws,
-        )
-        if "result" in def_result:
-            locs = def_result["result"]
-            if locs is None:
-                locs = []
-            elif isinstance(locs, dict):
-                locs = [locs]
-            for loc in locs:
-                uri = loc.get("uri", "")
-                def_line = _extract_line(loc.get("range", {}))
-                definers.append(_build_site(
-                    uri, def_line, ws,
-                    {"kind": symbol.kind, "name": symbol.name},
-                ))
-    except Exception:
-        pass
+    # Definition + type-definition (reuses shared _definition helper).
+    def_data = await _definition(symbol, fp, ws)
 
     incoming = await _incoming_calls(symbol, fp, ws)
     outgoing = await _outgoing_calls(symbol, fp, ws)
@@ -573,7 +558,8 @@ async def _explain(
         "kind": symbol.kind,
         "body": body,
         "range_line_char": {"start": list(symbol.range_start), "end": list(symbol.range_end)},
-        "definers": definers,
+        "definers": def_data["definers"],
+        "type_definition": def_data["type_definition"],
         "incoming_calls": incoming,
         "outgoing_calls": outgoing,
         "references": refs,
@@ -713,32 +699,86 @@ async def _definition(
     symbol: ResolvedSymbol,
     file_path: str | Path,
     workspace: Path | None = None,
-) -> dict | None:
-    """Return the definition site of *symbol* with snippet and locality.
+) -> dict:
+    """Return definition and type-definition sites for *symbol*.
 
-    Returns a single ``{file, line, snippet, locality}`` dict, or ``None``
-    if the symbol has no workspace-local definition (e.g. built-in or
-    external library).
+    Returns a dict with two keys:
+
+    - ``definers`` (``list[dict]``): all definition locations with
+      ``{file, line, snippet, locality, symbol, kind}``.  Empty list
+      when there is no workspace-local definition (e.g. built-in or
+      external library).
+    - ``type_definition`` (``dict | None``): the type's definition site
+      (same shape as a definer entry), or ``None`` when the type is
+      primitive, built-in, or external.  ``None`` is also returned when
+      the type-definition LSP request fails (treated gracefully).
+
+    This single helper is reused by both ``find_definition`` (standalone
+    tool) and ``_explain`` (composed tool).  Bundling type-definition
+    here means all composed tools that include definition info also get
+    the type site for free.
     """
-    from lsp import query_definition, detect_workspace
+    from lsp import query_definition, query_type_definition, detect_workspace
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
     fp = Path(file_path).resolve()
 
-    result = await query_definition(
+    # ── 1. Definition sites ─────────────────────────────────────────────
+    def_result = await query_definition(
         fp, line=symbol.line, character=symbol.character, workspace=ws,
     )
-    locations: list[dict] = result.get("result") or []
-    if not locations:
-        return None
+    locs_raw = def_result.get("result")
+    if locs_raw is None:
+        locs_list: list[dict] = []
+    elif isinstance(locs_raw, dict):
+        locs_list = [locs_raw]
+    else:
+        locs_list = locs_raw
 
-    loc = locations[0]
-    uri = loc.get("uri", "")
-    start = loc.get("range", {}).get("start", {})
-    line = (start.get("line", 0) or 0) + 1  # LSP 0-indexed → 1-indexed
+    definers: list[dict] = []
+    for loc in locs_list:
+        uri = loc.get("uri", "")
+        start = loc.get("range", {}).get("start", {})
+        line = (start.get("line", 0) or 0) + 1  # LSP 0-indexed → 1-indexed
+        definers.append(_build_site(
+            uri, line, ws,
+            symbol_info={"kind": symbol.kind, "name": symbol.name},
+            source_file=fp,
+        ))
 
-    return _build_site(uri, line, ws, source_file=fp)
+    # ── 2. Type-definition site ─────────────────────────────────────────
+    type_site: dict | None = None
+    try:
+        td_result = await query_type_definition(
+            fp, line=symbol.line, character=symbol.character, workspace=ws,
+        )
+        td_raw = td_result.get("result")
+        if td_raw is None:
+            td_list: list[dict] = []
+        elif isinstance(td_raw, dict):
+            td_list = [td_raw]
+        else:
+            td_list = td_raw
+
+        # A type-definition may return the same location as the definition
+        # itself (e.g. a class — its own type IS itself).  We still return
+        # it; the agent can detect identity and ignore.
+        for td_loc in td_list:
+            td_uri = td_loc.get("uri", "")
+            td_start = td_loc.get("range", {}).get("start", {})
+            td_line = (td_start.get("line", 0) or 0) + 1
+            type_site = _build_site(
+                td_uri, td_line, ws,
+                source_file=fp,
+            )
+            break  # Take only the first type-definition location.
+    except Exception:
+        # type_definition is a best-effort addition; never let it
+        # break the whole call.  Silently return None for the type site.
+        pass
+
+    return {"definers": definers, "type_definition": type_site}
 
 
 # ── Hover ───────────────────────────────────────────────────────────────────────

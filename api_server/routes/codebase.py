@@ -177,6 +177,7 @@ async def explain(body: SymbolBody):
         return await explain_symbol(
             body.file, body.symbol_name,
             line=body.line,
+            max_sites=body.max if body.max is not None else 100,
             workspace=Path(body.workspace) if body.workspace else None,
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:
@@ -201,6 +202,7 @@ async def impact(body: SymbolBody):
             body.file, body.symbol_name,
             line=body.line,
             depth=body.depth if body.depth is not None else 10,
+            max_sites=body.max if body.max is not None else 100,
             workspace=Path(body.workspace) if body.workspace else None,
         )
     except (AmbiguousSymbolError, SymbolNotFoundError) as exc:

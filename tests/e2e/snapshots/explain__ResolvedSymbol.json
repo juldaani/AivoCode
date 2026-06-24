@@ -15,12 +15,19 @@
   "definers": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
-      "line": 50,
-      "snippet": "class ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.",
+      "line": 51,
+      "snippet": "    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"",
       "symbol": "ResolvedSymbol",
-      "kind": "Class"
+      "kind": "Class",
+      "locality": "same_file"
     }
   ],
+  "type_definition": {
+    "file": "tests/data/mock_repos/python/mock_pkg/fixtures_classes.py",
+    "line": 51,
+    "snippet": "    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"",
+    "locality": "same_file"
+  },
   "incoming_calls": [
     {
       "file": "tests/data/mock_repos/python/mock_pkg/fixtures_functions.py",
