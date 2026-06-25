@@ -2,6 +2,7 @@
   "symbol": "LoudGreeter",
   "kind": "Class",
   "body": "class LoudGreeter(GreeterBase):\n    \"\"\"Loud greeter — overrides greet, adds factory methods.\"\"\"\n\n    def greet(self, name: str) -> str:\n        \"\"\"Override: shout the greeting.\"\"\"\n        return super().greet(name).upper()\n\n    @staticmethod\n    def make_default() -> \"LoudGreeter\":\n        \"\"\"Static factory — creates a default instance.\"\"\"\n        return LoudGreeter()\n\n    @classmethod\n    def make_named(cls, prefix: str) -> \"LoudGreeter\":\n        \"\"\"Classmethod factory — creates with a config prefix.\"\"\"\n        instance = cls()\n        instance._prefix = prefix\n        return instance\n\n    def shout(self, text: str) -> str:\n        \"\"\"Extra method for call hierarchy depth.\"\"\"\n        return text.upper() + \"!!!\"",
+  "truncated": false,
   "range_line_char": {
     "start": [
       1,

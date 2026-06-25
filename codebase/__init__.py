@@ -149,13 +149,19 @@ async def read_symbol(
     workspace: Path | None = None,
     command: str = "read-symbol",
 ) -> dict:
-    """Read the full body text of *symbol_name* in *file_path*.
+    """Read the body text of *symbol_name* in *file_path*.
 
-    Returns a dict with ``symbol``, ``kind``, ``body``, ``range_line_char``,
-    ``file``, ``imports``, and ``query``.  The ``imports`` list contains all
-    import statements in the file, including lazy imports inside function
-    bodies.  Each entry has ``{line, statement, lazy}`` — ``lazy`` is
-    ``True`` for imports nested inside a ``def``/``class`` body.
+    Returns a dict with ``symbol``, ``kind``, ``body``, ``truncated``,
+    ``range_line_char``, ``file``, ``imports``, and ``query``.
+
+    Bodies longer than 10 000 characters are truncated to keep agent
+    context manageable.  When this happens, a notice is appended to the
+    body text and the ``truncated`` key is ``True``.
+
+    The ``imports`` list contains all import statements in the file,
+    including lazy imports inside function bodies.  Each entry has
+    ``{line, statement, lazy}`` — ``lazy`` is ``True`` for imports
+    nested inside a ``def``/``class`` body.
     """
     from lsp import detect_workspace
     ws_rel = workspace or Path.cwd()

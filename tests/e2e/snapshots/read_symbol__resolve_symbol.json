@@ -2,6 +2,7 @@
   "symbol": "resolve_symbol",
   "kind": "Function",
   "body": "async def resolve_symbol(\n    file_path: str,\n    symbol_name: str,\n    *,\n    line: int | None = None,\n    workspace: Path | None = None,\n) -> ResolvedSymbol:\n    \"\"\"Async function with lazy imports inside.\n\n    The ``from lsp import query_document_symbols`` import is inside the\n    function body — tests that lazy imports appear as outgoing calls.\n    \"\"\"\n    from pathlib import Path as PathAlias  # lazy import — tests alias\n\n    ws = workspace or PathAlias.cwd()\n    # Simulated: in production this calls query_document_symbols.\n    return ResolvedSymbol(\n        name=symbol_name,\n        kind=\"Class\",\n        line=line or 1,\n    )",
+  "truncated": false,
   "range_line_char": {
     "start": [
       1,

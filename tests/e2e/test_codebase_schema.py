@@ -204,9 +204,11 @@ def test_overview_symbol_has_signature_and_preview(lsp_server: str, file_key: st
 @pytest.mark.parametrize("symbol_name", ["resolve_symbol", "ResolvedSymbol"])
 def test_read_has_imports_and_body(lsp_server: str, symbol_name: str) -> None:
     result = _run(lsp_server, "read-symbol", FILES["resolve"], "--symbol", symbol_name)
-    for key in ("symbol", "kind", "body", "range_line_char", "imports", "query", "meta"):
+    for key in ("symbol", "kind", "body", "truncated", "range_line_char",
+                "imports", "query", "meta"):
         assert key in result, f"read missing '{key}'"
     assert len(result["body"]) > 0, f"body is empty for {symbol_name}"
+    assert isinstance(result["truncated"], bool)
     imports = result["imports"]
     assert isinstance(imports, dict), "imports must be grouped dict"
     total = len(imports.get("module", [])) + len(imports.get("lazy", []))

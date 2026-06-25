@@ -2,6 +2,7 @@
   "symbol": "ResolvedSymbol",
   "kind": "Class",
   "body": "@dataclass(frozen=True, slots=True)\nclass ResolvedSymbol:\n    \"\"\"A resolved symbol with file position.\n\n    Fields are Variable kind — filtered from overview, so children: null.\n    \"\"\"\n\n    name: str\n    kind: str\n    line: int\n    character: int = 1\n    range_start: tuple[int, int] = field(default=(1, 1))\n    range_end: tuple[int, int] = field(default=(1, 1))",
+  "truncated": false,
   "range_line_char": {
     "start": [
       1,
