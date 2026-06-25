@@ -72,7 +72,7 @@
     "symbol": "ResolvedSymbol"
   },
   "meta": {
-    "root": "/workspaces/lsp-functionalities",
+    "root": "/workspaces/aivocode",
     "lsp": "basedpyright-langserver",
     "language": "python"
   }

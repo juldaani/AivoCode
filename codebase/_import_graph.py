@@ -24,7 +24,7 @@ How to use
 
 from __future__ import annotations
 
-import os
+import subprocess
 import time
 from collections import deque
 from pathlib import Path
@@ -267,20 +267,29 @@ class ImportGraph:
             return None
 
     def _walk_source_files(self):
-        """Yield absolute paths of all source files in the workspace."""
-        for root, dirs, files in os.walk(self._workspace):
-            # Skip hidden directories and common noise.
-            dirs[:] = [
-                d for d in dirs
-                if not d.startswith(".")
-                and d not in ("__pycache__", "node_modules", ".venv", "venv",
-                              ".git", ".tox", ".eggs", ".mypy_cache",
-                              ".pytest_cache", ".ruff_cache", "dist", "build",
-                              "*.egg-info")
-            ]
-            for name in files:
-                abs_path = Path(root) / name
-                handler = get_handler(abs_path)
-                if handler is None:
-                    continue
-                yield abs_path
+        """Yield absolute paths of all git-tracked source files in the workspace.
+
+        Uses ``git ls-files`` which respects ``.gitignore`` and is
+        language-agnostic (no hardcoded directory blocklist).  Only
+        files with a registered language handler (suffix match) are
+        yielded.
+        """
+        try:
+            proc = subprocess.run(
+                ["git", "-C", str(self._workspace), "ls-files"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return  # git unavailable — yield nothing
+
+        for line in proc.stdout.splitlines():
+            rel_path = line.strip()
+            if not rel_path:
+                continue
+            abs_path = self._workspace / rel_path
+            handler = get_handler(abs_path)
+            if handler is None:
+                continue
+            yield abs_path

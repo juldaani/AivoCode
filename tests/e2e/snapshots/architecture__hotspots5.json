@@ -1,7 +1,19 @@
 {
   "structure": {
     "api_server": {
-      "files": 6,
+      "files": 2,
+      "folders": {
+        "routes": {
+          "files": 4,
+          "folders": {},
+          "imports": [
+            "codebase",
+            "lsp",
+            "web_ops"
+          ],
+          "imported_by": []
+        }
+      },
       "imports": [
         "codebase",
         "lsp",
@@ -10,12 +22,34 @@
       "imported_by": []
     },
     "cli": {
-      "files": 9,
+      "files": 4,
+      "folders": {
+        "commands": {
+          "files": 5,
+          "folders": {},
+          "imports": [],
+          "imported_by": []
+        }
+      },
       "imports": [],
       "imported_by": []
     },
     "codebase": {
-      "files": 12,
+      "files": 9,
+      "folders": {
+        "_lang_handlers": {
+          "files": 3,
+          "folders": {},
+          "imports": [
+            "lsp"
+          ],
+          "imported_by": [
+            "api_server",
+            "lsp",
+            "tests"
+          ]
+        }
+      },
       "imports": [
         "lsp"
       ],
@@ -27,6 +61,7 @@
     },
     "file_watcher": {
       "files": 6,
+      "folders": {},
       "imports": [],
       "imported_by": [
         "lsp",
@@ -35,6 +70,7 @@
     },
     "lsp": {
       "files": 9,
+      "folders": {},
       "imports": [
         "codebase",
         "file_watcher"
@@ -46,7 +82,117 @@
       ]
     },
     "tests": {
-      "files": 60,
+      "files": 2,
+      "folders": {
+        "data/mock_repos/python": {
+          "files": 0,
+          "folders": {
+            "mock_pkg": {
+              "files": 15,
+              "folders": {
+                "subpkg": {
+                  "files": 2,
+                  "folders": {},
+                  "imports": [],
+                  "imported_by": []
+                }
+              },
+              "imports": [],
+              "imported_by": []
+            },
+            "tests": {
+              "files": 2,
+              "folders": {},
+              "imports": [],
+              "imported_by": []
+            }
+          },
+          "imports": [],
+          "imported_by": []
+        },
+        "e2e": {
+          "files": 9,
+          "folders": {},
+          "imports": [
+            "codebase",
+            "file_watcher",
+            "lsp"
+          ],
+          "imported_by": []
+        },
+        "integration": {
+          "files": 2,
+          "folders": {
+            "file_watcher": {
+              "files": 2,
+              "folders": {},
+              "imports": [
+                "file_watcher"
+              ],
+              "imported_by": []
+            },
+            "lsp": {
+              "files": 11,
+              "folders": {},
+              "imports": [
+                "lsp"
+              ],
+              "imported_by": []
+            }
+          },
+          "imports": [
+            "codebase",
+            "file_watcher",
+            "lsp"
+          ],
+          "imported_by": []
+        },
+        "unit": {
+          "files": 1,
+          "folders": {
+            "codebase": {
+              "files": 3,
+              "folders": {},
+              "imports": [
+                "codebase"
+              ],
+              "imported_by": []
+            },
+            "file_watcher": {
+              "files": 4,
+              "folders": {},
+              "imports": [
+                "file_watcher"
+              ],
+              "imported_by": []
+            },
+            "lsp": {
+              "files": 5,
+              "folders": {},
+              "imports": [
+                "file_watcher",
+                "lsp"
+              ],
+              "imported_by": []
+            },
+            "web_ops": {
+              "files": 2,
+              "folders": {},
+              "imports": [
+                "web_ops"
+              ],
+              "imported_by": []
+            }
+          },
+          "imports": [
+            "codebase",
+            "file_watcher",
+            "lsp",
+            "web_ops"
+          ],
+          "imported_by": []
+        }
+      },
       "imports": [
         "codebase",
         "file_watcher",
@@ -57,6 +203,7 @@
     },
     "web_ops": {
       "files": 4,
+      "folders": {},
       "imports": [],
       "imported_by": [
         "api_server",
@@ -106,14 +253,14 @@
   ],
   "summary": {
     "total_files": 106,
-    "total_dirs": 7
+    "total_dirs": 23
   },
-  "workspace": "/workspaces/lsp-functionalities",
+  "workspace": "/workspaces/aivocode",
   "query": {
     "command": "architecture",
     "hotspots": 5
   },
   "meta": {
-    "root": "/workspaces/lsp-functionalities"
+    "root": "/workspaces/aivocode"
   }
 }

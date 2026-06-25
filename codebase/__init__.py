@@ -571,11 +571,21 @@ async def architecture(
     workspace: Path | None = None,
     command: str = "architecture",
 ) -> dict:
-    """Repo architecture: directory-level import graph, entry points, hotspots.
+    """Repo architecture: nested directory tree, entry points, hotspots.
 
     Pure import-graph computation — zero LSP calls.  Returns a
     high-level structural view useful for onboarding an agent to a
     codebase it has never seen before.
+
+    The ``structure`` is a nested directory tree where every folder
+    entry has ``files`` (direct-file count), ``folders`` (subdirectory
+    entries, recursively), ``imports``, and ``imported_by``.  Empty
+    single-child directory chains are collapsed into composite keys
+    (e.g. ``tests/data/mock_repos/python``) to keep the tree compact.
+
+    File discovery uses ``git ls-files`` (respects ``.gitignore``) and
+    is language-agnostic — only files with a registered language
+    handler are counted.
 
     *hotspots* controls how many high-impact files are ranked (default 20).
     """

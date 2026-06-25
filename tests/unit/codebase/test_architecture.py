@@ -43,6 +43,9 @@ class TestStructure:
         assert set(s.keys()) == {"lsp", "codebase"}
         assert s["lsp"]["files"] == 2
         assert s["codebase"]["files"] == 1
+        # Every dir now has a "folders" key (empty if no subdirs).
+        assert s["lsp"]["folders"] == {}
+        assert s["codebase"]["folders"] == {}
 
     def test_dir_level_imports(self):
         """lsp/a imports codebase/c → lsp.imports includes codebase."""
@@ -73,7 +76,51 @@ class TestStructure:
             "lsp/a.py": set(),
         })
         result = _compute_architecture(g, hotspots=20)
-        assert result["structure"] == {"lsp": {"files": 1, "imports": [], "imported_by": []}}
+        assert result["structure"] == {
+            "lsp": {"files": 1, "folders": {}, "imports": [], "imported_by": []}}
+
+    def test_nested_subdirs(self):
+        """Subdirectories appear as entries in the parent's 'folders' key."""
+        g = _make_graph({
+            "lsp/a.py": set(),
+            "lsp/workers/b.py": set(),
+            "lsp/workers/http/c.py": set(),
+        })
+        result = _compute_architecture(g, hotspots=20)
+        s = result["structure"]
+        assert s["lsp"]["files"] == 1  # a.py
+        assert set(s["lsp"]["folders"].keys()) == {"workers"}
+        workers = s["lsp"]["folders"]["workers"]
+        assert workers["files"] == 1  # b.py
+        assert set(workers["folders"].keys()) == {"http"}
+
+    def test_empty_chain_merged(self):
+        """Multiple empty single-child dirs collapse into one composite key."""
+        g = _make_graph({
+            "a/x/y/z/mod.py": set(),
+        })
+        result = _compute_architecture(g, hotspots=20)
+        s = result["structure"]
+        # a/ is top-level (always visible), x/ → y/ → z/ are merged.
+        assert "x/y/z" in s["a"]["folders"]
+        assert s["a"]["folders"]["x/y/z"]["files"] == 1
+        assert s["a"]["files"] == 0
+
+    def test_empty_chain_not_merged_when_multiple_children(self):
+        """Empty dir with multiple children is NOT merged."""
+        g = _make_graph({
+            "tests/data/fixtures/a.py": set(),
+            "tests/data/fixtures/b.py": set(),
+            "tests/data/utils/c.py": set(),
+        })
+        result = _compute_architecture(g, hotspots=20)
+        s = result["structure"]
+        # tests/ → data/ (empty, 2 children: fixtures/ + utils/) → no merge
+        tdata = s["tests"]["folders"]["data"]
+        assert set(tdata["folders"].keys()) == {"fixtures", "utils"}
+        # fixtures/ has files=2, no subfolders → no merge.
+        assert tdata["folders"]["fixtures"]["files"] == 2
+        assert tdata["folders"]["fixtures"]["folders"] == {}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -223,6 +270,15 @@ class TestSummary:
         })
         result = _compute_architecture(g, hotspots=20)
         assert result["summary"]["total_files"] == 3
+        assert result["summary"]["total_dirs"] == 2  # lsp + codebase
+
+    def test_total_dirs_counts_nested(self):
+        """total_dirs includes nested subdirectories."""
+        g = _make_graph({
+            "lsp/workers/a.py": set(),
+        })
+        result = _compute_architecture(g, hotspots=20)
+        # lsp + lsp/workers = 2 dirs
         assert result["summary"]["total_dirs"] == 2
 
     def test_empty_graph(self):

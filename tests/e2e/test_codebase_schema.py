@@ -429,13 +429,22 @@ def test_architecture_shape(lsp_server: str, hotspots: int) -> None:
     for key in ("structure", "entry_points", "hotspots", "summary", "query", "meta"):
         assert key in result, f"architecture missing '{key}'"
 
-    # Structure entries
-    for dir_name, info in result["structure"].items():
-        assert isinstance(info, dict)
-        for key in ("files", "imports", "imported_by"):
+    # Recursively validate directory entries in the nested structure tree.
+    def _check_dir(dir_name: str, info: dict) -> None:
+        assert isinstance(info, dict), f"structure.{dir_name} must be a dict"
+        for key in ("files", "folders", "imports", "imported_by"):
             assert key in info, f"structure.{dir_name} missing '{key}'"
+        assert isinstance(info["files"], int), f"structure.{dir_name}.files must be int"
+        assert isinstance(info["folders"], dict), f"structure.{dir_name}.folders must be dict"
         assert isinstance(info["imports"], list)
         assert isinstance(info["imported_by"], list)
+        # Recurse into subfolders — with composite keys the dir name may
+        # include slashes (e.g. "data/mock_repos/python").
+        for sub_name, sub_info in info["folders"].items():
+            _check_dir(f"{dir_name}/{sub_name}", sub_info)
+
+    for dir_name, info in result["structure"].items():
+        _check_dir(dir_name, info)
 
     # Hotspot invariants
     assert len(result["hotspots"]) <= hotspots
@@ -449,3 +458,62 @@ def test_architecture_shape(lsp_server: str, hotspots: int) -> None:
     # Summary
     assert "total_files" in result["summary"]
     assert "total_dirs" in result["summary"]
+
+
+# ── all-outputs-valid-json ─────────────────────────────────────────────────────
+
+
+# Every codebase command — all 16.  Uses ``subprocess.run`` directly (not the
+# ``_run`` helper) so we can assert exit code 0 (no interpreter tracebacks
+# leaking into stdout) AND valid JSON in one explicit test.
+_ALL_COMMANDS: list[tuple[str, list[str]]] = [
+    ("tree",                 ["--suffix", ".py"]),
+    ("read-symbol",          [FILES["resolve"], "--symbol", "resolve_symbol"]),
+    ("incoming-calls",       [FILES["resolve"], "--symbol", "resolve_symbol"]),
+    ("outgoing-calls",       [FILES["resolve"], "--symbol", "resolve_symbol"]),
+    ("references",           [FILES["resolve"], "--symbol", "ResolvedSymbol"]),
+    ("definition",           [FILES["resolve"], "--symbol", "ResolvedSymbol"]),
+    ("hover",                [FILES["resolve"], "--symbol", "resolve_symbol", "--line", "180"]),
+    ("diagnostics",          [FILES["resolve"]]),
+    ("overview",             [FILES["client"], "--depth", "0"]),
+    ("explain",              [FILES["resolve"], "--symbol", "resolve_symbol"]),
+    ("search",               ["ResolvedSymbol"]),
+    ("impact",               [FILES["analyze"], "--symbol", "_overview"]),
+    ("architecture",         ["--hotspots", "5"]),
+    ("import-dependents",    [FILES["resolve"], "--depth", "1"]),
+    ("import-dependencies",  [FILES["resolve"]]),
+    ("affected-tests",       [FILES["resolve"], "--depth", "10"]),
+]
+
+
+@pytest.mark.parametrize("command,args", _ALL_COMMANDS)
+def test_all_outputs_are_valid_json(
+    lsp_server: str, command: str, args: list[str],
+) -> None:
+    """Every codebase command exits 0 and emits valid JSON.
+
+    Checks both conditions explicitly so a traceback mixed into stdout
+    (exit code non-zero or stdout = traceback + partial JSON) is caught.
+    """
+    proc = subprocess.run(
+        ["python", "-m", "cli", "codebase", command, *args],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env={**os.environ, "AIVOCODE_URL": lsp_server},
+    )
+    assert proc.returncode == 0, (
+        f"'{command}' failed (exit {proc.returncode})\n"
+        f"stdout: {proc.stdout[:500]}\n"
+        f"stderr: {proc.stderr[:500]}"
+    )
+    try:
+        json.loads(proc.stdout)
+    except json.JSONDecodeError as e:
+        pytest.fail(
+            f"'{command}' output is not valid JSON:\n"
+            f"stdout (first 500 chars): {proc.stdout[:500]}\n"
+            f"stderr: {proc.stderr[:500]}\n"
+            f"error: {e}"
+        )

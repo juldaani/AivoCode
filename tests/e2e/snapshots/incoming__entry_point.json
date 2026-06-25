@@ -8,7 +8,7 @@
     "symbol": "entry_point"
   },
   "meta": {
-    "root": "/workspaces/lsp-functionalities",
+    "root": "/workspaces/aivocode",
     "lsp": "basedpyright-langserver",
     "language": "python"
   }

@@ -22,7 +22,7 @@
     "symbol": "caller_1"
   },
   "meta": {
-    "root": "/workspaces/lsp-functionalities",
+    "root": "/workspaces/aivocode",
     "lsp": "basedpyright-langserver",
     "language": "python"
   }

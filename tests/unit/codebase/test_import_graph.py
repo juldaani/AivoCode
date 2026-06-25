@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,28 @@ def _make_graph(edges: dict[str, set[str]]) -> ImportGraph:
             g._forward.setdefault(target, set())
     g._files_indexed = len(edges)
     return g
+
+
+def _init_git(dir_path: Path) -> None:
+    """Initialize a git repository in *dir_path* and stage all files.
+
+    Required because ``build_full()`` uses ``git ls-files`` for file
+    discovery — it only sees tracked files.
+    """
+    subprocess.run(
+        ["git", "init"], cwd=dir_path, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=dir_path, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=dir_path, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "add", "."], cwd=dir_path, capture_output=True, check=True,
+    )
 
 
 def _deps_files(result: list[dict]) -> list[str]:
@@ -200,6 +223,8 @@ class TestAffectedTests:
             "from target import f\ndef helper(): return f()\n"
         )
 
+        _init_git(tmp_path)
+
         g = ImportGraph(tmp_path)
         g.build_full()
         return g
@@ -264,6 +289,7 @@ class TestUpdate:
         # Create a real file so update() can process it.
         (tmp_path / "a.py").write_text("import b\n")
         (tmp_path / "b.py").write_text("")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
@@ -284,6 +310,7 @@ class TestUpdate:
         (tmp_path / "a.py").write_text("import b\n")
         (tmp_path / "b.py").write_text("")
         (tmp_path / "c.py").write_text("")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
@@ -301,6 +328,7 @@ class TestUpdate:
     def test_add_new_file(self, tmp_path):
         """Simulate adding a new file."""
         (tmp_path / "a.py").write_text("")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
@@ -319,6 +347,7 @@ class TestUpdate:
         """``update([])`` is a no-op — counters and state unchanged."""
         (tmp_path / "a.py").write_text("import b\n")
         (tmp_path / "b.py").write_text("")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
@@ -334,6 +363,7 @@ class TestUpdate:
         """Single ``update()`` call with a mix of add / modify / delete."""
         (tmp_path / "target.py").write_text("def f(): pass\n")
         (tmp_path / "mod.py").write_text("from target import f\n")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
@@ -357,6 +387,7 @@ class TestUpdate:
     def test_non_python_file_no_drift(self, tmp_path):
         """``update()`` on a non-code file does NOT change ``_files_indexed``."""
         (tmp_path / "a.py").write_text("def f(): pass\n")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
@@ -398,6 +429,7 @@ class TestErrorAccumulation:
         try:
             bad_file = tmp_path / "bad.raise"
             bad_file.write_text("not relevant")
+            _init_git(tmp_path)
 
             g = ImportGraph(tmp_path)
             g.build_full()
@@ -422,6 +454,15 @@ class TestInfo:
     def test_build_info(self, tmp_path):
         (tmp_path / "a.py").write_text("import b\n")
         (tmp_path / "b.py").write_text("")
+        _init_git(tmp_path)
+
+        g = ImportGraph(tmp_path)
+
+    def test_build_idempotent(self, tmp_path):
+        """Calling ``build_full()`` twice produces the same graph."""
+        (tmp_path / "a.py").write_text("import b\n")
+        (tmp_path / "b.py").write_text("")
+        _init_git(tmp_path)
 
         g = ImportGraph(tmp_path)
         g.build_full()
