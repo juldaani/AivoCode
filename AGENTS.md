@@ -18,7 +18,7 @@
 - Imports: use `import numpy as np`.
 - Performance: prefer NumPy vectorized operations over Python loops when feasible.
 - Do not hardcode language specifics (for instance python filenames etc). Aim is to keep 
-  the main code generic so its easy to add more programming languages.
+  the main code generic and language agnostic so its easy to add more programming languages.
 
 ## Docs & Comments Policy
 - Docstrings/comments should explain: what it does (short), why it exists/why this way,
