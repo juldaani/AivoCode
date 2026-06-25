@@ -2,10 +2,8 @@
 
 ---
 
-## Tooling (OpenCode)
-- Runtime: Python 3.12 (see `env-aivocode.yml`).
-- Ruff works automatically out of the box, through OpenCode. Opencode automatically
-  calls ruff after file changes and notifies the agent of possible problems.
+## Tooling
+- Runtime: Python 3.12 (see `.devcontainer/environment.yml`).
 
 ## Environments (Safety Rule)
 - Do not build, edit, update, or remove environments in this repo.
@@ -19,6 +17,8 @@
 - Exceptions: do not use generic `except Exception`; catch specific exceptions or let it fail.
 - Imports: use `import numpy as np`.
 - Performance: prefer NumPy vectorized operations over Python loops when feasible.
+- Do not hardcode language specifics (for instance python filenames etc). Aim is to keep 
+  the main code generic so its easy to add more programming languages.
 
 ## Docs & Comments Policy
 - Docstrings/comments should explain: what it does (short), why it exists/why this way,
