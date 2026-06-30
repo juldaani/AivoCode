@@ -3,15 +3,12 @@ name: Build and Publish
 on:
   push:
     branches: [main]
-    paths:
-      - '**.py'
-      - '**.sh'
-      - '**.yml'
-      - '**.yaml'
-      - '**.toml'
-      - 'Dockerfile*'
     paths-ignore:
+      - '**/*.md'
       - 'tests/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.aivocode.env.example'
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 0'   # weekly — pick up base image updates
