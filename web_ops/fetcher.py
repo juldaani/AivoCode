@@ -20,11 +20,13 @@ Why this exists
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import json
 import os
 import re
+import socket
 import time
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
@@ -84,7 +86,12 @@ class FetchResult:
 # Constants
 # ---------------------------------------------------------------------------
 
-_CDP_PORT: int = 9243
+# Maximum number of concurrent browser launches/crawls.  Keeps memory
+# bounded while allowing genuinely parallel fetches.  Further callers queue
+# until a slot frees.
+_FETCH_CONCURRENCY: int = 4
+_FETCH_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(_FETCH_CONCURRENCY)
+
 _PAGE_TIMEOUT_MS: int = 10_000
 # Extra delay (seconds) after wait conditions are satisfied before capturing.
 # Kept at zero because ``load`` already guarantees scripts are executed;
@@ -153,6 +160,22 @@ _CACHE_TTL_S: float = 900
 # Maximum number of cached files.  When exceeded, the oldest files (by
 # modification time) are evicted to keep the cache within bounds.
 _CACHE_MAX_FILES: int = 200
+
+
+def _free_port() -> int:
+    """Return a free TCP port on localhost.
+
+    Binds to port 0 so the OS assigns a free ephemeral port, reads the
+    assigned port number, then closes the socket.  There is a small TOCTOU
+    window between close and reuse, but for short-lived browser launches it
+    is acceptable.
+
+    Every ``_fetch_once`` call gets its own port so concurrent crawls run in
+    isolated browser processes — no shared CDP endpoint, no cross‑talk.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 # ---------------------------------------------------------------------------
@@ -887,12 +910,22 @@ def _cache_is_fresh(path: Path) -> bool:
 
 
 def _read_cache_markdown(url: str) -> str | None:
-    """Read cached markdown from the unified JSON cache, or ``None``."""
+    """Read cached markdown from the unified JSON cache, or ``None``.
+
+    Returns ``None`` when the cache file stores a ``url`` field that does
+    not match *url* — the two URLs produce different SHA‑256 keys, so a
+    mismatch means the cache entry was corrupted (race, manual tamper,
+    filesystem error).  Old cache files without a ``url`` field are
+    treated as trusted; they expire naturally after the TTL.
+    """
     path = _cache_path(url)
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+        stored_url = data.get("url")
+        if stored_url is not None and stored_url != url:
+            return None  # cache entry belongs to a different URL
         return data.get("markdown")
     except (OSError, json.JSONDecodeError):
         return None
@@ -901,12 +934,18 @@ def _read_cache_markdown(url: str) -> str | None:
 def _read_cache_links(
     url: str,
 ) -> dict[str, list[dict[str, Any]]] | None:
-    """Read cached navigation links from the unified JSON cache, or ``None``."""
+    """Read cached navigation links from the unified JSON cache, or ``None``.
+
+    Same URL‑verification semantics as ``_read_cache_markdown``.
+    """
     path = _cache_path(url)
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+        stored_url = data.get("url")
+        if stored_url is not None and stored_url != url:
+            return None  # cache entry belongs to a different URL
         return data.get("links")
     except (OSError, json.JSONDecodeError):
         return None
@@ -917,14 +956,18 @@ def _write_cache(
     markdown: str,
     links: dict[str, list[dict[str, Any]]] | None = None,
 ) -> None:
-    """Write markdown and links to a unified JSON cache file.
+    """Write markdown, links, and source URL to a unified JSON cache file.
 
     Each cached entry is a single ``<hash>.json`` file.  The chunked tree
     is always recomputed from markdown on read (never cached) so that
     chunking algorithm changes take effect immediately without cache
     invalidation.
+
+    The ``url`` field in the JSON serves as a self‑check — readers can
+    detect cache entries that were accidentally written for a different
+    URL (e.g. due to a page‑level browser race) and treat them as misses.
     """
-    data: dict[str, Any] = {"markdown": markdown}
+    data: dict[str, Any] = {"url": url, "markdown": markdown}
     if links is not None:
         data["links"] = links
     path = _cache_path(url)
@@ -1135,30 +1178,40 @@ async def _fetch_once(
     # redirected into the buffer so nothing leaks to stderr.
     buf = io.StringIO()
     browser = None
+    result = None
 
     try:
-        with redirect_stdout(buf), redirect_stderr(buf):
-            browser = await launch_async(
-                headless=True,
-                args=[
-                    f"--remote-debugging-port={_CDP_PORT}",
-                    "--remote-debugging-address=127.0.0.1",
-                ],
-            )
+        # ── Rate-limit concurrent browser launches ────────────────────
+        # The semaphore caps live crawls at _FETCH_CONCURRENCY (4) so
+        # memory stays bounded.  Cache reads (no fresh fetch) never
+        # reach here, so cache hits remain fully concurrent.
+        async with _FETCH_SEMAPHORE:
+            # Allocate a free port so this crawl gets its own isolated
+            # browser process.  No shared CDP endpoint, no cross‑talk.
+            port = _free_port()
 
-            browser_config = BrowserConfig(
-                browser_mode="cdp",
-                cdp_url=f"http://127.0.0.1:{_CDP_PORT}",
-            )
+            with redirect_stdout(buf), redirect_stderr(buf):
+                browser = await launch_async(
+                    headless=True,
+                    args=[
+                        f"--remote-debugging-port={port}",
+                        "--remote-debugging-address=127.0.0.1",
+                    ],
+                )
 
-            run_config = CrawlerRunConfig(
-                wait_until=wait_until,
-                page_timeout=_PAGE_TIMEOUT_MS,
-                delay_before_return_html=_DELAY_BEFORE_RETURN_HTML_S,
-            )
+                browser_config = BrowserConfig(
+                    browser_mode="cdp",
+                    cdp_url=f"http://127.0.0.1:{port}",
+                )
 
-            async with AsyncWebCrawler(config=browser_config) as crawler:
-                result = await crawler.arun(url, config=run_config)
+                run_config = CrawlerRunConfig(
+                    wait_until=wait_until,
+                    page_timeout=_PAGE_TIMEOUT_MS,
+                    delay_before_return_html=_DELAY_BEFORE_RETURN_HTML_S,
+                )
+
+                async with AsyncWebCrawler(config=browser_config) as crawler:
+                    result = await crawler.arun(url, config=run_config)
 
         if result is None:
             return FetchResult(
