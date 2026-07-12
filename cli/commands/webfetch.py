@@ -20,8 +20,22 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser: argparse.ArgumentParser = subparsers.add_parser(
         "webfetch",
         parents=[_GLOBAL_OPTIONS],
-        help="Fetch a URL and output the result as JSON.",
-        description="Fetch a URL via CloakBrowser + Crawl4AI and output structured result as JSON.",
+        help="Fetch a URL and return structured markdown as JSON.",
+        description=(
+            "Fetch a URL via a headless browser, convert the page to markdown, and "
+            "return the result as JSON.\n"
+            "\n"
+            "Pages are automatically cached for 15 minutes (200‑entry LRU).  "
+            "Use --refresh-cache to force a fresh fetch.\n"
+            "\n"
+            "Truncation: when a full‑page fetch exceeds --limit chars (default 20 000), "
+            "the raw markdown is replaced with a compact table of contents (the ``toc`` "
+            "field) to keep output manageable.  Use --heading or --line-range to retrieve "
+            "specific sections from the ToC (capped at 10 000 chars per section).\n"
+            "\n"
+            "The ``url`` field is always present in the output so you can see "
+            "exactly what was fetched."
+        ),
     )
     parser.add_argument(
         "url",
@@ -35,29 +49,42 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default="load",
         help=(
             "When to consider the page ready for capture. "
-            "'load' (default) waits for all resources to load. "
-            "Use 'networkidle' or --js-render for JS-heavy SPAs."
+            "'load' (default) waits for resources (images, CSS, etc.). "
+            "'networkidle' waits until no network activity for 500 ms — "
+            "use this or --js-render for JS‑heavy SPAs."
         ),
     )
     parser.add_argument(
         "--js-render",
         action="store_true",
         default=False,
-        help="Enable full JavaScript rendering (alias for --wait-until networkidle). "
-             "Use for SPAs or pages that fetch content dynamically.",
+        help=(
+            "Enable full JavaScript rendering.  Sets --wait-until to "
+            "'networkidle' so the browser waits for dynamic content to load. "
+            "Use for SPAs or pages that fetch data after initial HTML load."
+        ),
     )
     parser.add_argument(
         "--refresh-cache",
         action="store_true",
         default=False,
-        help="Bypass cache and always fetch fresh content from the web.",
+        help=(
+            "Bypass the cache (15‑minute TTL) and always launch a fresh "
+            "browser to fetch the page."
+        ),
     )
     parser.add_argument(
         "--heading",
         type=str,
         action="append",
         default=None,
-        help="Extract a section by heading text (case-insensitive). Repeatable.",
+        help=(
+            "Extract a section by its heading as shown in the ``toc`` "
+            "(case‑insensitive).  Use the exact heading text from the ToC — "
+            "e.g. if the ToC shows ``{\"Getting Started\": [...]}``, pass "
+            "``--heading \"Getting Started\"``.  Repeatable; multiple headings "
+            "produce a combined output with ``[heading: …]`` labels."
+        ),
     )
     parser.add_argument(
         "--line-range",
@@ -65,23 +92,28 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         action="append",
         default=None,
         help=(
-            "Extract lines from the cached page "
-            "(1-based, 'start-end'). Repeatable."
+            "Extract a range of lines from the cached markdown "
+            "(1‑based, 'start-end', e.g. ``10-50``).  Repeatable."
         ),
     )
     parser.add_argument(
         "--navigation",
         action="store_true",
         default=False,
-        help="Include extracted page links (internal/external) in the result.",
+        help=(
+            "Include extracted page links (``internal`` / ``external`` arrays) "
+            "in the result.  Only returned on full‑page fetches (not section extracts)."
+        ),
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=20000,
         help=(
-            "Character count above which a full-page fetch returns a "
-            "compact table of contents instead of raw markdown (default 20000)."
+            "Character count above which a full‑page fetch substitutes a compact "
+            "table of contents instead of raw markdown (default 20 000).  "
+            "Does NOT affect section extraction via --heading / --line-range — "
+            "those have a fixed 10 000‑char cap regardless of this value."
         ),
     )
     parser.set_defaults(func=_handle)

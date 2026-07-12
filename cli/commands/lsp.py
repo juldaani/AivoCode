@@ -54,8 +54,25 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``lsp`` command group on the given subparser group."""
     lsp_parser: argparse.ArgumentParser = subparsers.add_parser(
         "lsp",
-        help="LSP daemon operations.",
-        description="Manage the LSP daemon and query document symbols.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="Raw LSP daemon queries.",
+        description=(
+            "Direct LSP (Language Server Protocol) queries via a daemon.\n"
+            "\n"
+            "Daemon lifecycle — the daemon is managed automatically:\n"
+            "  • Auto‑started on the first query to any workspace.\n"
+            "  • One daemon per git workspace (isolated sockets).\n"
+            "  • Auto‑stopped after 10 minutes of inactivity.\n"
+            "  • ``lsp start`` / ``lsp stop`` / ``lsp status`` give explicit control.\n"
+            "\n"
+            "These commands return raw LSP data.  For higher‑level, agent‑friendly "
+            "wrappers with snippets, compaction, and richer formatting, prefer "
+            "the ``codebase`` family of commands (e.g. ``codebase incoming-calls`` "
+            "instead of ``lsp incoming-calls``).\n"
+            "\n"
+            "Position convention — all line/character values are 1‑indexed: "
+            "line 1 is the first line, character 1 is the first character."
+        ),
     )
     lsp_sub = lsp_parser.add_subparsers(
         title="commands",
@@ -67,22 +84,24 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     sym_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "symbols",
         parents=[_GLOBAL_OPTIONS],
-        help="Query document symbols for a file.",
-        description="Query document symbols from the LSP daemon and output as JSON.",
+        help="Document symbol tree for a file (classes, functions, etc.).",
+        description=(
+            "Return the hierarchical document symbol tree for a file.  "
+            "Shows all classes, functions, methods, variables, etc. "
+            "with their ranges and nesting structure.  Uses LSP "
+            "``textDocument/documentSymbol``."
+        ),
     )
     sym_parser.add_argument(
         "file",
         type=str,
-        help="File path relative to the git repo root (e.g. mock_pkg/utils.py).",
+        help="File path (relative or absolute).",
     )
     sym_parser.add_argument(
         "--workspace",
         type=str,
         default=None,
-        help=(
-            "Git repo root. Auto-detected server-side via "
-            "``git rev-parse --show-toplevel`` from the file path if not provided."
-        ),
+        help="Git repo root (auto‑detected from the file path if omitted).",
     )
     sym_parser.set_defaults(func=_handle_symbols)
 
@@ -90,20 +109,19 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     start_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "start",
         parents=[_GLOBAL_OPTIONS],
-        help="Ensure the LSP daemon is running.",
+        help="Ensure the LSP daemon is running (auto‑started on first query).",
         description=(
             "Start the LSP daemon for a workspace if not already running. "
-            "No-op if already running."
+            "No‑op if already running.  Normally you don't need this — the "
+            "daemon auto‑starts on the first query.  Use this to warm up "
+            "before a batch of queries."
         ),
     )
     start_parser.add_argument(
         "--workspace",
         type=str,
         default=None,
-        help=(
-            "Path within the git workspace (or the workspace itself). "
-            "Auto-detected server-side from cwd if not provided."
-        ),
+        help="Path within the git workspace. Auto‑detected from cwd if omitted.",
     )
     start_parser.set_defaults(func=_handle_start)
 
@@ -111,9 +129,9 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     stop_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "stop",
         parents=[_GLOBAL_OPTIONS],
-        help="Shut down the LSP daemon.",
+        help="Shut down the LSP daemon (also auto‑stops after 10 min idle).",
         description=(
-            "Kill the LSP daemon and remove all sockets for the current "
+            "Kill the LSP daemon and remove all socket files for the current "
             "workspace (detected from cwd).  No arguments needed — always "
             "does a full cleanup."
         ),
@@ -124,17 +142,18 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     status_parser: argparse.ArgumentParser = lsp_sub.add_parser(
         "status",
         parents=[_GLOBAL_OPTIONS],
-        help="Check LSP daemon health.",
-        description="Check whether the LSP daemon is running for a workspace.",
+        help="Check if the LSP daemon is running.",
+        description=(
+            "Ping the LSP daemon socket for a workspace.  Returns "
+            "``running: true/false`` along with the language and server name.  "
+            "If the daemon is down and a query is made, it auto‑starts."
+        ),
     )
     status_parser.add_argument(
         "--workspace",
         type=str,
         default=None,
-        help=(
-            "Path within the git workspace (or the workspace itself). "
-            "Auto-detected server-side from cwd if not provided."
-        ),
+        help="Path within the git workspace. Auto‑detected from cwd if omitted.",
     )
     status_parser.set_defaults(func=_handle_status)
 
@@ -146,21 +165,26 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         "-l", "--line",
         type=int,
         required=True,
-        help="Line number (1-indexed).",
+        help="Line number (1‑indexed — first line is 1).",
     )
     _POSITION_OPTIONS.add_argument(
         "-c", "--character",
         type=int,
         required=True,
-        help="Character offset (1-indexed).",
+        help="Character offset (1‑indexed — first character is 1).",
     )
 
     # ── workspace-symbol ───────────────────────────────────────────────
     wsym_parser = lsp_sub.add_parser(
         "workspace-symbol",
         parents=[_GLOBAL_OPTIONS],
-        help="Search symbols across the workspace.",
-        description="Fuzzy search for symbols by name across the entire workspace.",
+        help="Fuzzy symbol search across the workspace (raw LSP).",
+        description=(
+            "Fuzzy search for symbols by name across the entire workspace.  "
+            "Uses LSP ``workspace/symbol`` — returns raw server results "
+            "with LSP locations.  No filtering, no limit.  For a filtered, "
+            "agent‑friendly version, use ``codebase search`` instead."
+        ),
     )
     wsym_parser.add_argument("query", type=str, help="Search query string.")
     wsym_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -170,8 +194,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     def_parser = lsp_sub.add_parser(
         "definition",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Go-to definition.",
-        description="Find where the symbol at a position is defined.",
+        help="Go-to definition (raw LSP).",
+        description=(
+            "Find where the symbol at a position is defined.  Returns a list "
+            "of LSP Location objects (URIs + ranges).  May be empty if the "
+            "symbol is built‑in or the definition is not in the workspace."
+        ),
     )
     def_parser.add_argument("file", type=str, help="File path.")
     def_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -181,8 +209,14 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     tdef_parser = lsp_sub.add_parser(
         "type-definition",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Go-to type definition.",
-        description="Find where the type of the symbol at a position is declared.",
+        help="Go-to type definition (raw LSP).",
+        description=(
+            "Find where the **type** of the symbol at a position is declared.  "
+            "For example, for a variable ``x: MyClass`` at the cursor, this "
+            "returns where ``MyClass`` is defined.  Different from ``definition``: "
+            "``definition`` finds where the symbol *itself* is declared, "
+            "``type‑definition`` finds where its *type* is declared."
+        ),
     )
     tdef_parser.add_argument("file", type=str, help="File path.")
     tdef_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -192,8 +226,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     ref_parser = lsp_sub.add_parser(
         "references",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Find references.",
-        description="Find all references to the symbol at a position.",
+        help="Find all references to a symbol (raw LSP).",
+        description=(
+            "Find all usages of the symbol at a position across the workspace.  "
+            "Returns a list of LSP Location objects.  For agent‑friendly "
+            "references with snippets and compaction, use ``codebase references``."
+        ),
     )
     ref_parser.add_argument("file", type=str, help="File path.")
     ref_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -203,8 +241,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     hover_parser = lsp_sub.add_parser(
         "hover",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Hover information.",
-        description="Get signature, type info, and docstring for a symbol.",
+        help="Hover info — signature, type, docstring (raw LSP).",
+        description=(
+            "Get signature, type info, and docstring for a symbol at a position.  "
+            "The result is markdown (LSP ``MarkupContent``).  Works on external "
+            "library symbols, not just workspace code."
+        ),
     )
     hover_parser.add_argument("file", type=str, help="File path.")
     hover_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -214,8 +256,13 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     inc_parser = lsp_sub.add_parser(
         "incoming-calls",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Incoming call hierarchy.",
-        description="Find callers — who calls the function at a position.",
+        help="Incoming call hierarchy — who calls this function (raw LSP).",
+        description=(
+            "Find callers — who calls the function at a position.  Uses "
+            "LSP call‑hierarchy protocol.  Position must be on or inside "
+            "the function body.  Returns ``fromRanges`` showing exact "
+            "call sites within each caller."
+        ),
     )
     inc_parser.add_argument("file", type=str, help="File path.")
     inc_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -225,8 +272,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     outc_parser = lsp_sub.add_parser(
         "outgoing-calls",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Outgoing call hierarchy.",
-        description="Find callees — what the function at a position calls.",
+        help="Outgoing call hierarchy — what this function calls (raw LSP).",
+        description=(
+            "Find callees — what the function at a position calls.  Uses "
+            "LSP call‑hierarchy protocol.  Returns ``fromRanges`` showing "
+            "exact call sites within the query function."
+        ),
     )
     outc_parser.add_argument("file", type=str, help="File path.")
     outc_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")
@@ -236,8 +287,13 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     ren_parser = lsp_sub.add_parser(
         "rename-edits",
         parents=[_GLOBAL_OPTIONS, _POSITION_OPTIONS],
-        help="Preview rename edits.",
-        description="Preview what files would change if the symbol were renamed (no files modified).",
+        help="Preview what would change if a symbol were renamed.",
+        description=(
+            "PREVIEW ONLY — no files are modified.  Returns a WorkspaceEdit "
+            "showing every file and line that would change if the symbol at "
+            "the given position were renamed to --new-name.  Changes are "
+            "returned as a map of file URI → list of text edits (range → new text)."
+        ),
     )
     ren_parser.add_argument("file", type=str, help="File path.")
     ren_parser.add_argument(
@@ -253,8 +309,13 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     diag_parser = lsp_sub.add_parser(
         "diagnostics",
         parents=[_GLOBAL_OPTIONS],
-        help="Query diagnostics.",
-        description="Get type errors, warnings, and other diagnostics for a file.",
+        help="LSP diagnostics — type errors, warnings, hints (raw LSP).",
+        description=(
+            "Get type errors, warnings, hints, and info diagnostics for a file.  "
+            "Uses LSP ``textDocument/publishDiagnostics`` (push‑based — there may "
+            "be a brief delay after the server opens the file).  For a severity‑"
+            "grouped view with counts, use ``codebase diagnostics``."
+        ),
     )
     diag_parser.add_argument("file", type=str, help="File path.")
     diag_parser.add_argument("--workspace", type=str, default=None, help="Git repo root.")

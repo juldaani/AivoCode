@@ -92,5 +92,5 @@ _GLOBAL_OPTIONS.add_argument(
     "--pretty-format",
     action="store_true",
     default=False,
-    help="Pretty-print JSON output with indentation (default: compact).",
+    help="Pretty-print JSON output with indentation (for human debugging only; default: compact).",
 )

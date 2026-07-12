@@ -34,7 +34,22 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(
         prog="aivocode",
-        description="AivoCode CLI — codebase intelligence tools for AI agents.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "AivoCode CLI — AI‑agent coding companion.\n"
+            "\n"
+            "A REST API client that gives AI agents programmatic access to:\n"
+            "  • codebase  — Explore your source code via LSP and import‑graph analysis.\n"
+            "  • lsp       — Raw LSP daemon queries (symbols, definitions, references, diagnostics).\n"
+            "  • webfetch  — Fetch a URL and convert it to structured markdown / ToC JSON.\n"
+            "  • websearch — Neural web search via the Exa API.\n"
+            "\n"
+            "All intelligence lives server‑side — the CLI is a zero‑processing thin client.\n"
+            "Set $AIVOCODE_URL to point at the right server (default: http://aivocode:8000).\n"
+            "\n"
+            "Most tools auto‑detect the git workspace from your current directory or file path.\n"
+            "Add --pretty-format to any command for indented JSON output (for human debugging only)."
+        ),
     )
     subparsers = parser.add_subparsers(
         title="commands",
