@@ -351,8 +351,18 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     idd.set_defaults(func=_handle_import_dependencies)
 
     # ── affected-tests ──────────────────────────────────────────────────
-    atp = cb_sub.add_parser("affected-tests", parents=[_GLOBAL_OPTIONS],
-                             help="Which test files are affected if this file changes?")
+    atp = cb_sub.add_parser(
+        "affected-tests", parents=[_GLOBAL_OPTIONS],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="Which test files are affected if this file changes?",
+        description="Find test files affected by a change via the import graph.",
+        epilog=(
+            "Limitation: only finds tests that import the target file "
+            "(or its transitive dependents up to --depth).  E2e / integration "
+            "tests that exercise the target via HTTP, CLI subprocess, or "
+            "other non-import paths will NOT be found — run those separately."
+        ),
+    )
     atp.add_argument("file", type=str,
                       help="File whose changes you want to check (e.g. the file you edited).")
     atp.add_argument("--depth", "-d", type=int, default=10,

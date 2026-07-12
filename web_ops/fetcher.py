@@ -80,6 +80,7 @@ class FetchResult:
     chunked: dict[str, Any] | None = None
     info: str | None = None
     total_chars: int = 0
+    url: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +103,17 @@ _DEFAULT_WAIT_UNTIL: _WaitUntil = "load"
 # Character threshold above which content is truncated and replaced with a
 # table of contents.  Full content is always saved to cache for later retrieval.
 _TRUNCATION_THRESHOLD: int = 10_000
+
+# Character thresholds used exclusively by the webfetch API.
+# ---------------------------------------------------------------------------
+# ToC trigger — when a full-page fetch exceeds this, the result is replaced
+# with a compact table of contents.  Overridable via ``--limit`` CLI flag.
+_WEBFETCH_TRUNCATION_THRESHOLD: int = 20_000
+
+# Section‑extraction cap — extracted headings / line ranges are hard‑capped
+# at this character count.  Independent of ``--limit`` to keep a separate
+# safety net for agent context windows.
+_WEBFETCH_SECTION_TRUNCATION_THRESHOLD: int = 10_000
 
 # Maximum number of text-chunk previews to include per section/node in the
 # compact ToC, keyed by section depth (0 = root, 1 = H1, …).  Depths beyond
@@ -1081,8 +1093,8 @@ def _render_section(
     """Render a chunked-tree section (and its subsections) back to markdown.
 
     Returns ``(markdown, error, info)``.  *info* is a human-readable
-    truncation note when the result exceeds ``_TRUNCATION_THRESHOLD``
-    characters, or ``None``.
+    truncation note when the result exceeds
+    ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD`` characters, or ``None``.
 
     Walks the section subtree and emits heading lines + chunk text in
     document order so the caller receives a contiguous markdown fragment.
@@ -1104,12 +1116,12 @@ def _render_section(
     _walk(section)
     markdown = "\n".join(lines).rstrip()
 
-    if len(markdown) > _TRUNCATION_THRESHOLD:
+    if len(markdown) > _WEBFETCH_SECTION_TRUNCATION_THRESHOLD:
         info = (
-            f"Content truncated at {_TRUNCATION_THRESHOLD} characters. "
+            f"Content truncated at {_WEBFETCH_SECTION_TRUNCATION_THRESHOLD} characters. "
             f"Use --heading or --line-range to retrieve specific content."
         )
-        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ... " + info
+        markdown = markdown[:_WEBFETCH_SECTION_TRUNCATION_THRESHOLD] + " ... " + info
         return markdown, None, info
 
     return markdown, None, None
@@ -1121,8 +1133,8 @@ def _extract_line_range(
     """Extract lines from a 1-based range string like ``"10-30"``.
 
     Returns ``(markdown, error, info)``.  *info* is a human-readable
-    truncation note when the result exceeds ``_TRUNCATION_THRESHOLD``
-    characters, or ``None``.
+    truncation note when the result exceeds
+    ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD`` characters, or ``None``.
     """
     try:
         parts = line_range.split("-")
@@ -1146,12 +1158,12 @@ def _extract_line_range(
     end = min(end, len(lines))
     markdown = "\n".join(lines[start - 1:end])
 
-    if len(markdown) > _TRUNCATION_THRESHOLD:
+    if len(markdown) > _WEBFETCH_SECTION_TRUNCATION_THRESHOLD:
         info = (
-            f"Content truncated at {_TRUNCATION_THRESHOLD} characters. "
+            f"Content truncated at {_WEBFETCH_SECTION_TRUNCATION_THRESHOLD} characters. "
             f"Use --heading or --line-range to retrieve specific content."
         )
-        markdown = markdown[:_TRUNCATION_THRESHOLD] + " ... " + info
+        markdown = markdown[:_WEBFETCH_SECTION_TRUNCATION_THRESHOLD] + " ... " + info
         return markdown, None, info
 
     return markdown, None, None
@@ -1217,6 +1229,7 @@ async def _fetch_once(
             return FetchResult(
                 success=False,
                 error=_parse_error(buf.getvalue()) or "Crawler returned no result",
+                url=url,
             )
 
         if not result.success:
@@ -1224,6 +1237,7 @@ async def _fetch_once(
                 success=False,
                 status_code=result.status_code,
                 error=_parse_error(buf.getvalue()),
+                url=url,
             )
 
         # Extract raw markdown (the full page, unfiltered).
@@ -1239,6 +1253,7 @@ async def _fetch_once(
                 status_code=result.status_code,
                 markdown="",
                 error="empty",
+                url=url,
             )
 
         # Always extract structured navigation links for caching.
@@ -1266,6 +1281,7 @@ async def _fetch_once(
             navigation=navigation,
             chunked=chunked_tree,
             total_chars=len(markdown),
+            url=url,
         )
 
     finally:
@@ -1282,19 +1298,23 @@ def _truncation_message() -> str:
     return " ... "
 
 
-def _truncation_info(total_chars: int, markdown: str = "") -> str:
+def _truncation_info(total_chars: int, markdown: str = "", *, limit: int = 20_000) -> str:
     """Explain truncation so the agent knows what happened and what to do.
 
     Appends a feed-page warning when the markdown has very few blank lines
     and a high density of links — typical of news feed / link-directory
     pages where the chunked ToC may be unreliable.
+
+    *limit* is the webfetch ToC threshold (overridable via ``--limit``).
+    The section‑extraction cap message references the dedicated
+    ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD`` constant (10 000 chars).
     """
     msg = (
-        f"Content exceeds the {_TRUNCATION_THRESHOLD} character limit "
+        f"Content exceeds the {limit} character limit "
         f"({total_chars} chars total). Full content stored in cache. "
         f"Use `toc` for navigation, or --heading / --line-range "
         f"to retrieve specific content (capped at "
-        f"{_TRUNCATION_THRESHOLD} chars)."
+        f"{_WEBFETCH_SECTION_TRUNCATION_THRESHOLD} chars)."
     )
     if markdown and _is_feed_page(markdown):
         msg += (
@@ -1343,6 +1363,7 @@ async def _fetch_url(
     line_range: str | None = None,
     refresh_cache: bool = False,
     include_navigation: bool = False,
+    limit: int = _WEBFETCH_TRUNCATION_THRESHOLD,
 ) -> FetchResult:
     """Fetch a URL via CloakBrowser + Crawl4AI and return structured results.
 
@@ -1350,12 +1371,13 @@ async def _fetch_url(
     ``heading`` / ``line_range`` always operates on consistent content
     regardless of flags used on previous calls.
 
-    When content exceeds the truncation threshold (10 000 chars), the full
-    content is saved to a disk cache and the result includes a compact
-    table of contents (chunk triples + nested section objects) instead
-    of the raw markdown.  Agents can then retrieve specific sections via
-    ``heading`` or ``line_range`` parameters — which read directly from
-    cache.  Retrieved content is also capped at the same threshold.
+    When content exceeds *limit* chars (default 20 000), the full content
+    is saved to a disk cache and the result includes a compact table of
+    contents (chunk triples + nested section objects) instead of the raw
+    markdown.  Agents can then retrieve specific sections via ``heading``
+    or ``line_range`` parameters — which read directly from cache.
+    Retrieved content is capped at ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD`` chars (hard
+    limit, independent of *limit*).
 
     Navigation links (internal/external) are extracted during every fresh
     crawl and persisted in the same cache file.  When
@@ -1367,12 +1389,15 @@ async def _fetch_url(
         heading: Exact heading text to extract from cache (case-insensitive).
             Dedup suffix ``" (N)"`` is stripped before lookup.
         line_range: ``"start-end"`` line range to extract from cache
-            (1-based).  Content is capped at ``_TRUNCATION_THRESHOLD``
+            (1-based).  Content is capped at ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD``
             characters.
         refresh_cache: If ``True``, always refetch from the web, ignoring any
             cached content.
         include_navigation: If ``True``, include extracted page links
             (internal/external) in the result.
+        limit: Character threshold for the ToC — full-page fetches exceeding
+            this return a compact ToC instead of raw markdown.  Does not
+            affect section extraction (which uses ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD``).
 
     Returns:
         ``FetchResult`` — never ``None``.
@@ -1398,6 +1423,7 @@ async def _fetch_url(
                 error=err,
                 info=info,
                 total_chars=len(md),
+                url=url,
             )
         # Cache missing or stale — fetch first, then extract from result.
 
@@ -1415,7 +1441,8 @@ async def _fetch_url(
                 # than trusting a cached version — the chunking algorithm
                 # may have changed since the cache was written.
                 return _result_with_truncation(
-                    cached_md, navigation=nav, chunked=None,
+                    cached_md, navigation=nav, chunked=None, limit=limit,
+                    url=url,
                 )
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
@@ -1445,6 +1472,7 @@ async def _fetch_url(
             error=err,
             info=info,
             total_chars=len(md),
+            url=url,
         )
 
     # Full result — apply truncation if needed.
@@ -1452,6 +1480,8 @@ async def _fetch_url(
         full_markdown,
         navigation=result.navigation if include_navigation else None,
         chunked=result.chunked,
+        limit=limit,
+        url=url,
     )
 
 
@@ -1459,19 +1489,27 @@ def _result_with_truncation(
     markdown: str,
     navigation: dict[str, list[dict[str, Any]]] | None = None,
     chunked: dict[str, Any] | None = None,
+    *,
+    url: str = "",
+    limit: int = _WEBFETCH_TRUNCATION_THRESHOLD,
 ) -> FetchResult:
     """Build a FetchResult with optional truncation and compact ToC.
+
+    When *markdown* exceeds *limit* chars, replaces it with a compact ToC
+    and stores a helpful info message.  Below *limit* the raw markdown is
+    returned as-is.
 
     If *chunked* is ``None`` (old cache without it, or not yet computed),
     the verbose chunked tree is generated on the fly from *markdown*.
     """
     total_chars = len(markdown)
-    if total_chars <= _TRUNCATION_THRESHOLD:
+    if total_chars <= limit:
         return FetchResult(
             success=True,
             markdown=markdown,
             navigation=navigation,
             total_chars=total_chars,
+            url=url,
         )
 
     # Ensure we have a chunked tree — compute it if missing.
@@ -1496,8 +1534,9 @@ def _result_with_truncation(
         markdown=_truncation_message(),
         navigation=navigation,
         toc=toc,
-        info=_truncation_info(total_chars, markdown),
+        info=_truncation_info(total_chars, markdown, limit=limit),
         total_chars=total_chars,
+        url=url,
     )
 
 
@@ -1509,13 +1548,14 @@ async def fetch_urls(
     line_ranges: list[str] | None = None,
     refresh_cache: bool = False,
     include_navigation: bool = False,
+    limit: int = _WEBFETCH_TRUNCATION_THRESHOLD,
 ) -> FetchResult:
     """Fetch *url* (or extract sections from it) and return structured results.
 
     The single public entry point for web fetching.  Handles three cases:
 
     1. **No selectors** — returns the full page (truncated to a ToC when the
-       content exceeds ``_TRUNCATION_THRESHOLD`` chars).
+       content exceeds *limit* chars, default 20 000).
     2. **Single selector** (one heading or one line‑range) — extracts that
        section from the cached page.
     3. **Multiple selectors** — seeds the cache with one fetch, then extracts
@@ -1530,6 +1570,8 @@ async def fetch_urls(
         refresh_cache: If ``True``, always refetch, ignoring cache.
         include_navigation: If ``True``, include extracted page links in the
             result (only applicable when no selectors are given).
+        limit: Character count above which a full‑page fetch returns a
+            compact ToC instead of raw markdown (default 20 000).
 
     Returns:
         ``FetchResult`` — never ``None``.
@@ -1547,12 +1589,14 @@ async def fetch_urls(
         # Seed the cache with one fetch.
         seed = await _fetch_url(
             url, wait_until=wait_until, refresh_cache=refresh_cache,
+            limit=limit,
         )
         if not seed.success:
             return FetchResult(
                 success=False,
                 markdown="",
                 error=f"Failed to fetch {url}: {seed.error}",
+                url=url,
             )
 
         successes: list[str] = []
@@ -1581,6 +1625,7 @@ async def fetch_urls(
             success=bool(successes),
             markdown=combined,
             error="; ".join(errors) if errors else None,
+            url=url,
         )
 
     # ── Single / no selector → delegate to _fetch_url ───────────────────
@@ -1593,6 +1638,7 @@ async def fetch_urls(
         line_range=line_range,
         refresh_cache=refresh_cache,
         include_navigation=include_navigation,
+        limit=limit,
     )
 
 
@@ -1618,6 +1664,7 @@ def result_to_output_json(result: FetchResult, *, compact_toc: bool = True) -> s
         toc_n_chars = len(json.dumps(result.toc, ensure_ascii=False))
 
     output: dict[str, Any] = {
+        "url": result.url,
         "success": result.success,
         "status_code": result.status_code,
         "error": result.error,

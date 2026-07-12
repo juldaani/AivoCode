@@ -75,6 +75,15 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=False,
         help="Include extracted page links (internal/external) in the result.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=20000,
+        help=(
+            "Character count above which a full-page fetch returns a "
+            "compact table of contents instead of raw markdown (default 20000)."
+        ),
+    )
     parser.set_defaults(func=_handle)
 
 
@@ -89,6 +98,7 @@ def _handle(args: argparse.Namespace) -> int:
         "wait_until": wait_until,
         "refresh_cache": args.refresh_cache,
         "include_navigation": args.navigation,
+        "limit": args.limit,
     }
     if headings:
         body["headings"] = headings

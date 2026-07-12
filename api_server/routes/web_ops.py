@@ -29,6 +29,7 @@ class WebfetchBody(BaseModel):
     line_ranges: list[str] | None = None
     refresh_cache: bool = False
     include_navigation: bool = False
+    limit: int = 20000
 
 
 class WebsearchBody(BaseModel):
@@ -60,11 +61,13 @@ async def webfetch(body: WebfetchBody):
         line_ranges=body.line_ranges,
         refresh_cache=body.refresh_cache,
         include_navigation=body.include_navigation,
+        limit=body.limit,
     )
     # Build a plain dict from the FetchResult attributes.  FetchResult is
     # a plain class (not a dataclass), so we construct the dict manually
     # rather than using ``dataclasses.asdict()``.
-    return {
+    response: dict = {
+        "url": result.url,
         "markdown": result.markdown,
         "success": result.success,
         "status_code": result.status_code,
@@ -75,6 +78,7 @@ async def webfetch(body: WebfetchBody):
         "info": result.info,
         "total_chars": result.total_chars,
     }
+    return {k: v for k, v in response.items() if v is not None}
 
 
 @router.post("/websearch")
