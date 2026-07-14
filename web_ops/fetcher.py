@@ -31,8 +31,10 @@ import time
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, List, Tuple
 
+import Stemmer
+import bm25s
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from cloakbrowser import launch_async
 
@@ -136,6 +138,18 @@ _TOC_PRUNING_RATIO_THRESHOLD: float = 10.0
 # this filter.
 _MIN_CHUNK_PREVIEW_CHARS: int = 15
 
+# ── BM25 keyword extraction constants ──────────────────────────────────────
+# Min / max top‑K keywords to extract per chunk.
+_KW_MIN_K: int = 3
+_KW_MAX_K: int = 15
+
+# Adaptive K: one keyword per this many words in the chunk text (ceil).
+_KW_WORDS_PER_KEYWORD: int = 12
+
+# Character threshold (below which keywords are omitted from the ToC).
+# 2 × the preview length (80).
+_KW_TOC_CHARS_THRESHOLD: int = 160
+
 # Average characters-per-chunk threshold above which a section is considered
 # "dense" — i.e. the \n\n-based parser produced overly-large chunks — and a
 # finer \n-based re-split + consecutive-merge pass is applied.
@@ -195,7 +209,7 @@ def _free_port() -> int:
 # ---------------------------------------------------------------------------
 
 
-def _chunk_preview(text: str, n: int = 60) -> str:
+def _chunk_preview(text: str, n: int = 80) -> str:
     """First *n* chars of *text*, URLs stripped, leading whitespace removed,
     hard-cut.
 
@@ -204,6 +218,46 @@ def _chunk_preview(text: str, n: int = 60) -> str:
     rather than URL cruft.
     """
     return _strip_urls(text)[:n]
+
+
+def _chunk_type(text: str) -> str:
+    """Classify a chunk as ``"code"``, ``"table"``, ``"blockquote"``, ``"list"``,
+    or ``"text"`` based on the first non‑blank line.
+
+    Heuristic:
+    - `` ``` `` at line start → code block.
+    - ``|`` at line start → table row.
+    - ``> `` at line start → blockquote.
+    - Bullet (``*``, ``-``, ``+``) or numbered (``1.``) → list.
+    - Everything else → text.
+    """
+    first = text.lstrip()
+    if not first:
+        return "text"
+    first_line = first.split("\n")[0].lstrip()
+    if first_line.startswith("```"):
+        return "code"
+    if first_line.startswith("|"):
+        return "table"
+    if first_line.startswith("> "):
+        return "blockquote"
+    if _RE_LIST_ITEM.match(first_line):
+        return "list"
+    return "text"
+
+
+def _make_chunk_dict(text: str, start: int, end: int) -> dict[str, Any]:
+    """Build a chunk dict with ``text``, ``preview``, ``lines``, and ``type``.
+
+    All chunk creation sites go through this helper so ``type`` is never
+    missed and future fields are added in one place.
+    """
+    return {
+        "text": text,
+        "preview": _chunk_preview(text),
+        "lines": [start, end],
+        "type": _chunk_type(text),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +414,34 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
     # Post-process: detect dense sections (where \n\n split produced
     # overly-large chunks) and re-split + merge for finer granularity.
     _rechunk_dense_sections(root)
+
+    # Post-process: merge colon-terminated intro chunks with their
+    # following chunk (e.g. "The parameters are:" → table/list below).
+    _merge_colon_chunks(root)
+
+    # Post-process: remove empty-anchor chunks (e.g. GitHub's
+    # ``[](#section-id)`` heading anchors) that carry no content.
+    _remove_empty_anchor_chunks(root)
+
+    # Post-process: merge short orphan chunks (< 80 chars) into the next
+    # chunk — eliminates ToC JSON clutter where metadata is larger than
+    # the content itself.  Code, table, text+code, and text+table chunks
+    # are preserved intact regardless of size.
+    #
+    # Runs in a loop: each pass merges one "layer" of short chunks with
+    # their next neighbour.  Loops until the number of remaining mergeable
+    # short chunks drops below a size‑scaled threshold, or no more merges
+    # are possible (convergence safety).
+    max_orphans = max(
+        _SHORT_ORPHAN_FLOOR,
+        -(-len(markdown) // _SHORT_ORPHAN_SCALE_DIVISOR),
+    )
+    while True:
+        merges = _merge_short_chunks(root)
+        if merges == 0:
+            break  # No more merges possible — all candidates are skip-types or solo.
+        if _count_short_mergeable_chunks(root) < max_orphans:
+            break
 
     return root
 
@@ -525,11 +607,7 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                     if should_flush:
                         # Flush current group, start a new one.
                         group_text = "\n".join(group_lines)
-                        new_chunks.append({
-                            "text": group_text,
-                            "preview": _chunk_preview(group_text),
-                            "lines": [line_start + i, line_start + j - 1],
-                        })
+                        new_chunks.append(_make_chunk_dict(group_text, line_start + i, line_start + j - 1))
                         i = j  # next group starts at this index
                         group_lines = []
                         group_chars = 0
@@ -539,11 +617,7 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                 # Emit the final (or only) group.
                 if group_lines:
                     group_text = "\n".join(group_lines)
-                    new_chunks.append({
-                        "text": group_text,
-                        "preview": _chunk_preview(group_text),
-                        "lines": [line_start + i, line_start + j - 1],
-                    })
+                    new_chunks.append(_make_chunk_dict(group_text, line_start + i, line_start + j - 1))
                 i = j
             elif typ == "list":
                 # Collect all consecutive list lines first, then split into
@@ -604,14 +678,13 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                     if group_lines and group_items + n_items > _MAX_TABLE_ROWS_PER_CHUNK:
                         # Would exceed cap — flush current group first.
                         group_text = "\n".join(group_lines)
-                        new_chunks.append({
-                            "text": group_text,
-                            "preview": _chunk_preview(group_text),
-                            "lines": [
+                        new_chunks.append(
+                            _make_chunk_dict(
+                                group_text,
                                 line_start + i + emitted,
                                 line_start + i + emitted + len(group_lines) - 1,
-                            ],
-                        })
+                            )
+                        )
                         emitted += len(group_lines)
                         group_lines = []
                         group_items = 0
@@ -622,23 +695,18 @@ def _rechunk_dense_sections(tree: dict[str, Any]) -> None:
                 # Emit final group.
                 if group_lines:
                     group_text = "\n".join(group_lines)
-                    new_chunks.append({
-                        "text": group_text,
-                        "preview": _chunk_preview(group_text),
-                        "lines": [
+                    new_chunks.append(
+                        _make_chunk_dict(
+                            group_text,
                             line_start + i + emitted,
                             line_start + i + emitted + len(group_lines) - 1,
-                        ],
-                    })
+                        )
+                    )
 
                 i = j
             else:
                 # Single-line chunk (may be merged with neighbours later).
-                new_chunks.append({
-                    "text": stripped,
-                    "preview": _chunk_preview(stripped),
-                    "lines": [line_start + i, line_start + i],
-                })
+                new_chunks.append(_make_chunk_dict(stripped, line_start + i, line_start + i))
                 i += 1
 
     # ── Merge consecutive single-line chunks into logical groups ──────
@@ -709,11 +777,7 @@ def _merge_consecutive_chunks(
             cur_end = nxt["lines"][1]
         else:
             # Emit the accumulated chunk and start fresh with nxt.
-            merged.append({
-                "text": cur_text,
-                "preview": _chunk_preview(cur_text),
-                "lines": [cur_start, cur_end],
-            })
+            merged.append(_make_chunk_dict(cur_text, cur_start, cur_end))
             cur_text = nxt_text
             cur_start = nxt["lines"][0]
             cur_end = nxt["lines"][1]
@@ -721,13 +785,196 @@ def _merge_consecutive_chunks(
             cur_is_group = nxt_is_group
 
     # Emit the trailing accumulated chunk.
-    merged.append({
-        "text": cur_text,
-        "preview": _chunk_preview(cur_text),
-        "lines": [cur_start, cur_end],
-    })
+    merged.append(_make_chunk_dict(cur_text, cur_start, cur_end))
 
     return merged
+
+
+# ── Post‑processing merge: colon‑terminated intro → next chunk ──────────
+
+# Max character length of a colon‑terminated intro chunk to trigger the
+# merge.  Longer chunks that end with ":" (e.g. a full sentence) are left
+# alone — the colon is likely part of the sentence, not an introduction
+# to the next chunk.
+_COLON_MERGE_MAX_CHARS: int = 200
+
+# Max character length of a chunk to trigger the short‑chunk merge step.
+# Chunks below this threshold that are NOT code, table, text+code, or
+# text+table are merged into the next chunk to reduce ToC JSON clutter.
+_SHORT_CHUNK_MAX_CHARS: int = 80
+
+# Short‑orphan threshold scaling: 1 allowed orphan per this many chars of raw
+# markdown.  Floor of 5 orphans regardless of page size, no upper limit.
+_SHORT_ORPHAN_SCALE_DIVISOR: int = 5_000
+_SHORT_ORPHAN_FLOOR: int = 5
+
+
+def _merge_colon_chunks(tree: dict[str, Any]) -> None:
+    """Merge a short colon‑terminated chunk with the following chunk.
+
+    Walks every section in the tree.  For each pair of consecutive chunks
+    where the first ends with ``:`` and has < ``_COLON_MERGE_MAX_CHARS``
+    chars, the two chunks are fused into one (text joined by ``\\n``,
+    line range spans both).
+
+    The merged chunk inherits the **second** chunk's type — the colon‑line
+    is typically a human‑readable lead‑in to a table, code block, or list.
+    """
+    for section in tree.get("sections", []):
+        _merge_colon_chunks(section)
+
+    chunks = tree.get("chunks")
+    if not chunks or len(chunks) < 2:
+        return
+
+    merged: list[dict[str, Any]] = []
+    i = 0
+    while i < len(chunks):
+        cur = chunks[i]
+        if (
+            i + 1 < len(chunks)
+            and cur["text"].rstrip().endswith(":")
+            and len(cur["text"]) < _COLON_MERGE_MAX_CHARS
+        ):
+            nxt = chunks[i + 1]
+            fused_text = cur["text"] + "\n" + nxt["text"]
+            fused = _make_chunk_dict(
+                fused_text,
+                cur["lines"][0],
+                nxt["lines"][1],
+            )
+            # Override the auto‑detected type — the fused chunk is an
+            # intro‑text followed by the second chunk's content, so the
+            # combined type reflects both (e.g. "text+code", "text+table").
+            fused["type"] = "text+" + nxt.get("type", "text")
+            merged.append(fused)
+            i += 2
+        else:
+            merged.append(cur)
+            i += 1
+
+    tree["chunks"] = merged
+
+
+def _remove_empty_anchor_chunks(tree: dict[str, Any]) -> None:
+    """Remove chunks whose entire text is empty-anchor markdown links.
+
+    Walks every section in the tree and drops chunks that consist only of
+    ``[](url)`` patterns — these carry no textual content and would
+    otherwise pollute the ToC and keyword index.
+    """
+    for section in tree.get("sections", []):
+        _remove_empty_anchor_chunks(section)
+
+    tree["chunks"] = [
+        c for c in tree.get("chunks", [])
+        if not _is_empty_anchor_chunk(c["text"])
+    ]
+
+
+def _is_empty_anchor_chunk(text: str) -> bool:
+    """Return ``True`` if *text* consists solely of empty-anchor markdown links.
+
+    Catches patterns like ``[](https://...#section)`` or ``[](url)`` where
+    the alt‑text is empty — these are heading anchors that carry no content.
+    Multiple anchors joined by whitespace are also detected.
+    """
+    if not text.strip():
+        return False
+    stripped = re.sub(r"\[\]\([^)]*\)", "", text).strip()
+    return len(stripped) == 0
+
+
+# Post‑processing merge: short orphan chunks (< _SHORT_CHUNK_MAX_CHARS),
+# merged **backward** into the previous chunk so the meaningful preview text
+# survives.  Skipped types (code, table, text+code, text+table) are
+# semantically atomic and must stay intact even when short.
+_SHORT_MERGE_SKIP_TYPES: frozenset[str] = frozenset(
+    {"code", "table", "text+code", "text+table"},
+)
+
+
+def _merge_short_chunks(tree: dict[str, Any]) -> int:
+    """Merge short orphan chunks (< ``_SHORT_CHUNK_MAX_CHARS`` chars) backward
+    into the **previous** chunk.
+
+    Walks every section in the tree.  When a chunk is short and its type is
+    NOT in ``_SHORT_MERGE_SKIP_TYPES``, it is absorbed into the end of the
+    preceding chunk (text joined by ``\\n``, line range spans both).
+
+    Merging backward preserves the preceding chunk's preview text — the
+    orphan is appended after it, not before it.  This is important because
+    the first few lines of a chunk determine its ToC preview; merging a
+    boilerplate orphan (e.g. "© 2026 GitHub, Inc.") into the front of a
+    substantive chunk would replace the useful preview with noise.
+
+    The merged chunk's type follows a same‑type shortcut: when both chunks
+    share the same type, the fused chunk keeps that single type (e.g.
+    ``text`` + ``text`` → ``text``).  When types differ, the composition is
+    preserved with a ``+`` separator (e.g. ``text`` + ``list`` → ``text+list``).
+
+    Returns the total number of merges performed across all sections (0 if
+    no chunk was short enough or all candidates were in the skip set).
+    Callers use this to detect convergence — a zero return means no further
+    progress is possible, even if short chunks remain.
+    """
+    merges = 0
+
+    for section in tree.get("sections", []):
+        merges += _merge_short_chunks(section)
+
+    chunks = tree.get("chunks")
+    if not chunks or len(chunks) < 2:
+        return merges
+
+    merged: list[dict[str, Any]] = []
+    for cur in chunks:
+        # Absorb backward into the previous chunk when: this chunk is short,
+        # its type is safe to merge, and there IS a previous chunk.
+        if (
+            len(cur["text"]) < _SHORT_CHUNK_MAX_CHARS
+            and cur.get("type", "text") not in _SHORT_MERGE_SKIP_TYPES
+            and merged
+        ):
+            prev = merged[-1]
+            fused_text = prev["text"] + "\n" + cur["text"]
+            fused = _make_chunk_dict(
+                fused_text,
+                prev["lines"][0],
+                cur["lines"][1],
+            )
+            # Compute merged type: same type → use that type;
+            # different types → preserve the composition hint.
+            prev_type = prev.get("type", "text")
+            cur_type = cur.get("type", "text")
+            fused["type"] = prev_type if prev_type == cur_type else f"{prev_type}+{cur_type}"
+            merged[-1] = fused
+            merges += 1
+        else:
+            merged.append(cur)
+
+    tree["chunks"] = merged
+    return merges
+
+
+def _count_short_mergeable_chunks(tree: dict[str, Any]) -> int:
+    """Return the number of mergeable short chunks across *tree*.
+
+    A chunk is "mergeable" when it has < ``_SHORT_CHUNK_MAX_CHARS`` chars
+    and its type is NOT in the skip set (code, table, text+code,
+    text+table).  This drives the loop termination condition — we keep
+    merging until the count drops below the size‑scaled threshold.
+    """
+    count = 0
+    for chunk in tree.get("chunks", []):
+        if (
+            len(chunk["text"]) < _SHORT_CHUNK_MAX_CHARS
+            and chunk.get("type", "text") not in _SHORT_MERGE_SKIP_TYPES
+        ):
+            count += 1
+    for section in tree.get("sections", []):
+        count += _count_short_mergeable_chunks(section)
+    return count
 
 
 def _emit_chunk(
@@ -740,11 +987,130 @@ def _emit_chunk(
     text = "\n".join(lines).rstrip()
     if not text:
         return  # Purely blank chunks (shouldn't happen, but safe).
-    parent["chunks"].append({
-        "text": text,
-        "preview": _chunk_preview(text),
-        "lines": [start, end],
-    })
+    # Skip chunks that are pure empty-anchor links — e.g. GitHub's
+    # auto-generated ``[](#section-id)`` heading anchors.
+    if _is_empty_anchor_chunk(text):
+        return
+    parent["chunks"].append(_make_chunk_dict(text, start, end))
+
+
+# ---------------------------------------------------------------------------
+# BM25 keyword extraction — writes keywords back into the chunked tree
+# ---------------------------------------------------------------------------
+
+
+def _flatten_chunk_dicts(tree: dict[str, Any]) -> List[dict[str, Any]]:
+    """Walk *tree* and return a flat list of every chunk dict (by reference).
+
+    Because the returned list holds the **same dict objects** that live in
+    the tree, mutations (e.g. adding ``bm25_keywords``) are visible in the
+    original tree.
+    """
+    result: List[dict[str, Any]] = []
+    for chunk in tree.get("chunks", []):
+        result.append(chunk)
+    for sub in tree.get("sections", []):
+        result.extend(_flatten_chunk_dicts(sub))
+    return result
+
+
+def _get_top_bm25_keywords(
+    bm25_obj: bm25s.BM25,
+    token_ids_per_doc: List[List[int]],
+    id_to_token: dict[int, str],
+    top_n: int = 3,
+) -> List[List[str]]:
+    """Return top-N (token_string) lists for each document from the CSR matrix.
+
+    Reads the internal CSR-format term-document matrix from
+    ``bm25_obj.scores``, collects every term that appears in a given
+    document, sorts by the BM25 weight, and returns the top *top_n*
+    **token strings only** (scores are discarded — the keywords are for
+    informational display, not ranking).
+    """
+    data = bm25_obj.scores["data"]
+    indices = bm25_obj.scores["indices"]
+    indptr = bm25_obj.scores["indptr"]
+    num_terms = len(indptr) - 1
+
+    results: List[List[str]] = []
+    for doc_id in range(len(token_ids_per_doc)):
+        term_scores: List[Tuple[str, float]] = []
+        for term_id in range(num_terms):
+            start = indptr[term_id]
+            end = indptr[term_id + 1]
+            for pos in range(start, end):
+                if indices[pos] == doc_id:
+                    token_str = id_to_token.get(term_id, f"<unk:{term_id}>")
+                    term_scores.append((token_str, float(data[pos])))
+                    break
+        term_scores.sort(key=lambda x: x[1], reverse=True)
+        results.append([t for t, _ in term_scores[:top_n]])
+
+    return results
+
+
+def _add_bm25_keywords_to_tree(tree: dict[str, Any]) -> None:
+    """Compute BM25 keywords for every chunk in *tree* and write them back.
+
+    Steps:
+    1. Flatten all chunk dicts from the tree (by reference).
+    2. Tokenize the corpus with the English stemmer.
+    3. Build a ``bm25s.BM25`` index.
+    4. For each chunk, compute an adaptive K from the word count
+       (clamped to ``[_KW_MIN_K, _KW_MAX_K]``), extract top-K terms,
+       and store the token list in ``chunk["bm25_keywords"]``.
+
+    Keywords are ALWAYS computed for every chunk (ground truth), regardless
+    of whether the ToC projector chooses to emit them.
+    """
+    chunk_dicts = _flatten_chunk_dicts(tree)
+    if not chunk_dicts:
+        return
+
+    # Build corpus from chunk text.
+    corpus = [c["text"] for c in chunk_dicts]
+    stemmer = Stemmer.Stemmer("english")
+    token_ids, vocab = bm25s.tokenize(
+        corpus, stopwords="en", stemmer=stemmer, return_ids=True,
+    )
+    id_to_token: dict[int, str] = {v: k for k, v in vocab.items()}
+
+    # Compute word counts for adaptive K sizing.
+    word_counts: List[int] = []
+    for c in chunk_dicts:
+        # Count non-empty lines / whitespace-delimited tokens as a cheap
+        # word‑count heuristic that does not need a separate tokenizer.
+        text = c["text"]
+        if text.strip():
+            word_counts.append(len(text.split()))
+        else:
+            word_counts.append(0)
+
+    # Adaptive K: ceil(word_count / _KW_WORDS_PER_KEYWORD), clamped.
+    # We compute the max across all chunks first, then extract at that level
+    # and trim per-chunk afterward — this is cheaper than indexing per chunk.
+    top_n_all = min(
+        _KW_MAX_K,
+        max(
+            _KW_MIN_K,
+            -(-max(word_counts) // _KW_WORDS_PER_KEYWORD) if word_counts else _KW_MIN_K,
+        ),
+    )
+
+    bm25 = bm25s.BM25()
+    bm25.index(token_ids)
+    all_keywords = _get_top_bm25_keywords(
+        bm25, token_ids, id_to_token, top_n=top_n_all,
+    )
+
+    # Write keywords back into each chunk dict (mutates tree in-place).
+    for chunk, kws, wc in zip(chunk_dicts, all_keywords, word_counts):
+        needed = max(
+            _KW_MIN_K,
+            min(_KW_MAX_K, -(-wc // _KW_WORDS_PER_KEYWORD)),
+        )
+        chunk["bm25_keywords"] = kws[:needed]
 
 
 # ---------------------------------------------------------------------------
@@ -778,7 +1144,14 @@ def _chunked_to_toc(
     """Project the verbose cached chunked tree into a compact ToC.
 
     The compact format is an ordered array where:
-    - ``[line_start, line_end, "preview"]`` triples are text chunks.
+    - Dict ``{"lines": [start, end], "preview": "...", "type": "text",
+      "n_chars": N, "bm25_keywords": [...]}`` objects are text chunks
+      (``bm25_keywords`` appears only when URL‑stripped text
+      > ``_KW_TOC_CHARS_THRESHOLD``).
+    - ``{"type": "omitted", "n_omitted": N, "lines": [first, last],
+      "info": "…"}`` sentinels mark chunks that were skipped due to the
+      per‑depth cap — ``n_omitted`` is the machine‑readable count,
+      ``info`` the human‑readable explanation.
     - ``{"Heading Name": [...]}`` objects are subsections.
 
     Duplicate heading names at the same level get a ``" (N)"`` suffix.
@@ -818,11 +1191,15 @@ def _section_to_toc(
         # all chunks so the section heading is still navigable.
         first = chunks[0]["lines"][0]
         last = chunks[-1]["lines"][1]
-        msg = (
-            f"… {len(chunks)} chunks — use --heading to expand all, "
-            f"or --line-range to read selectively"
-        )
-        result.append([first, last, msg])
+        result.append({
+            "type": "omitted",
+            "n_omitted": len(chunks),
+            "lines": [first, last],
+            "info": (
+                f"… {len(chunks)} chunks — use --heading to expand all, "
+                f"or --line-range to read selectively"
+            ),
+        })
     elif cap > 0:
         # Emit up to *cap* chunk previews — cap with sentinel if there are
         # more.  Skip trivially-short non-code chunks whose content was
@@ -836,7 +1213,17 @@ def _section_to_toc(
                     continue
 
             ls, le = chunk["lines"]
-            result.append([ls, le, chunk["preview"]])
+            # Build the ToC entry with type and (conditionally) bm25_keywords.
+            entry: dict[str, Any] = {
+                "lines": [ls, le],
+                "preview": chunk["preview"],
+                "type": chunk.get("type", "text"),
+                "n_chars": len(chunk["text"]),
+            }
+            chunk_n_chars = entry["n_chars"]
+            if chunk_n_chars > _KW_TOC_CHARS_THRESHOLD:
+                entry["bm25_keywords"] = chunk.get("bm25_keywords", [])
+            result.append(entry)
             emitted += 1
 
             if emitted >= cap:
@@ -847,11 +1234,15 @@ def _section_to_toc(
             skipped = len(chunks) - (i + 1)
             first = chunks[i + 1]["lines"][0]
             last = chunks[-1]["lines"][1]
-            msg = (
-                f"… {skipped} more chunks — use --heading to expand all, "
-                f"or --line-range to read selectively"
-            )
-            result.append([first, last, msg])
+            result.append({
+                "type": "omitted",
+                "n_omitted": skipped,
+                "lines": [first, last],
+                "info": (
+                    f"… {skipped} more chunks — use --heading to expand all, "
+                    f"or --line-range to read selectively"
+                ),
+            })
 
     # Subsections — deduplicate heading names within this level.
     # Skip sections whose entire content was filtered out (e.g. empty
@@ -1305,6 +1696,9 @@ def _truncation_info(total_chars: int, markdown: str = "", *, limit: int = 20_00
     and a high density of links — typical of news feed / link-directory
     pages where the chunked ToC may be unreliable.
 
+    Also explains the BM25 keyword threshold so agents understand why some
+    chunk entries carry an empty keyword list.
+
     *limit* is the webfetch ToC threshold (overridable via ``--limit``).
     The section‑extraction cap message references the dedicated
     ``_WEBFETCH_SECTION_TRUNCATION_THRESHOLD`` constant (10 000 chars).
@@ -1322,7 +1716,18 @@ def _truncation_info(total_chars: int, markdown: str = "", *, limit: int = 20_00
             "may be misleading/incomplete. Try --navigation for structured "
             "link extraction or --line-range for partial reading."
         )
+    msg += "\n\n" + _bm25_info()
     return msg
+
+
+def _bm25_info() -> str:
+    """Return a one‑liner explaining when BM25 keywords are omitted from the ToC."""
+    return (
+        "Each ToC chunk entry may include a `bm25_keywords` field. "
+        "Chunks ≤ {threshold} chars omit the field to stay compact. "
+        "Keywords are English‑stemmed (e.g. "
+        "`navig` = navigation, `readabl` = readability)."
+    ).format(threshold=_KW_TOC_CHARS_THRESHOLD)
 
 
 def _is_feed_page(markdown: str) -> bool:
@@ -1515,6 +1920,9 @@ def _result_with_truncation(
     # Ensure we have a chunked tree — compute it if missing.
     if chunked is None:
         chunked = _parse_chunked(markdown)
+
+    # Enrich the chunked tree with BM25 keyword metadata (mutates in-place).
+    _add_bm25_keywords_to_tree(chunked)
 
     toc = _chunked_to_toc(chunked)
 
