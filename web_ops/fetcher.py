@@ -423,25 +423,17 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
     # ``[](#section-id)`` heading anchors) that carry no content.
     _remove_empty_anchor_chunks(root)
 
-    # Post-process: merge short orphan chunks (< 80 chars) into the next
-    # chunk — eliminates ToC JSON clutter where metadata is larger than
-    # the content itself.  Code, table, text+code, and text+table chunks
-    # are preserved intact regardless of size.
+    # Post-process: merge short orphan chunks (< 150 chars) backward
+    # into the previous chunk — eliminates ToC JSON clutter where metadata
+    # is larger than the content itself.  Code, table, text+code, and
+    # text+table chunks are preserved intact regardless of size.
     #
-    # Runs in a loop: each pass merges one "layer" of short chunks with
-    # their next neighbour.  Loops until the number of remaining mergeable
-    # short chunks drops below a size‑scaled threshold, or no more merges
-    # are possible (convergence safety).
-    max_orphans = max(
-        _SHORT_ORPHAN_FLOOR,
-        -(-len(markdown) // _SHORT_ORPHAN_SCALE_DIVISOR),
-    )
-    while True:
-        merges = _merge_short_chunks(root)
-        if merges == 0:
-            break  # No more merges possible — all candidates are skip-types or solo.
-        if _count_short_mergeable_chunks(root) < max_orphans:
-            break
+    # Runs in a loop until convergence: each pass absorbs short chunks
+    # into their predecessor.  Stops when no more merges are possible
+    # (all remaining candidates are skip-types, section-first orphans
+    # with no predecessor, or already above the threshold).
+    while _merge_short_chunks(root) > 0:
+        pass
 
     return root
 
@@ -800,13 +792,9 @@ _COLON_MERGE_MAX_CHARS: int = 200
 
 # Max character length of a chunk to trigger the short‑chunk merge step.
 # Chunks below this threshold that are NOT code, table, text+code, or
-# text+table are merged into the next chunk to reduce ToC JSON clutter.
-_SHORT_CHUNK_MAX_CHARS: int = 80
-
-# Short‑orphan threshold scaling: 1 allowed orphan per this many chars of raw
-# markdown.  Floor of 5 orphans regardless of page size, no upper limit.
-_SHORT_ORPHAN_SCALE_DIVISOR: int = 5_000
-_SHORT_ORPHAN_FLOOR: int = 5
+# text+table are merged backward into the previous chunk to reduce ToC JSON
+# clutter.
+_SHORT_CHUNK_MAX_CHARS: int = 150
 
 
 def _merge_colon_chunks(tree: dict[str, Any]) -> None:
@@ -955,26 +943,6 @@ def _merge_short_chunks(tree: dict[str, Any]) -> int:
 
     tree["chunks"] = merged
     return merges
-
-
-def _count_short_mergeable_chunks(tree: dict[str, Any]) -> int:
-    """Return the number of mergeable short chunks across *tree*.
-
-    A chunk is "mergeable" when it has < ``_SHORT_CHUNK_MAX_CHARS`` chars
-    and its type is NOT in the skip set (code, table, text+code,
-    text+table).  This drives the loop termination condition — we keep
-    merging until the count drops below the size‑scaled threshold.
-    """
-    count = 0
-    for chunk in tree.get("chunks", []):
-        if (
-            len(chunk["text"]) < _SHORT_CHUNK_MAX_CHARS
-            and chunk.get("type", "text") not in _SHORT_MERGE_SKIP_TYPES
-        ):
-            count += 1
-    for section in tree.get("sections", []):
-        count += _count_short_mergeable_chunks(section)
-    return count
 
 
 def _emit_chunk(
