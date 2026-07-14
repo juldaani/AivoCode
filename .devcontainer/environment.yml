@@ -26,3 +26,8 @@ dependencies:
     - tree-sitter==0.25.2
     - tree-sitter-python==0.25.0
     - tree-sitter-typescript==0.23.2
+    - llama-index-core==0.14.23
+    - llama-index-embeddings-fastembed==0.6.0
+    - llama-index-retrievers-bm25==0.7.1
+    - rank-bm25==0.2.2
+    - fastembed==0.8.0
