@@ -116,6 +116,35 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
             "those have a fixed 10 000‑char cap regardless of this value."
         ),
     )
+    parser.add_argument(
+        "--query",
+        type=str,
+        default=None,
+        help=(
+            "Search the page content with hybrid (vector + BM25) retrieval.  "
+            "When set, the response contains ranked chunks with scores instead "
+            "of raw markdown.  Use --query-page to paginate."
+        ),
+    )
+    parser.add_argument(
+        "--query-page",
+        type=int,
+        default=0,
+        help=(
+            "Zero‑based page index for paginated search results.  "
+            "Each page returns 5 results.  Default 0."
+        ),
+    )
+    parser.add_argument(
+        "--query-vector-weight",
+        type=float,
+        default=0.65,
+        help=(
+            "Weight for the vector retriever (0–1).  BM25 gets 1 minus this "
+            "weight.  Higher values favour semantic similarity; lower values "
+            "favour keyword matches.  Default 0.65."
+        ),
+    )
     parser.set_defaults(func=_handle)
 
 
@@ -136,6 +165,10 @@ def _handle(args: argparse.Namespace) -> int:
         body["headings"] = headings
     if line_ranges:
         body["line_ranges"] = line_ranges
+    if args.query is not None:
+        body["query"] = args.query
+        body["query_page"] = args.query_page
+        body["query_vector_weight"] = args.query_vector_weight
 
     try:
         result = asyncio.run(_post("/web_ops/webfetch", body))

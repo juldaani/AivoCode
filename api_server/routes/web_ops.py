@@ -12,7 +12,8 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from web_ops import fetch_urls, web_search
+from web_ops import HybridSearcher, fetch_urls, web_search
+from web_ops.fetcher import _flatten_chunks, _parse_chunked, _read_cache_markdown
 
 router = APIRouter(prefix="/web_ops", tags=["web_ops"])
 
@@ -30,6 +31,10 @@ class WebfetchBody(BaseModel):
     refresh_cache: bool = False
     include_navigation: bool = False
     limit: int = 20000
+    # ── Hybrid search fields (optional — search mode activates when set) ──
+    query: str | None = None
+    query_page: int = 0
+    query_vector_weight: float = 0.65
 
 
 class WebsearchBody(BaseModel):
@@ -53,6 +58,11 @@ async def webfetch(body: WebfetchBody):
 
     All parameters mirror the ``fetch_urls()`` public API.  The server
     handles browser automation and HTML → markdown conversion.
+
+    When ``query`` is provided, the response switches to *search mode*:
+    the page is chunked, flattened into text nodes, indexed with a hybrid
+    (vector + BM25) retriever, and the top matching chunks are returned
+    with scores — no raw markdown or ToC.
     """
     result = await fetch_urls(
         body.url,
@@ -63,6 +73,51 @@ async def webfetch(body: WebfetchBody):
         include_navigation=body.include_navigation,
         limit=body.limit,
     )
+
+    # ── Search mode ────────────────────────────────────────────────────
+    if body.query is not None:
+        if not result.success:
+            return {
+                "url": body.url,
+                "success": False,
+                "error": result.error or "Fetch failed",
+            }
+
+        # The normal fetch truncates large pages to a ToC placeholder.
+        # For search we need the full content — read it from the on-disk
+        # cache where it was stored during the original fetch.
+        markdown = result.markdown
+        if markdown == " ... ":
+            cached = _read_cache_markdown(body.url)
+            if cached is None:
+                return {
+                    "url": body.url,
+                    "success": False,
+                    "error": "Page was truncated but no cached full content found",
+                }
+            markdown = cached
+
+        chunked = _parse_chunked(markdown)
+        nodes = _flatten_chunks(chunked, include_headers=True)
+        searcher = HybridSearcher()
+        searcher.build(nodes, vector_weight=body.query_vector_weight)
+        page_results, total = searcher.search(
+            body.query, top_k=5, page=body.query_page,
+        )
+
+        import math
+        total_pages = max(1, math.ceil(total / 5))
+        return {
+            "url": body.url,
+            "success": True,
+            "query": body.query,
+            "query_page": body.query_page,
+            "query_total_pages": total_pages,
+            "query_num_chunks": len(nodes),
+            "results": page_results,
+        }
+
+    # ── Normal mode (unchanged) ────────────────────────────────────────
     # Build a plain dict from the FetchResult attributes.  FetchResult is
     # a plain class (not a dataclass), so we construct the dict manually
     # rather than using ``dataclasses.asdict()``.

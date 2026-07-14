@@ -1688,3 +1688,76 @@ def result_to_output_json(result: FetchResult, *, compact_toc: bool = True) -> s
     output_marker["toc"] = "__TOC__"
     pretty = json.dumps(output_marker, indent=2, ensure_ascii=False)
     return pretty.replace('"__TOC__"', json.dumps(toc, ensure_ascii=False))
+
+
+# ---------------------------------------------------------------------------
+# Chunk flattener — converts the chunked tree into TextNode list for indexing
+# ---------------------------------------------------------------------------
+
+
+def _flatten_chunks(
+    tree: dict[str, Any],
+    *,
+    heading_path: list[str] | None = None,
+    include_headers: bool = True,
+) -> list[Any]:
+    """Flatten a chunked tree into a list of ``TextNode`` objects.
+
+    Each leaf chunk becomes one ``TextNode`` with metadata:
+    - ``heading_path``: list of ancestor heading strings (empty for root-level
+      chunks).
+    - ``lines``: ``[start_1based, end_1based]`` source line range.
+
+    When *include_headers* is ``True``, the chunk text is prefixed with a
+    breadcrumb like ``[Section > Subsection]`` to improve both embedding
+    quality (semantic context for the chunk) and BM25 term matching
+    (heading keywords contribute to retrieval).
+
+    This function lives in ``fetcher.py`` because it is tightly coupled to
+    the output shape of ``_parse_chunked``.  It is NOT the only way to
+    produce nodes for ``HybridSearcher`` — any list of ``TextNode`` works.
+
+    Args:
+        tree: A chunked tree dict as returned by ``_parse_chunked``.
+        heading_path: Accumulated heading breadcrumb (used internally during
+            recursion — callers pass ``None`` or omit).
+        include_headers: Whether to prepend breadcrumbs to chunk text.
+            Default ``True``.
+
+    Returns:
+        Flat list of ``TextNode`` objects (from ``llama_index.core.schema``).
+    """
+    # Lazy import — TextNode is only needed for the hybrid search code path,
+    # not for normal fetches.
+    from llama_index.core.schema import TextNode  # noqa: E402
+
+    heading_path = heading_path or []
+    nodes: list[Any] = []
+
+    # Emit nodes for every leaf chunk in this section.
+    for chunk in tree.get("chunks", []):
+        text: str = chunk["text"]
+        if include_headers and heading_path:
+            text = f"[{' > '.join(heading_path)}] {text}"
+
+        nodes.append(TextNode(
+            text=text,
+            metadata={
+                "heading_path": list(heading_path),
+                "lines": list(chunk["lines"]),
+            },
+        ))
+
+    # Recurse into child sections.
+    for section in tree.get("sections", []):
+        heading: str = section.get("heading", "")
+        child_path = heading_path + ([heading] if heading else [])
+        nodes.extend(
+            _flatten_chunks(
+                section,
+                heading_path=child_path,
+                include_headers=include_headers,
+            )
+        )
+
+    return nodes
