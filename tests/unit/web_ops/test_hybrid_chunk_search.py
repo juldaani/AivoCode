@@ -20,7 +20,7 @@ from web_ops.fetcher import _flatten_chunks, _parse_chunked
 from web_ops.hybrid_searcher import HybridSearcher
 
 # Path to saved test data (115 845 chars, 1 697 lines of markdown).
-_TEST_MD = Path(__file__).resolve().parent.parent.parent / "data" / "github_pi_subagents.md"
+_TEST_MD = Path(__file__).resolve().parent.parent.parent.parent / "data" / "webfetch" / "github_pi_subagents.md"
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
