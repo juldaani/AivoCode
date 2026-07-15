@@ -180,7 +180,7 @@ _DENSE_LINE_CHARS_THRESHOLD: int = 300
 
 # Directory where fetched page content is cached on disk.
 # Relative to the workspace root.
-_CACHE_DIR: Path = Path("tmp/aivocode/cache")
+_CACHE_DIR: Path = Path(".aivocode/cache")
 
 # Cache TTL in seconds.  After this period the cache is considered stale and
 # a fresh fetch is triggered automatically.  News sites update frequently;
@@ -1904,7 +1904,7 @@ async def _fetch_url(
 
     Side effects:
         Launches/takes down a CloakBrowser subprocess per fresh fetch.
-        Writes/reads unified JSON cache files to ``tmp/aivocode/cache/``.
+        Writes/reads unified JSON cache files to ``.aivocode/cache/``.
     """
     # ── Section extraction from cache (no fetch needed if fresh) ──────────
     wants_section = heading is not None or line_range is not None
@@ -2081,7 +2081,7 @@ async def fetch_urls(
 
     Side effects:
         Launches/takes down a CloakBrowser subprocess per fresh fetch.
-        Writes/reads unified JSON cache files to ``tmp/aivocode/cache/``.
+        Writes/reads unified JSON cache files to ``.aivocode/cache/``.
     """
     headings = headings or []
     line_ranges = line_ranges or []

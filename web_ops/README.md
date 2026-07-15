@@ -49,5 +49,5 @@ python -m cli webfetch https://nodejs.org/api/fs.html --pretty-format
 1. Launches a stealth browser via CloakBrowser at CDP port 9243
 2. Crawl4AI connects and captures the page as raw markdown
 3. Content > 10 000 chars → chunked into a heading-aware tree, projected to a compact ToC
-4. Full content cached to disk (`tmp/aivocode/cache/`) for 15 min, with section-level retrieval
+4. Full content cached to disk (`.aivocode/cache/`) for 15 min, with section-level retrieval
 5. Feed-page detection warns when the ToC may be unreliable (short lines, many links)
