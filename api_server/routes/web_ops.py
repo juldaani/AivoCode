@@ -35,6 +35,7 @@ class WebfetchBody(BaseModel):
     query: str | None = None
     query_page: int = 0
     query_vector_weight: float = 0.65
+    query_substring_weight: float = 0.4
 
 
 class WebsearchBody(BaseModel):
@@ -100,7 +101,11 @@ async def webfetch(body: WebfetchBody):
         chunked = _parse_chunked(markdown)
         nodes = _flatten_chunks(chunked, include_headers=True)
         searcher = HybridSearcher()
-        searcher.build(nodes, vector_weight=body.query_vector_weight)
+        searcher.build(
+            nodes,
+            vector_weight=body.query_vector_weight,
+            substring_weight=body.query_substring_weight,
+        )
         page_results, total = searcher.search(
             body.query, top_k=5, page=body.query_page,
         )
@@ -111,9 +116,12 @@ async def webfetch(body: WebfetchBody):
             "url": body.url,
             "success": True,
             "query": body.query,
+            "query_cleaned": searcher.query_cleaned,
+            "removed_stopwords": searcher.removed_stopwords,
             "query_page": body.query_page,
             "query_total_pages": total_pages,
             "query_num_chunks": len(nodes),
+            "query_substring_weight": body.query_substring_weight,
             "results": page_results,
         }
 

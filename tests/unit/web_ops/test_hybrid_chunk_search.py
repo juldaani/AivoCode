@@ -3,9 +3,11 @@
 Tests cover:
 - _flatten_chunks: chunked tree → TextNode list with metadata
 - HybridSearcher: build index, search, pagination, scoring
+- SubstringRetriever: stopword removal, sub-query generation,
+  weighted scoring, case insensitivity, normalisation
 - End-to-end: saved markdown → parse → flatten → search
 
-Uses a real-world markdown file cached at ``tests/data/github_pi_subagents.md``
+Uses a real-world markdown file cached at ``tests/data/webfetch/github_pi_subagents.md``
 to avoid network dependencies.  The markdown was fetched once from
 https://github.com/nicobailon/pi-subagents and checked in.
 """
@@ -18,9 +20,15 @@ import pytest
 
 from web_ops.fetcher import _flatten_chunks, _parse_chunked
 from web_ops.hybrid_searcher import HybridSearcher
+from web_ops.substring_retriever import (
+    SubstringRetriever,
+    generate_sub_queries,
+    remove_stopwords,
+    score_chunk,
+)
 
 # Path to saved test data (115 845 chars, 1 697 lines of markdown).
-_TEST_MD = Path(__file__).resolve().parent.parent.parent.parent / "data" / "webfetch" / "github_pi_subagents.md"
+_TEST_MD = Path(__file__).resolve().parent.parent.parent / "data" / "webfetch" / "github_pi_subagents.md"
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -251,3 +259,237 @@ class TestEndToEnd:
         r = results[0]
         assert r["score"] > 0.0, f"Top hit score is zero: {r}"
         assert len(r["text"]) > 20, f"Top hit text too short: {r['text'][:60]}"
+
+
+# ── SubstringRetriever internals ──────────────────────────────────────────────
+
+
+class TestSubstringRetrieverInternals:
+    """Unit tests for stopword removal, sub-query generation, and scoring."""
+
+    # ── stopword removal ─────────────────────────────────────────────────
+
+    def test_stopword_removal(self) -> None:
+        """Common stopwords are stripped, meaningful terms kept."""
+        cleaned, removed = remove_stopwords(
+            "how to configure the load auth module"
+        )
+        assert cleaned == "configure load auth module"
+        assert set(removed) == {"how", "to", "the"}
+
+    def test_stopword_removal_preserves_order(self) -> None:
+        """Remaining words keep their original order."""
+        cleaned, _ = remove_stopwords("the quick brown fox")
+        assert cleaned == "quick brown fox"
+
+    def test_stopword_removal_all_stopwords(self) -> None:
+        """When every word is a stopword, the cleaned query is empty."""
+        cleaned, removed = remove_stopwords("the a of in")
+        assert cleaned == ""
+        assert len(removed) == 4
+
+    def test_stopword_removal_no_stopwords(self) -> None:
+        """When no stopwords, query is unchanged."""
+        cleaned, removed = remove_stopwords("load auth module")
+        assert cleaned == "load auth module"
+        assert removed == []
+
+    def test_stopword_removal_case_insensitive(self) -> None:
+        """Stopword matching is case‑insensitive."""
+        cleaned, removed = remove_stopwords("How To Configure THE Load Auth")
+        assert cleaned == "Configure Load Auth"
+        assert set(removed) == {"How", "To", "THE"}
+
+    def test_stopword_removal_empty_input(self) -> None:
+        """Empty input produces empty output."""
+        cleaned, removed = remove_stopwords("")
+        assert cleaned == ""
+        assert removed == []
+
+    # ── sub-query generation ─────────────────────────────────────────────
+
+    def test_sub_query_generation_single_word(self) -> None:
+        """A single word produces just that word."""
+        subs = generate_sub_queries("load")
+        assert subs == ["load"]
+
+    def test_sub_query_generation_two_words(self) -> None:
+        """Two words → words + bigram."""
+        subs = generate_sub_queries("load auth")
+        assert subs == ["load", "auth", "load auth"]
+
+    def test_sub_query_generation_three_words(self) -> None:
+        """Three words → words + bigrams + full phrase."""
+        subs = generate_sub_queries("load auth module")
+        assert subs == [
+            "load", "auth", "module",
+            "load auth", "auth module",
+            "load auth module",
+        ]
+
+    def test_sub_query_generation_five_words(self) -> None:
+        """Bigram count = n − 1; full phrase included."""
+        subs = generate_sub_queries("a b c d e")
+        assert subs[:5] == ["a", "b", "c", "d", "e"]          # words
+        assert subs[5:9] == ["a b", "b c", "c d", "d e"]      # bigrams
+        assert subs[-1] == "a b c d e"                         # full phrase
+        assert len(subs) == 10  # 5 words + 4 bigrams + 1 full
+
+    def test_sub_query_generation_empty(self) -> None:
+        """Empty input → empty output."""
+        subs = generate_sub_queries("")
+        assert subs == []
+
+    # ── scoring ──────────────────────────────────────────────────────────
+
+    def test_scoring_weighted_by_phrase_length(self) -> None:
+        """A longer match contributes proportionally more to the score."""
+        subs = ["load", "auth", "load auth"]
+        score_single = score_chunk(["load"], "reload module")
+        score_long = score_chunk(["load auth"], "the load auth pattern")
+        # "load auth" (9 chars) should score higher than "load" (4 chars)
+        # per occurrence, assuming same count.
+        assert score_long > score_single
+
+    def test_scoring_multiple_occurrences(self) -> None:
+        """Repeated substring matches accumulate."""
+        score_once = score_chunk(["load"], "the reload function")
+        score_twice = score_chunk(
+            ["load"], "reload the autoload module"
+        )
+        assert score_twice > score_once
+
+    def test_scoring_accumulates_sub_queries(self) -> None:
+        """Multiple matching sub-queries sum their contributions."""
+        score_one = score_chunk(["auth"], "auth module documentation")
+        score_both = score_chunk(
+            ["auth", "module"],
+            "auth module documentation"
+        )
+        assert score_both > score_one
+
+    def test_case_insensitive_matching(self) -> None:
+        """Substring matching is case‑insensitive."""
+        score_lower = score_chunk(["load"], "reLOAD the CLASS")
+        score_upper = score_chunk(["LOAD"], "reload the class")
+        assert score_lower == score_upper
+
+    def test_no_match_returns_zero(self) -> None:
+        """An irrelevant query scores zero."""
+        score = score_chunk(["xyzzy"], "this chunk has no match")
+        assert score == 0.0
+
+    def test_empty_sub_queries_returns_zero(self) -> None:
+        """No sub‑queries means zero score."""
+        score = score_chunk([], "some chunk text")
+        assert score == 0.0
+
+    # ── SubstringRetriever._retrieve ─────────────────────────────────────
+
+    def test_retrieve_returns_node_with_score(self) -> None:
+        """_retrieve returns NodeWithScore objects in descending order."""
+        from llama_index.core.schema import QueryBundle, TextNode
+
+        nodes = [
+            TextNode(text="the reload function example"),
+            TextNode(text="auth module configuration"),
+            TextNode(text="unrelated bananas"),
+        ]
+        retriever = SubstringRetriever.from_defaults(
+            nodes, similarity_top_k=10
+        )
+        results = retriever.retrieve(QueryBundle("load"))
+        assert len(results) == 1
+        assert results[0].score > 0.0
+        assert "reload" in results[0].node.text
+
+    def test_retrieve_top_k_caps_results(self) -> None:
+        """Only top_k results are returned."""
+        from llama_index.core.schema import QueryBundle, TextNode
+
+        nodes = [
+            TextNode(text=f"chunk{i} load") for i in range(10)
+        ]
+        retriever = SubstringRetriever.from_defaults(
+            nodes, similarity_top_k=3
+        )
+        results = retriever.retrieve(QueryBundle("load"))
+        assert len(results) == 3
+
+    def test_retrieve_empty_query_all_stopwords(self) -> None:
+        """All‑stopword query returns no results."""
+        from llama_index.core.schema import QueryBundle, TextNode
+
+        nodes = [
+            TextNode(text="some content"),
+        ]
+        retriever = SubstringRetriever.from_defaults(
+            nodes, similarity_top_k=10
+        )
+        results = retriever.retrieve(QueryBundle("the a of in"))
+        assert results == []
+
+    def test_retrieve_no_match(self) -> None:
+        """No matching substring → empty results."""
+        from llama_index.core.schema import QueryBundle, TextNode
+
+        nodes = [
+            TextNode(text="alpha beta gamma"),
+        ]
+        retriever = SubstringRetriever.from_defaults(
+            nodes, similarity_top_k=10
+        )
+        results = retriever.retrieve(QueryBundle("xyzzy"))
+        assert results == []
+
+
+# ── Fused search integration tests ────────────────────────────────────────────
+
+
+class TestFusedSearch:
+    """Integration tests for BM25 + substring fusion via HybridSearcher."""
+
+    def test_bm25_plus_substring_fusion(self, flat_nodes: list) -> None:
+        """Fused search ranks results from both retrievers."""
+        s = HybridSearcher()
+        s.build(flat_nodes, substring_weight=0.4)
+        results, total = s.search("license copyright", top_k=10, page=0)
+        assert total > 0
+        assert len(results) > 0
+        assert all(isinstance(r["score"], float) for r in results)
+        # Scores should be in descending order.
+        scores = [r["score"] for r in results]
+        for i in range(1, len(scores)):
+            assert scores[i] <= scores[i - 1]
+
+    def test_substring_weight_zero_pure_bm25(self, flat_nodes: list) -> None:
+        """weight=0 → pure BM25, substring has zero influence."""
+        s = HybridSearcher()
+        s.build(flat_nodes, substring_weight=0.0)
+        results, total = s.search("subagent", top_k=5, page=0)
+        assert len(results) > 0
+        assert total > 0
+
+    def test_substring_weight_one_pure_substring(self, flat_nodes: list) -> None:
+        """weight=1.0 → pure substring, BM25 has zero influence."""
+        s = HybridSearcher()
+        s.build(flat_nodes, substring_weight=1.0)
+        results, total = s.search("subagent", top_k=5, page=0)
+        assert len(results) > 0
+        assert total > 0
+
+    def test_search_exposes_cleaned_query(self, flat_nodes: list) -> None:
+        """HybridSearcher.query_cleaned is set after search()."""
+        s = HybridSearcher()
+        s.build(flat_nodes, substring_weight=0.4)
+        s.search("how to configure the load auth", top_k=3, page=0)
+        assert s.query_cleaned == "configure load auth"
+        assert set(s.removed_stopwords) == {"how", "to", "the"}
+
+    def test_search_exposes_cleaned_query_no_stopwords(self, flat_nodes: list) -> None:
+        """query_cleaned matches original when no stopwords present."""
+        s = HybridSearcher()
+        s.build(flat_nodes, substring_weight=0.4)
+        s.search("subagent", top_k=3, page=0)
+        assert s.query_cleaned == "subagent"
+        assert s.removed_stopwords == []

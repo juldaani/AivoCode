@@ -1,17 +1,20 @@
-"""Hybrid search over text chunks — vector (FastEmbed) + keyword (BM25).
+"""Hybrid search over text chunks — BM25 + exact substring matching.
 
 What this module provides
-- ``HybridRetriever``: Combines two ``BaseRetriever`` instances with weighted
-  min-max score fusion (mirrors ``QueryFusionRetriever._relative_score_fusion``
-  with ``num_queries=1``).
+- ``HybridRetriever``: Combines multiple ``BaseRetriever`` instances with
+  weighted min-max score fusion (mirrors ``QueryFusionRetriever`` in
+  ``_relative_score_fusion`` mode with ``num_queries=1``).
 - ``HybridSearcher``: High-level wrapper that builds an in-memory index from a
   list of ``TextNode`` objects and runs hybrid queries against it.
 
 Why this exists
 - The webfetch pipeline produces chunked content (``_parse_chunked`` →
   ``_flatten_chunks`` → ``TextNode`` list).  This module plugs those nodes
-  into a dual retriever so agents can search inside fetched pages without
+  into a fused retriever so agents can search inside fetched pages without
   needing an LLM or external service.
+- BM25 covers stemmed/term‑based matching; substring matching catches
+  sub‑word hits (``reload``, ``autoload``) and exact multi‑word phrases
+  that BM25 treats as independent terms.
 - The index is NOT persistent — it is rebuilt each request.  Typical pages
   produce 10–200 chunks, so the rebuild cost is sub‑second.
 
@@ -21,10 +24,13 @@ How to use
     from web_ops.hybrid_searcher import HybridSearcher
 
     searcher = HybridSearcher()
-    searcher.build(nodes, vector_weight=0.65)
+    searcher.build(nodes, substring_weight=0.4)
     results, total = searcher.search("install python", top_k=5, page=0)
     for r in results:
         print(f"[{r['score']:.3f}] {r['text'][:80]}...")
+    # Read pre‑processed query info after search():
+    print(searcher.query_cleaned)        # "install python"
+    print(searcher.removed_stopwords)    # []  (no stopwords in this query)
 """
 
 from __future__ import annotations
@@ -37,6 +43,8 @@ from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.retrievers.bm25 import BM25Retriever
 
+from web_ops.substring_retriever import SubstringRetriever, remove_stopwords
+
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -46,7 +54,12 @@ _DEFAULT_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 
 # Default weight assigned to the vector retriever (BM25 gets 1 − weight).
 # 0.65 means semantic meaning drives ranking, keywords fill gaps.
+# (Currently unused — vector embeddings are commented out.)
 _DEFAULT_VECTOR_WEIGHT = 0.65
+
+# Default weight for the substring retriever in BM25 + substring fusion.
+# BM25 gets ``1 − substring_weight`` (default 0.6).
+_DEFAULT_SUBSTRING_WEIGHT = 0.4
 
 # Hardcoded page size for search results when the caller doesn't specify.
 _DEFAULT_TOP_K = 5
@@ -143,15 +156,17 @@ class HybridRetriever(BaseRetriever):
 class HybridSearcher:
     """Build an in-memory hybrid index from TextNodes and run queries against it.
 
-    The index is NOT persistent — each ``build()`` call creates fresh vector
-    and BM25 indexes.  For typical page sizes (10–200 chunks) this completes
-    in under a second.
+    The index is NOT persistent — each ``build()`` call creates fresh BM25
+    and substring indexes.  For typical page sizes (10–200 chunks) this
+    completes in under a second.
 
     Usage::
 
         searcher = HybridSearcher()
-        searcher.build(nodes)
-        results, total = searcher.search("query", top_k=5, page=0)
+        searcher.build(nodes, substring_weight=0.4)
+        results, total, cleaned, removed = searcher.search(
+            "query", top_k=5, page=0,
+        )
     """
 
     def __init__(self) -> None:
@@ -159,25 +174,28 @@ class HybridSearcher:
         self._index: Optional[VectorStoreIndex] = None
         self._nodes: List[TextNode] = []
         self._retriever: Optional[HybridRetriever] = None
+        self._substring_retriever: Optional[SubstringRetriever] = None
 
     def build(
         self,
         nodes: List[TextNode],
         vector_weight: float = _DEFAULT_VECTOR_WEIGHT,
+        substring_weight: float = _DEFAULT_SUBSTRING_WEIGHT,
     ) -> None:
         """Index *nodes* for hybrid retrieval.
 
         Side effects:
-        - Sets ``Settings.embed_model`` to ``FastEmbedEmbedding`` (once per
-          process — the model itself is cached after the first ``build()``).
-        - Creates an in-memory ``VectorStoreIndex`` over *nodes*.
-        - Creates a ``BM25Retriever`` over *nodes*.
-        - Wires both into a ``HybridRetriever``.
+        - Creates an in-memory ``BM25Retriever`` over *nodes*.
+        - Creates a ``SubstringRetriever`` over *nodes*.
+        - Wires both into a ``HybridRetriever`` with weighted score fusion
+          (default: BM25 0.6, substring 0.4).
 
         Args:
             nodes: TextNodes to index (typically flattened from a chunked tree).
-            vector_weight: Weight for the vector retriever (0–1).
-                BM25 gets ``1 − vector_weight``.  Default 0.65.
+            vector_weight: (Reserved) Weight for the vector retriever
+                when re‑enabled.  Currently unused.
+            substring_weight: Weight for the substring retriever (0–1).
+                BM25 gets ``1 − substring_weight``.  Default 0.4.
         """
         # The FastEmbed model is heavy to load (~33 MB download on first use),
         # but the Settings singleton caches it after the first assignment.
@@ -195,16 +213,22 @@ class HybridSearcher:
             nodes=nodes, similarity_top_k=num_nodes
         )
 
+        # Build substring retriever.
+        self._substring_retriever = SubstringRetriever.from_defaults(
+            nodes=nodes, similarity_top_k=num_nodes
+        )
+
         # Wire hybrid — fetch all nodes from sub-retrievers so pagination
         # happens after weighted score fusion.
         # self._retriever = HybridRetriever(
-        #     retrievers=[vector_retriever, bm25_retriever],
-        #     weights=[vector_weight, 1.0 - vector_weight],
+        #     retrievers=[vector_retriever, bm25_retriever, self._substring_retriever],
+        #     weights=[vector_weight, 1.0 - vector_weight - substring_weight,
+        #              substring_weight],
         #     top_k=num_nodes,
         # )
         self._retriever = HybridRetriever(
-            retrievers=[bm25_retriever],
-            weights=None,
+            retrievers=[bm25_retriever, self._substring_retriever],
+            weights=[1.0 - substring_weight, substring_weight],
             top_k=num_nodes,
         )
 
@@ -215,6 +239,9 @@ class HybridSearcher:
         page: int = 0,
     ) -> Tuple[List[Dict], int]:
         """Run a hybrid query and return paginated results.
+
+        After calling ``search()``, read ``searcher.query_cleaned`` and
+        ``searcher.removed_stopwords`` for the preprocessed query metadata.
 
         Args:
             query: Natural-language search query.
@@ -230,6 +257,11 @@ class HybridSearcher:
             raise RuntimeError(
                 "HybridSearcher.build() must be called before search()"
             )
+
+        # Preprocess once — store results on the instance so callers
+        # (e.g. the API layer) can read them without changing the tuple
+        # return type that existing code depends on.
+        self.query_cleaned, self.removed_stopwords = remove_stopwords(query)
 
         raw_results = self._retriever.retrieve(query)
         total = len(raw_results)

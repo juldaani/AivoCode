@@ -39,6 +39,7 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".aivocode.env"
 from web_ops.fetcher import FetchResult, fetch_urls  # noqa: E402
 from web_ops.hybrid_searcher import HybridSearcher  # noqa: E402
 from web_ops.searcher import ResultItem, SearchResult, web_search  # noqa: E402
+from web_ops.substring_retriever import SubstringRetriever  # noqa: E402
 
 __all__ = [
     "fetch_urls",
@@ -46,5 +47,6 @@ __all__ = [
     "HybridSearcher",
     "ResultItem",
     "SearchResult",
+    "SubstringRetriever",
     "web_search",
 ]

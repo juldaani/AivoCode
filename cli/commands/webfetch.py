@@ -145,6 +145,17 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
             "favour keyword matches.  Default 0.65."
         ),
     )
+    parser.add_argument(
+        "--query-substring-weight",
+        type=float,
+        default=0.4,
+        help=(
+            "Weight for the exact substring retriever (0–1).  BM25 gets "
+            "1 minus this weight.  Higher values favour literal substring "
+            "and phrase matching; lower values favour BM25 keyword matching.  "
+            "Default 0.4."
+        ),
+    )
     parser.set_defaults(func=_handle)
 
 
@@ -169,6 +180,7 @@ def _handle(args: argparse.Namespace) -> int:
         body["query"] = args.query
         body["query_page"] = args.query_page
         body["query_vector_weight"] = args.query_vector_weight
+        body["query_substring_weight"] = args.query_substring_weight
 
     try:
         result = asyncio.run(_post("/web_ops/webfetch", body))

@@ -156,3 +156,39 @@ class TestPrettyFormatGlobal:
         assert "\n  " in output, (
             f"expected indented JSON, got: {output[:200]}"
         )
+
+
+# ── Query search mode smoke ───────────────────────────────────────────────────
+
+
+class TestWebfetchQuerySearch:
+    """Smoke: webfetch --query triggers search mode with correct response shape."""
+
+    def test_query_with_substring_weight(self, lsp_server: str) -> None:
+        """``--query` triggers search mode and returns expected fields."""
+        result = _run_cli_webfetch(
+            lsp_server,
+            "https://github.com/tintinweb/pi-subagents",
+            "--query", "load auth",
+            "--query-substring-weight", "0.3",
+        )
+        assert result.get("success") is True, (
+            f"expected success, got: {result}"
+        )
+        # Search-mode fields must be present.
+        assert "query" in result
+        assert "query_cleaned" in result
+        assert "removed_stopwords" in result
+        assert "query_page" in result
+        assert "query_total_pages" in result
+        assert "query_num_chunks" in result
+        assert "query_substring_weight" in result
+        assert result["query_substring_weight"] == 0.3
+        assert "results" in result
+        assert isinstance(result["results"], list)
+        # At least one result is expected for a relevant query.
+        assert len(result["results"]) > 0, "expected at least 1 search result"
+        # Each result must have the expected keys.
+        for r in result["results"]:
+            for key in ("score", "text", "heading_path", "lines"):
+                assert key in r, f"Missing key '{key}' in result: {r}"

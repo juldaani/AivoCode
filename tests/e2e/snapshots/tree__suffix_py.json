@@ -192,7 +192,8 @@
               "web_ops/": [
                 "__init__.py",
                 "test_cache_url_verification.py",
-                "test_chunking.py"
+                "test_chunking.py",
+                "test_hybrid_chunk_search.py"
               ]
             }
           ]
@@ -201,16 +202,16 @@
     },
     {
       "tmp/": [
-        "probe_race.py",
-        "probe_race2.py",
-        "probe_sequential.py"
+        "trace_list_list_text.py"
       ]
     },
     {
       "web_ops/": [
         "__init__.py",
         "fetcher.py",
+        "hybrid_searcher.py",
         "searcher.py",
+        "substring_retriever.py",
         "tst_web_fetch.py"
       ]
     }
