@@ -1233,10 +1233,11 @@ def _chunked_to_toc(
     """Project the verbose cached chunked tree into a compact ToC.
 
     The compact format is an ordered array where:
-    - Strings ``"904-926 ‖ type ‖ kw1,kw2 ‖ preview..."`` are chunks
+- Strings ``"904-926 ‖ type ‖ kw1,kw2 ‖ preview..."`` are chunks
       (keyword field omitted for chunks ≤ ``_KW_TOC_CHARS_THRESHOLD``).
-    - Strings ``"247-343 ‖ omitted×14"`` are sentinels for sections skipped
-      due to the per‑depth cap.
+    - ``{"type": "omitted", "n_omitted": N, "lines": [first, last],
+      "info": "…"}`` sentinels mark chunks that were skipped due to the
+      per‑depth cap.
     - ``{"Heading Name": [...]}`` objects are subsections.
 
     Duplicate heading names at the same level get a ``" (N)"`` suffix.
@@ -1276,7 +1277,15 @@ def _section_to_toc(
         # all chunks so the section heading is still navigable.
         first = chunks[0]["lines"][0]
         last = chunks[-1]["lines"][1]
-        result.append(f"{first}-{last} ‖ omitted×{len(chunks)}")
+        result.append({
+            "type": "omitted",
+            "n_omitted": len(chunks),
+            "lines": [first, last],
+            "info": (
+                f"… {len(chunks)} chunks — use --heading to expand all, "
+                f"or --line-range to read selectively"
+            ),
+        })
     elif cap > 0:
         # Emit up to *cap* chunk previews — cap with sentinel if there are
         # more.  Skip trivially-short non-code chunks whose content was
@@ -1290,9 +1299,8 @@ def _section_to_toc(
                     continue
 
             ls, le = chunk["lines"]
-# Build the compact chunk string:
+            # Build the compact chunk string:
             #   "ls-le ‖ type ‖ kw1,kw2 ‖ preview..."
-            # Build the compact chunk string:  "ls-le ‖ type ‖ kw1,kw2 ‖ preview..."
             preview_text = chunk["preview"]
             # Append "..." when the preview was hard-truncated.
             if len(preview_text) >= _PREVIEW_LEN:
@@ -1318,7 +1326,15 @@ def _section_to_toc(
             skipped = len(chunks) - (i + 1)
             first = chunks[i + 1]["lines"][0]
             last = chunks[-1]["lines"][1]
-            result.append(f"{first}-{last} ‖ omitted×{skipped}")
+            result.append({
+                "type": "omitted",
+                "n_omitted": skipped,
+                "lines": [first, last],
+                "info": (
+                    f"… {skipped} more chunks — use --heading to expand all, "
+                    f"or --line-range to read selectively"
+                ),
+            })
 
     # Subsections — deduplicate heading names within this level.
     # Skip sections whose entire content was filtered out (e.g. empty
@@ -1768,12 +1784,8 @@ def _truncation_message() -> str:
 def _truncation_info(total_chars: int, markdown: str = "", *, limit: int = 20_000) -> str:
     """Explain truncation so the agent knows what happened and what to do.
 
-    Appends a feed-page warning when the markdown has very few blank lines
-    and a high density of links — typical of news feed / link-directory
-    pages where the chunked ToC may be unreliable.
-
-    Also explains the BM25 keyword threshold so agents understand why some
-    chunk entries carry an empty keyword list.
+    Message order: truncation notice → ToC format → omitted sentinels →
+    feed-page warning (if applicable).
 
     *limit* is the webfetch ToC threshold (overridable via ``--limit``).
     The section‑extraction cap message references the dedicated
@@ -1782,17 +1794,24 @@ def _truncation_info(total_chars: int, markdown: str = "", *, limit: int = 20_00
     msg = (
         f"Content exceeds the {limit} character limit "
         f"({total_chars} chars total). Full content stored in cache. "
-        f"Use `toc` for navigation, or --heading / --line-range "
+        f"Use `toc` for navigation -> --heading / --line-range "
         f"to retrieve specific content (capped at "
         f"{_WEBFETCH_SECTION_TRUNCATION_THRESHOLD} chars)."
     )
+    msg += "\n\n" + _bm25_info()
+    msg += (
+        "\n\nSome sections contain omitted-chunk sentinels "
+        "(type `omitted`). Each sentinel collapses N chunks with "
+        "their first and last line numbers. "
+        "Use --heading to expand that section in the ToC, "
+        "or --line-range to read a specific range directly."
+    )
     if markdown and _is_feed_page(markdown):
         msg += (
-            " WARNING: this page may be a feed/directory — the ToC parsing "
+            "\n\nWARNING: this page may be a feed/directory — the ToC parsing "
             "may be misleading/incomplete. Try --navigation for structured "
             "link extraction or --line-range for partial reading."
         )
-    msg += "\n\n" + _bm25_info()
     return msg
 
 
@@ -1800,12 +1819,9 @@ def _bm25_info() -> str:
     """Return a one‑liner explaining the ToC compact‑string format."""
     return (
         "ToC chunk format: "
-        "`lines ‖ type ‖ kw1,kw2 ‖ preview...`. "
-        "`‖` (U+2016) separates fields. "
-        "`...` means the preview was truncated. "
-        "Keywords (English‑stemmed, e.g. "
-        "`navig` = navigation) appear on chunks > {} chars. "
-        "`‖ omitted×N` = N chunks skipped (use --heading to expand)."
+        "`lines ‖ type ‖ keywords ‖ preview...`. "
+        "`...` = preview truncated. "
+        "Keywords: top BM25 relevance terms (English‑stemmed) on chunks > {} chars."
     ).format(_KW_TOC_CHARS_THRESHOLD)
 
 
