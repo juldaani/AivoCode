@@ -75,8 +75,13 @@ _DEFAULT_TOP_K = 5
 _MAX_TEXT_CHARS = 1200
 
 # Number of characters on each side of a substring match used to build
-# the ``highlights`` snippet.
-_HIGHLIGHT_WINDOW = 50
+# a highlight snippet for the full‑query match.
+_HIGHLIGHT_WINDOW = 40
+
+# Sliding‑window width for the greedy highlight‑placement algorithm.
+# The window is scored by match density and the highest‑scoring
+# non‑overlapping windows become Phase‑B highlights.
+_GREEDY_WINDOW = 100
 
 # Reciprocal Rank Fusion constant — controls how tightly top ranks are
 # compressed.  k=60 is the standard from the RRF paper (Cormack et al.).
@@ -365,10 +370,12 @@ class HybridSearcher:
         Returns:
             ``(results, total_matches)`` where *results* is a list of dicts
             with keys ``score_fused``, ``score_bm25``, ``score_substring``,
-            ``text``, ``heading_path``, ``line_range``, and optionally
-            ``highlights`` (when *text* was truncated to the ``_MAX_TEXT_CHARS``
-            cap).  *total_matches* is the total number of results across all
-            pages.
+            ``n_substring_matches``, ``text``, ``heading_path``,
+            ``line_range``, and optionally ``highlights`` (a ``List[str]`` of
+            ``**``‑marked snippets drawn from the hidden region past the
+            ``_MAX_TEXT_CHARS`` cap; absent entirely when no matches exist in
+            the hidden region).  *total_matches* is the total number of
+            results across all pages.
         """
         if self._retriever is None:
             raise RuntimeError(
@@ -383,7 +390,7 @@ class HybridSearcher:
         total = len(raw_results)
         page_slice = raw_results[page * top_k : (page + 1) * top_k]
 
-        # Generate sub‑queries once for highlight extraction.
+        # Generate sub‑queries once for highlight extraction and match counting.
         sub_queries = generate_sub_queries(self.query_cleaned)
 
         formatted: List[Dict] = []
@@ -399,7 +406,7 @@ class HybridSearcher:
             )
             full_text: str = r.node.text
 
-            # Truncate long text; add highlights when truncation occurs.
+            # Truncate long text; extract highlights from the hidden region.
             truncated = len(full_text) > _MAX_TEXT_CHARS
             display_text = (
                 f"{full_text[:_MAX_TEXT_CHARS]}… "
@@ -422,10 +429,21 @@ class HybridSearcher:
                 "line_range": node_metadata.get("lines", []),
             }
 
+            # Highlights are sourced ONLY from the hidden (truncated) region —
+            # the visible part is already in the ``"text"`` field.
             if truncated and sub_queries:
-                highlight = _extract_highlight(sub_queries, full_text)
-                if highlight is not None:
-                    result["highlights"] = highlight
+                hidden_text = full_text[_MAX_TEXT_CHARS:]
+                hidden_chars = len(hidden_text)
+                # One highlight per 500 missing chars, capped [1, 5].
+                n_highlights = max(1, min(5, (hidden_chars + 499) // 500))
+                highlights = _extract_highlights(
+                    hidden_text,
+                    n_highlights,
+                    self.query_cleaned,
+                    sub_queries,
+                )
+                if highlights:
+                    result["highlights"] = highlights
 
             formatted.append(result)
 
@@ -462,37 +480,222 @@ def _count_substring_matches(sub_queries: List[str], text: str) -> int:
     return total
 
 
-def _extract_highlight(
-    sub_queries: List[str],
-    text: str,
-    window: int = _HIGHLIGHT_WINDOW,
-) -> Optional[str]:
-    """Find the best substring match and return ``±window`` context.
+def _add_markers(text: str, sub_queries: List[str]) -> str:
+    """Wrap sub‑query matches in ``**…**`` markers, handling overlaps.
 
-    Sub‑queries are tried in **reverse order** (full phrase first =
-    most specific) so the longest match controls the snippet position.
+    Finds every occurrence of every sub‑query in *text* (case‑insensitive),
+    then greedily selects non‑overlapping matches — longest match wins ties
+    at the same start position.  Markers are applied right‑to‑left so
+    earlier offsets stay valid.
 
     Args:
-        sub_queries: Output of ``generate_sub_queries``.
-        text: Full (untruncated) chunk text.
-        window: Characters of context on each side of the match.
+        text: Snippet to annotate.
+        sub_queries: All sub‑queries (words, bigrams, full phrase).
 
     Returns:
-        A snippet like ``"…context before match context after…"`` with
-        ellipsis added when the snippet doesn't start/end at the text
-        boundary.  Returns ``None`` when no sub‑query matches at all.
+        *text* with ``**`` wrapped around matched spans, or *text*
+        unchanged when no sub‑query matches.
     """
+    if not sub_queries:
+        return text
+
     text_lower = text.lower()
-    for sub in reversed(sub_queries):
-        idx = text_lower.find(sub.lower())
-        if idx == -1:
+
+    # ── Find every match span: (start, end, sub_query_text) ──────────────
+    spans: List[Tuple[int, int, str]] = []
+    for sub in sub_queries:
+        sub_lower = sub.lower()
+        search_start = 0
+        while True:
+            idx = text_lower.find(sub_lower, search_start)
+            if idx == -1:
+                break
+            spans.append((idx, idx + len(sub), sub))
+            # Step by 1 to catch overlapping matches (e.g. "aaa" in "aaaa"
+            # should match at positions 0 and 1); dedup handles overlap.
+            search_start = idx + 1
+
+    if not spans:
+        return text
+
+    # ── Sort: start ascending, then length descending (longest wins) ─────
+    spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
+
+    # ── Greedy dedup: keep spans that don't overlap already‑kept ones ────
+    kept: List[Tuple[int, int, str]] = []
+    for start, end, sub in spans:
+        if not kept or start >= kept[-1][1]:
+            kept.append((start, end, sub))
+
+    # ── Apply markers right‑to‑left (offsets don't shift for earlier ones)
+    result = text
+    for start, end, sub in reversed(kept):
+        result = result[:start] + "**" + result[start:end] + "**" + result[end:]
+
+    return result
+
+
+def _find_best_window(
+    text: str,
+    sub_queries: List[str],
+    window_size: int,
+    consumed_spans: Set[Tuple[int, int]],
+) -> Tuple[int, int]:
+    """Slide a *window_size* window across *text* and return the start
+    position of the highest‑scoring **non‑overlapping** window together
+    with its score.
+
+    Scoring weights: 1‑word match = +1, 2‑word match = +2.  3+‑word
+    sub‑queries (the full phrase) are excluded — they're handled by
+    Phase‑A highlight placement.
+
+    Args:
+        text: Text to scan.
+        sub_queries: All sub‑queries (words, bigrams, full phrase).
+        window_size: Width of the scoring window.
+        consumed_spans: ``(start, end)`` spans already claimed by Phase‑A
+            or earlier Phase‑B windows — these are skipped.
+
+    Returns:
+        ``(best_start, best_score)`` where *best_start* is the character
+        offset of the highest‑scoring window and *best_score* is the sum
+        of match weights inside it.  Returns ``(0, 0)`` when no window
+        scores above zero or all candidate positions are consumed.
+    """
+    if not text or not sub_queries:
+        return 0, 0
+
+    text_lower = text.lower()
+    best_start = 0
+    best_score = 0
+
+    # Pre‑filter sub‑queries: only 1‑word and 2‑word matter for scoring.
+    # Also pre‑lower them.
+    scoring_subs: List[Tuple[str, int]] = []  # (sub_lower, weight)
+    for sub in sub_queries:
+        n_words = len(sub.split())
+        if n_words == 1:
+            scoring_subs.append((sub.lower(), 1))
+        elif n_words == 2:
+            scoring_subs.append((sub.lower(), 2))
+
+    if not scoring_subs:
+        return 0, 0
+
+    for i in range(len(text)):
+        window_end = i + window_size
+
+        # Skip if this window overlaps any already‑consumed span.
+        if any(
+            i < ce and window_end > cs for cs, ce in consumed_spans
+        ):
             continue
-        start = max(0, idx - window)
-        end = min(len(text), idx + len(sub) + window)
-        snippet = text[start:end]
-        if start > 0:
+
+        # Score this window.
+        score = 0
+        for sub_lower, weight in scoring_subs:
+            search_start = i
+            while True:
+                pos = text_lower.find(sub_lower, search_start)
+                # Match must START within the window AND fit completely
+                # — otherwise the snippet (exact window‑width slice) will
+                # truncate the match string and ``_add_markers`` won't find it.
+                if pos == -1 or pos + len(sub_lower) > window_end:
+                    break
+                score += weight
+                search_start = pos + len(sub_lower)
+
+        if score > best_score:
+            best_score = score
+            best_start = i
+
+    return best_start, best_score
+
+
+def _extract_highlights(
+    hidden_text: str,
+    n_highlights: int,
+    query_cleaned: str,
+    sub_queries: List[str],
+    snippet_window: int = _HIGHLIGHT_WINDOW,
+    greedy_window: int = _GREEDY_WINDOW,
+) -> List[str]:
+    """Extract up to *n_highlights* snippets from the hidden region of a chunk.
+
+    Two‑phase algorithm:
+
+    **Phase A — full query match (1 slot).**  If ``query_cleaned`` (the
+    stopword‑stripped user query) appears anywhere in *hidden_text*, a
+    ±*snippet_window*‑char snippet is centered on the first occurrence
+    and takes one highlight slot.
+
+    **Phase B — greedy window placement (remaining slots).**  A sliding
+    window of *greedy_window* chars is scored by match density
+    (1‑word = +1, 2‑word = +2) and the highest‑scoring **non‑overlapping**
+    windows are selected greedily until all slots are filled or no window
+    scores > 0.
+
+    Every snippet has ``**…**`` markers wrapped around matched sub‑queries.
+
+    Args:
+        hidden_text: The part of the chunk beyond ``_MAX_TEXT_CHARS``
+            (i.e. the region NOT shown in the ``"text"`` field).
+        n_highlights: Maximum number of highlights to generate
+            (computed from ``ceil(hidden_chars / 500)``, capped [1, 5]).
+        query_cleaned: Stopword‑stripped query used for Phase‑A matching.
+        sub_queries: Output of ``generate_sub_queries(query_cleaned)``.
+        snippet_window: Chars of context on each side of the Phase‑A match.
+        greedy_window: Sliding‑window width for Phase‑B scoring.
+
+    Returns:
+        List of marked‑up snippet strings.  May be shorter than
+        *n_highlights* (or even empty) when not enough matches exist
+        in *hidden_text*.  An empty list means ``highlights`` should be
+        **suppressed** entirely in the result dict (absent key, not
+        ``null``).
+    """
+    highlights: List[str] = []
+    # Track consumed spans so Phase‑B windows don't overlap with Phase‑A
+    # or with each other.
+    consumed: Set[Tuple[int, int]] = set()
+
+    # ── Phase A: full query match (2+ word queries only) ──────────────
+    # A single‑word query gets no dedicated full‑query slot — Phase‑B
+    # greedy placement already captures every occurrence and can spread
+    # multiple highlights across different parts of the hidden text.
+    if query_cleaned and len(query_cleaned.split()) >= 2 and n_highlights > 0:
+        idx = hidden_text.lower().find(query_cleaned.lower())
+        if idx != -1:
+            match_end = idx + len(query_cleaned)
+            start = max(0, idx - snippet_window)
+            end = min(len(hidden_text), match_end + snippet_window)
+            snippet = hidden_text[start:end]
+            if start > 0:
+                snippet = "…" + snippet
+            if end < len(hidden_text):
+                snippet = snippet + "…"
+            snippet = _add_markers(snippet, sub_queries)
+            highlights.append(snippet)
+            consumed.add((start, end))
+            n_highlights -= 1
+
+    # ── Phase B: greedy window placement ───────────────────────────────
+    while n_highlights > 0:
+        best_start, best_score = _find_best_window(
+            hidden_text, sub_queries, greedy_window, consumed,
+        )
+        if best_score == 0:
+            break
+
+        end = min(best_start + greedy_window, len(hidden_text))
+        snippet = hidden_text[best_start:end]
+        if best_start > 0:
             snippet = "…" + snippet
-        if end < len(text):
+        if end < len(hidden_text):
             snippet = snippet + "…"
-        return snippet
-    return None
+        snippet = _add_markers(snippet, sub_queries)
+        highlights.append(snippet)
+        consumed.add((best_start, end))
+        n_highlights -= 1
+
+    return highlights
