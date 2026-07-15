@@ -164,15 +164,17 @@ class TestHybridSearcherSearch:
 
     def test_result_dict_keys(self, searcher: HybridSearcher):
         """Each result dict must have score_fused, score_bm25, score_substring,
-        text, heading_path, line_range."""
+        n_substring_matches, text, heading_path, line_range."""
         results, _ = searcher.search("readme", top_k=3, page=0)
         assert len(results) > 0, "Expected at least 1 result"
         for r in results:
             for key in ("score_fused", "score_bm25", "score_substring",
+                        "n_substring_matches",
                         "text", "heading_path", "line_range"):
                 assert key in r, f"Missing key '{key}' in result: {r}"
             assert isinstance(r["score_fused"], float)
             assert isinstance(r["score_bm25"], float)
+            assert isinstance(r["n_substring_matches"], int)
             assert isinstance(r["text"], str)
             assert isinstance(r["heading_path"], list)
             assert isinstance(r["line_range"], list)

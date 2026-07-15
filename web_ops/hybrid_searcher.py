@@ -134,10 +134,10 @@ class HybridRetriever(BaseRetriever):
 
         Steps:
         1. Collect results from every sub-retriever.
-        2. Store raw per‑retriever scores in ``self._per_retriever_scores``
-           keyed by ``node.hash`` (TextNode copies survive across retrievers).
-        3. Min-max normalise each retriever's scores to [0, 1].
-        4. Multiply each score by that retriever's weight.
+        2. Min-max normalise each retriever's scores to [0, 1].
+        3. Multiply each score by that retriever's weight.
+        4. Store normalised‑weighted per‑retriever scores in
+           ``self._per_retriever_scores`` (same scale as fused score).
         5. Merge duplicates (keyed by ``node.hash``) — scores are summed.
         6. Sort by score descending, return top ``_top_k``.
         """
@@ -146,11 +146,24 @@ class HybridRetriever(BaseRetriever):
         for retriever in self._retrievers:
             per_retriever.append(retriever.retrieve(query_bundle))
 
-        # ── Step 2: Store raw per‑retriever scores ─────────────────────────
-        # TextNode objects created by BM25 / Substring are COPIES, not the
-        # same Python objects.  We store scores keyed by node hash (which is
-        # content‑derived and stable across copies) instead of relying on
-        # shared object identity or TextNode.metadata.
+        # ── Step 2‑3: Min‑max normalise, multiply by weight ────────────────
+        for nodes, weight in zip(per_retriever, self._weights):
+            if not nodes:
+                continue
+            scores = [n.score or 0.0 for n in nodes]
+            min_s, max_s = min(scores), max(scores)
+            for node in nodes:
+                raw = node.score or 0.0
+                if max_s == min_s:
+                    normalised = 1.0 if max_s > 0 else 0.0
+                else:
+                    normalised = (raw - min_s) / (max_s - min_s)
+                node.score = normalised * weight
+
+        # ── Step 4: Store normalised×weight per‑retriever scores ───────────
+        # Stored AFTER normalisation so scores are on the same [0, weight]
+        # scale as the fused result — directly comparable and algebraically
+        # summable: score_fused ≈ score_bm25 + score_substring.
         self._per_retriever_scores = {}
         if self._labels:
             for retriever_idx, nodes in enumerate(per_retriever):
@@ -164,20 +177,6 @@ class HybridRetriever(BaseRetriever):
                     self._per_retriever_scores[h][label_key] = round(
                         node.score or 0.0, 4
                     )
-
-        # ── Step 3‑4: Min‑max normalise, multiply by weight ────────────────
-        for nodes, weight in zip(per_retriever, self._weights):
-            if not nodes:
-                continue
-            scores = [n.score or 0.0 for n in nodes]
-            min_s, max_s = min(scores), max(scores)
-            for node in nodes:
-                raw = node.score or 0.0
-                if max_s == min_s:
-                    normalised = 1.0 if max_s > 0 else 0.0
-                else:
-                    normalised = (raw - min_s) / (max_s - min_s)
-                node.score = normalised * weight
 
         # ── Step 5: Merge duplicates (by node hash) ────────────────────────
         merged: Dict[str, NodeWithScore] = {}
@@ -338,15 +337,21 @@ class HybridSearcher:
             # Truncate long text; add highlights when truncation occurs.
             truncated = len(full_text) > _MAX_TEXT_CHARS
             display_text = (
-                full_text[:_MAX_TEXT_CHARS] + "..."
+                f"{full_text[:_MAX_TEXT_CHARS]}… "
+                f"[truncated to {_MAX_TEXT_CHARS} chars, "
+                f"full chunk has {len(full_text)} chars]"
                 if truncated
                 else full_text
             )
+
+            # Count substring matches for this chunk (cheap for top-k results).
+            n_matches = _count_substring_matches(sub_queries, full_text)
 
             result: dict = {
                 "score_fused": round(r.score or 0.0, 4),
                 "score_bm25": per_retriever_scores.get("score_bm25", 0.0),
                 "score_substring": per_retriever_scores.get("score_substring", 0.0),
+                "n_substring_matches": n_matches,
                 "text": display_text,
                 "heading_path": node_metadata.get("heading_path", []),
                 "line_range": node_metadata.get("lines", []),
@@ -362,7 +367,34 @@ class HybridSearcher:
         return formatted, total
 
 
-# ── Highlight extraction ─────────────────────────────────────────────────────
+# ── Post‑retrieval helpers ────────────────────────────────────────────────────
+
+
+def _count_substring_matches(sub_queries: List[str], text: str) -> int:
+    """Count total non‑overlapping substring match occurrences across all
+    sub‑queries in *text* (case‑insensitive).
+
+    Args:
+        sub_queries: Output of ``generate_sub_queries``.
+        text: Full chunk text.
+
+    Returns:
+        Total number of substring matches (may be 0).
+    """
+    if not sub_queries:
+        return 0
+    text_lower = text.lower()
+    total = 0
+    for sub in sub_queries:
+        sub_lower = sub.lower()
+        start = 0
+        while True:
+            idx = text_lower.find(sub_lower, start)
+            if idx == -1:
+                break
+            total += 1
+            start = idx + len(sub_lower)
+    return total
 
 
 def _extract_highlight(

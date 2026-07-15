@@ -190,5 +190,6 @@ class TestWebfetchQuerySearch:
         # Each result must have the expected keys.
         for r in result["results"]:
             for key in ("score_fused", "score_bm25", "score_substring",
+                        "n_substring_matches",
                         "text", "heading_path", "line_range"):
                 assert key in r, f"Missing key '{key}' in result: {r}"
