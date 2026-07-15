@@ -163,21 +163,24 @@ class TestHybridSearcherSearch:
         assert total >= 0
 
     def test_result_dict_keys(self, searcher: HybridSearcher):
-        """Each result dict must have score, text, heading_path, lines."""
+        """Each result dict must have score_fused, score_bm25, score_substring,
+        text, heading_path, line_range."""
         results, _ = searcher.search("readme", top_k=3, page=0)
         assert len(results) > 0, "Expected at least 1 result"
         for r in results:
-            for key in ("score", "text", "heading_path", "lines"):
+            for key in ("score_fused", "score_bm25", "score_substring",
+                        "text", "heading_path", "line_range"):
                 assert key in r, f"Missing key '{key}' in result: {r}"
-            assert isinstance(r["score"], float)
+            assert isinstance(r["score_fused"], float)
+            assert isinstance(r["score_bm25"], float)
             assert isinstance(r["text"], str)
             assert isinstance(r["heading_path"], list)
-            assert isinstance(r["lines"], list)
+            assert isinstance(r["line_range"], list)
 
     def test_scores_are_non_increasing(self, searcher: HybridSearcher):
         """Results should be returned in descending score order."""
         results, _ = searcher.search("subagent", top_k=10, page=0)
-        scores = [r["score"] for r in results]
+        scores = [r["score_fused"] for r in results]
         for i in range(1, len(scores)):
             assert scores[i] <= scores[i - 1], (
                 f"Score increased at index {i}: {scores[i - 1]} → {scores[i]}"
@@ -228,7 +231,7 @@ class TestHybridSearcherSearch:
         s.build(flat_nodes, vector_weight=0.0)
         results, total = s.search("agent", top_k=3, page=0)
         assert len(results) > 0
-        assert all(isinstance(r["score"], float) for r in results)
+        assert all(isinstance(r["score_fused"], float) for r in results)
 
     def test_vector_weight_one(self, flat_nodes: list):
         """Pure vector (vector_weight=1) should still return results."""
@@ -236,7 +239,7 @@ class TestHybridSearcherSearch:
         s.build(flat_nodes, vector_weight=1.0)
         results, total = s.search("agent", top_k=3, page=0)
         assert len(results) > 0
-        assert all(isinstance(r["score"], float) for r in results)
+        assert all(isinstance(r["score_fused"], float) for r in results)
 
 
 # ── Smoke: end-to-end with simple queries ─────────────────────────────────────
@@ -257,7 +260,7 @@ class TestEndToEnd:
         results, _ = searcher.search("pi-subagents", top_k=1, page=0)
         assert len(results) == 1
         r = results[0]
-        assert r["score"] > 0.0, f"Top hit score is zero: {r}"
+        assert r["score_fused"] > 0.0, f"Top hit score is zero: {r}"
         assert len(r["text"]) > 20, f"Top hit text too short: {r['text'][:60]}"
 
 
@@ -456,9 +459,9 @@ class TestFusedSearch:
         results, total = s.search("license copyright", top_k=10, page=0)
         assert total > 0
         assert len(results) > 0
-        assert all(isinstance(r["score"], float) for r in results)
+        assert all(isinstance(r["score_fused"], float) for r in results)
         # Scores should be in descending order.
-        scores = [r["score"] for r in results]
+        scores = [r["score_fused"] for r in results]
         for i in range(1, len(scores)):
             assert scores[i] <= scores[i - 1]
 
@@ -484,7 +487,6 @@ class TestFusedSearch:
         s.build(flat_nodes, substring_weight=0.4)
         s.search("how to configure the load auth", top_k=3, page=0)
         assert s.query_cleaned == "configure load auth"
-        assert set(s.removed_stopwords) == {"how", "to", "the"}
 
     def test_search_exposes_cleaned_query_no_stopwords(self, flat_nodes: list) -> None:
         """query_cleaned matches original when no stopwords present."""
@@ -492,4 +494,3 @@ class TestFusedSearch:
         s.build(flat_nodes, substring_weight=0.4)
         s.search("subagent", top_k=3, page=0)
         assert s.query_cleaned == "subagent"
-        assert s.removed_stopwords == []

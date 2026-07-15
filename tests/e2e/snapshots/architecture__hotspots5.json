@@ -202,7 +202,7 @@
       "imported_by": []
     },
     "web_ops": {
-      "files": 5,
+      "files": 6,
       "folders": {},
       "imports": [],
       "imported_by": [
@@ -252,7 +252,7 @@
     }
   ],
   "summary": {
-    "total_files": 109,
+    "total_files": 110,
     "total_dirs": 23
   },
   "workspace": "/workspaces/aivocode",

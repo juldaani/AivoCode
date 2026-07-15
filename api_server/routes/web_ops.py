@@ -117,7 +117,6 @@ async def webfetch(body: WebfetchBody):
             "success": True,
             "query": body.query,
             "query_cleaned": searcher.query_cleaned,
-            "removed_stopwords": searcher.removed_stopwords,
             "query_page": body.query_page,
             "query_total_pages": total_pages,
             "query_num_chunks": len(nodes),
