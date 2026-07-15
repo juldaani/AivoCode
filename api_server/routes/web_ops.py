@@ -121,6 +121,16 @@ async def webfetch(body: WebfetchBody):
             "query_total_pages": total_pages,
             "query_num_chunks": len(nodes),
             "query_substring_weight": body.query_substring_weight,
+            "info": (
+                "Highlights are uppercase substrings drawn from the hidden "
+                "(truncated) part of each chunk — the visible prefix is in "
+                "the \"text\" field.  One highlight per 500 hidden chars, "
+                "capped at 5.  Full query matches get a dedicated centered "
+                "snippet; remaining slots are placed greedily where keyword "
+                "density is highest.  Uppercase spans show what matched "
+                "(case‑insensitive).  When no matches exist in the hidden "
+                "region the \"highlights\" key is absent from the result."
+            ),
             "results": page_results,
         }
 
