@@ -435,6 +435,11 @@ def _parse_chunked(markdown: str) -> dict[str, Any]:
     while _merge_short_chunks(root) > 0:
         pass
 
+    # Post-process: merge moderate chunks (< 300 chars) using a two‑directional
+    # heuristic — try backward first (cap result at 800), then forward (same
+    # cap), or leave alone.  Reduces ToC entries that are small but not tiny.
+    _merge_moderate_chunks(root)
+
     return root
 
 
@@ -796,6 +801,11 @@ _COLON_MERGE_MAX_CHARS: int = 200
 # clutter.
 _SHORT_CHUNK_MAX_CHARS: int = 150
 
+# Moderate-chunk merge: chunks below this length trigger the merge heuristic.
+# Two-directional with a result-size cap to avoid producing over-large chunks.
+_MODERATE_CHUNK_MAX_CHARS: int = 300
+_MODERATE_CHUNK_RESULT_CAP: int = 800
+
 
 def _merge_colon_chunks(tree: dict[str, Any]) -> None:
     """Merge a short colon‑terminated chunk with the following chunk.
@@ -875,11 +885,22 @@ def _is_empty_anchor_chunk(text: str) -> bool:
 
 # Post‑processing merge: short orphan chunks (< _SHORT_CHUNK_MAX_CHARS),
 # merged **backward** into the previous chunk so the meaningful preview text
-# survives.  Skipped types (code, table, text+code, text+table) are
-# semantically atomic and must stay intact even when short.
-_SHORT_MERGE_SKIP_TYPES: frozenset[str] = frozenset(
-    {"code", "table", "text+code", "text+table"},
-)
+# survives.  Base types that are semantically atomic — any chunk whose type
+# contains one of these (e.g. ``text+code``, ``list+text``, ``text+code+text``)
+# is never merged outside the colon‑merge step.
+_MERGE_SKIP_BASE_TYPES: frozenset[str] = frozenset({"code", "table", "list", "blockquote"})
+
+
+def _is_skip_type(chunk_type: str) -> bool:
+    """Return ``True`` if *chunk_type* contains any atomic base type.
+
+    Splits on ``+`` and checks for intersection with
+    ``_MERGE_SKIP_BASE_TYPES``.  This catches simple types (``code``) and
+    composite types from any merge step (``text+list``, ``list+text``,
+    ``text+code+text``, etc.).
+    """
+    parts = chunk_type.split("+")
+    return bool(_MERGE_SKIP_BASE_TYPES.intersection(parts))
 
 
 def _merge_short_chunks(tree: dict[str, Any]) -> int:
@@ -887,7 +908,8 @@ def _merge_short_chunks(tree: dict[str, Any]) -> int:
     into the **previous** chunk.
 
     Walks every section in the tree.  When a chunk is short and its type is
-    NOT in ``_SHORT_MERGE_SKIP_TYPES``, it is absorbed into the end of the
+    NOT in ``_MERGE_SKIP_BASE_TYPES`` (any type containing code, table, list,
+    or blockquote), it is absorbed into the end of the
     preceding chunk (text joined by ``\\n``, line range spans both).
 
     Merging backward preserves the preceding chunk's preview text — the
@@ -921,8 +943,9 @@ def _merge_short_chunks(tree: dict[str, Any]) -> int:
         # its type is safe to merge, and there IS a previous chunk.
         if (
             len(cur["text"]) < _SHORT_CHUNK_MAX_CHARS
-            and cur.get("type", "text") not in _SHORT_MERGE_SKIP_TYPES
+            and not _is_skip_type(cur.get("type", "text"))
             and merged
+            and not _is_skip_type(merged[-1].get("type", "text"))
         ):
             prev = merged[-1]
             fused_text = prev["text"] + "\n" + cur["text"]
@@ -943,6 +966,100 @@ def _merge_short_chunks(tree: dict[str, Any]) -> int:
 
     tree["chunks"] = merged
     return merges
+
+
+def _merge_moderate_chunks(tree: dict[str, Any]) -> None:
+    """Merge medium‑small chunks (< ``_MODERATE_CHUNK_MAX_CHARS`` chars) using
+    a two‑directional heuristic.
+
+    For each chunk under 300 chars, try:
+
+    1. **Backward merge** — absorb into the previous chunk.  Skipped when
+       the result would exceed ``_MODERATE_CHUNK_RESULT_CAP`` (800 chars).
+    2. **Forward merge** (fallback) — absorb the next chunk into this one.
+       Skipped when the result would exceed the same cap.
+
+    If neither direction is viable the chunk is left alone.  The scan is a
+    single forward pass — ``i`` advances to the next chunk after each
+    decision (whether merged or kept).
+
+    Chunks whose type contains any base atomic type from
+    ``_MERGE_SKIP_BASE_TYPES`` (code, table, list, or blockquote, including
+    all composite forms like ``text+code``, ``list+text``,
+    ``text+code+text``) are never merged — they are semantically atomic and
+    stay intact regardless of size.  Only the colon‑merge step
+    is allowed to fuse those types.
+
+    Merged type logic: same type → single type; different types →
+    ``prev_type+nxt_type`` (same convention as the short‑chunk merge).
+    """
+    for section in tree.get("sections", []):
+        _merge_moderate_chunks(section)
+
+    chunks = tree.get("chunks")
+    if not chunks or len(chunks) < 2:
+        return
+
+    merged: list[dict[str, Any]] = []
+    i = 0
+    while i < len(chunks):
+        cur = chunks[i]
+        cur_len = len(cur["text"])
+
+        if cur_len >= _MODERATE_CHUNK_MAX_CHARS:
+            # Chunk is already large enough — keep as-is.
+            merged.append(cur)
+            i += 1
+            continue
+
+        # Skip types that are semantically atomic — any type containing
+        # code, table, or list (same base set as the short‑chunk merge).
+        if _is_skip_type(cur.get("type", "text")):
+            merged.append(cur)
+            i += 1
+            continue
+
+        # ── Step 1: try backward merge ────────────────────────────────
+        if merged and not _is_skip_type(merged[-1].get("type", "text")):
+            prev = merged[-1]
+            combined_len = len(prev["text"]) + cur_len + 1  # +1 for \n
+            if combined_len <= _MODERATE_CHUNK_RESULT_CAP:
+                fused_text = prev["text"] + "\n" + cur["text"]
+                fused = _make_chunk_dict(
+                    fused_text,
+                    prev["lines"][0],
+                    cur["lines"][1],
+                )
+                prev_type = prev.get("type", "text")
+                cur_type = cur.get("type", "text")
+                fused["type"] = prev_type if prev_type == cur_type else f"{prev_type}+{cur_type}"
+                merged[-1] = fused
+                i += 1
+                continue
+
+        # ── Step 2: try forward merge ─────────────────────────────────
+        if i + 1 < len(chunks) and not _is_skip_type(chunks[i + 1].get("type", "text")):
+            nxt = chunks[i + 1]
+            combined_len = cur_len + len(nxt["text"]) + 1  # +1 for \n
+            if combined_len <= _MODERATE_CHUNK_RESULT_CAP:
+                fused_text = cur["text"] + "\n" + nxt["text"]
+                fused = _make_chunk_dict(
+                    fused_text,
+                    cur["lines"][0],
+                    nxt["lines"][1],
+                )
+                cur_type = cur.get("type", "text")
+                nxt_type = nxt.get("type", "text")
+                fused["type"] = cur_type if cur_type == nxt_type else f"{cur_type}+{nxt_type}"
+                merged.append(fused)
+                i += 2
+                continue
+
+        # Neither merge viable — keep cur as-is.
+        merged.append(cur)
+        i += 1
+
+    tree["chunks"] = merged
 
 
 def _emit_chunk(
