@@ -76,6 +76,11 @@ _MAX_TEXT_CHARS = 1200
 # the ``highlights`` snippet.
 _HIGHLIGHT_WINDOW = 50
 
+# Reciprocal Rank Fusion constant — controls how tightly top ranks are
+# compressed.  k=60 is the standard from the RRF paper (Cormack et al.).
+# Smaller k gives more spread between top results.
+_RRF_K = 60
+
 
 # ---------------------------------------------------------------------------
 # HybridRetriever — mirrors QueryFusionRetriever._relative_score_fusion
@@ -134,33 +139,41 @@ class HybridRetriever(BaseRetriever):
 
         Steps:
         1. Collect results from every sub-retriever.
-        2. Min-max normalise each retriever's scores to [0, 1].
-        3. Multiply each score by that retriever's weight.
-        4. Store normalised‑weighted per‑retriever scores in
+        2. Reciprocal Rank Fusion (RRF) + min‑max normalise each retriever's
+           scores to [0, 1], then multiply by weight.  RRF suppresses
+           outlier dominance — a single 200‑match chunk no longer compresses
+           every other result toward zero.
+        3. Store normalised‑weighted per‑retriever scores in
            ``self._per_retriever_scores`` (same scale as fused score).
-        5. Merge duplicates (keyed by ``node.hash``) — scores are summed.
-        6. Sort by score descending, return top ``_top_k``.
+        4. Merge duplicates (keyed by ``node.hash``) — scores are summed.
+        5. Sort by score descending, return top ``_top_k``.
         """
         # ── Step 1: Collect results ────────────────────────────────────────
         per_retriever: List[List[NodeWithScore]] = []
         for retriever in self._retrievers:
             per_retriever.append(retriever.retrieve(query_bundle))
 
-        # ── Step 2‑3: Min‑max normalise, multiply by weight ────────────────
+        # ── Step 2: RRF normalise, multiply by weight ─────────────────────
         for nodes, weight in zip(per_retriever, self._weights):
             if not nodes:
                 continue
-            scores = [n.score or 0.0 for n in nodes]
-            min_s, max_s = min(scores), max(scores)
-            for node in nodes:
-                raw = node.score or 0.0
-                if max_s == min_s:
-                    normalised = 1.0 if max_s > 0 else 0.0
-                else:
-                    normalised = (raw - min_s) / (max_s - min_s)
-                node.score = normalised * weight
+            n = len(nodes)
+            # RRF score for each rank position (1‑based).
+            rrf_scores = [1.0 / (_RRF_K + rank) for rank in range(1, n + 1)]
+            rrf_min, rrf_max = rrf_scores[-1], rrf_scores[0]
 
-        # ── Step 4: Store normalised×weight per‑retriever scores ───────────
+            if rrf_max == rrf_min:
+                # Single node — normalised to 1.0.
+                norm_scores = [1.0] * n if rrf_max > 0 else [0.0] * n
+            else:
+                norm_scores = [
+                    (s - rrf_min) / (rrf_max - rrf_min) for s in rrf_scores
+                ]
+
+            for node, norm in zip(nodes, norm_scores):
+                node.score = round(norm * weight, 4)
+
+        # ── Step 3: Store normalised×weight per‑retriever scores ───────────
         # Stored AFTER normalisation so scores are on the same [0, weight]
         # scale as the fused result — directly comparable and algebraically
         # summable: score_fused ≈ score_bm25 + score_substring.
@@ -178,7 +191,7 @@ class HybridRetriever(BaseRetriever):
                         node.score or 0.0, 4
                     )
 
-        # ── Step 5: Merge duplicates (by node hash) ────────────────────────
+        # ── Step 4: Merge duplicates (by node hash) ────────────────────────
         merged: Dict[str, NodeWithScore] = {}
         for nodes in per_retriever:
             for node in nodes:
