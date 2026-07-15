@@ -138,6 +138,10 @@ _TOC_PRUNING_RATIO_THRESHOLD: float = 10.0
 # this filter.
 _MIN_CHUNK_PREVIEW_CHARS: int = 15
 
+# Maximum length of a chunk preview string (chars).  Used by _chunk_preview
+# and by the ToC projector's truncation indicator.
+_PREVIEW_LEN: int = 80
+
 # ── BM25 keyword extraction constants ──────────────────────────────────────
 # Min / max top‑K keywords to extract per chunk.
 _KW_MIN_K: int = 3
@@ -147,7 +151,7 @@ _KW_MAX_K: int = 15
 _KW_WORDS_PER_KEYWORD: int = 12
 
 # Character threshold (below which keywords are omitted from the ToC).
-# 2 × the preview length (80).
+# 2 × the preview length.
 _KW_TOC_CHARS_THRESHOLD: int = 160
 
 # Average characters-per-chunk threshold above which a section is considered
@@ -209,7 +213,7 @@ def _free_port() -> int:
 # ---------------------------------------------------------------------------
 
 
-def _chunk_preview(text: str, n: int = 80) -> str:
+def _chunk_preview(text: str, n: int = _PREVIEW_LEN) -> str:
     """First *n* chars of *text*, URLs stripped, leading whitespace removed,
     hard-cut.
 
@@ -1229,14 +1233,10 @@ def _chunked_to_toc(
     """Project the verbose cached chunked tree into a compact ToC.
 
     The compact format is an ordered array where:
-    - Dict ``{"lines": [start, end], "preview": "...", "type": "text",
-      "n_chars": N, "bm25_keywords": [...]}`` objects are text chunks
-      (``bm25_keywords`` appears only when URL‑stripped text
-      > ``_KW_TOC_CHARS_THRESHOLD``).
-    - ``{"type": "omitted", "n_omitted": N, "lines": [first, last],
-      "info": "…"}`` sentinels mark chunks that were skipped due to the
-      per‑depth cap — ``n_omitted`` is the machine‑readable count,
-      ``info`` the human‑readable explanation.
+    - Strings ``"904-926 ‖ type ‖ kw1,kw2 ‖ preview..."`` are chunks
+      (keyword field omitted for chunks ≤ ``_KW_TOC_CHARS_THRESHOLD``).
+    - Strings ``"247-343 ‖ omitted×14"`` are sentinels for sections skipped
+      due to the per‑depth cap.
     - ``{"Heading Name": [...]}`` objects are subsections.
 
     Duplicate heading names at the same level get a ``" (N)"`` suffix.
@@ -1276,15 +1276,7 @@ def _section_to_toc(
         # all chunks so the section heading is still navigable.
         first = chunks[0]["lines"][0]
         last = chunks[-1]["lines"][1]
-        result.append({
-            "type": "omitted",
-            "n_omitted": len(chunks),
-            "lines": [first, last],
-            "info": (
-                f"… {len(chunks)} chunks — use --heading to expand all, "
-                f"or --line-range to read selectively"
-            ),
-        })
+        result.append(f"{first}-{last} ‖ omitted×{len(chunks)}")
     elif cap > 0:
         # Emit up to *cap* chunk previews — cap with sentinel if there are
         # more.  Skip trivially-short non-code chunks whose content was
@@ -1298,17 +1290,24 @@ def _section_to_toc(
                     continue
 
             ls, le = chunk["lines"]
-            # Build the ToC entry with type and (conditionally) bm25_keywords.
-            entry: dict[str, Any] = {
-                "lines": [ls, le],
-                "preview": chunk["preview"],
-                "type": chunk.get("type", "text"),
-                "n_chars": len(chunk["text"]),
-            }
-            chunk_n_chars = entry["n_chars"]
+# Build the compact chunk string:
+            #   "ls-le ‖ type ‖ kw1,kw2 ‖ preview..."
+            # Build the compact chunk string:  "ls-le ‖ type ‖ kw1,kw2 ‖ preview..."
+            preview_text = chunk["preview"]
+            # Append "..." when the preview was hard-truncated.
+            if len(preview_text) >= _PREVIEW_LEN:
+                preview_text += "..."
+            parts = [
+                f"{ls}-{le}",
+                chunk.get("type", "text"),
+            ]
+            chunk_n_chars = len(chunk["text"])
             if chunk_n_chars > _KW_TOC_CHARS_THRESHOLD:
-                entry["bm25_keywords"] = chunk.get("bm25_keywords", [])
-            result.append(entry)
+                kws = ",".join(chunk.get("bm25_keywords", []))
+                if kws:
+                    parts.append(kws)
+            parts.append(preview_text)
+            result.append(" ‖ ".join(parts))
             emitted += 1
 
             if emitted >= cap:
@@ -1319,15 +1318,7 @@ def _section_to_toc(
             skipped = len(chunks) - (i + 1)
             first = chunks[i + 1]["lines"][0]
             last = chunks[-1]["lines"][1]
-            result.append({
-                "type": "omitted",
-                "n_omitted": skipped,
-                "lines": [first, last],
-                "info": (
-                    f"… {skipped} more chunks — use --heading to expand all, "
-                    f"or --line-range to read selectively"
-                ),
-            })
+            result.append(f"{first}-{last} ‖ omitted×{skipped}")
 
     # Subsections — deduplicate heading names within this level.
     # Skip sections whose entire content was filtered out (e.g. empty
@@ -1806,13 +1797,16 @@ def _truncation_info(total_chars: int, markdown: str = "", *, limit: int = 20_00
 
 
 def _bm25_info() -> str:
-    """Return a one‑liner explaining when BM25 keywords are omitted from the ToC."""
+    """Return a one‑liner explaining the ToC compact‑string format."""
     return (
-        "Each ToC chunk entry may include a `bm25_keywords` field. "
-        "Chunks ≤ {threshold} chars omit the field to stay compact. "
-        "Keywords are English‑stemmed (e.g. "
-        "`navig` = navigation, `readabl` = readability)."
-    ).format(threshold=_KW_TOC_CHARS_THRESHOLD)
+        "ToC chunk format: "
+        "`lines ‖ type ‖ kw1,kw2 ‖ preview...`. "
+        "`‖` (U+2016) separates fields. "
+        "`...` means the preview was truncated. "
+        "Keywords (English‑stemmed, e.g. "
+        "`navig` = navigation) appear on chunks > {} chars. "
+        "`‖ omitted×N` = N chunks skipped (use --heading to expand)."
+    ).format(_KW_TOC_CHARS_THRESHOLD)
 
 
 def _is_feed_page(markdown: str) -> bool:
