@@ -121,7 +121,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         default=None,
         help=(
-            "Search the page content with hybrid (vector + BM25) retrieval.  "
+            "Search the page content with hybrid (BM25 + substring) retrieval.  "
             "When set, the response contains ranked chunks with scores instead "
             "of raw markdown.  Use --query-page to paginate."
         ),
@@ -133,16 +133,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Zero‑based page index for paginated search results.  "
             "Each page returns 5 results.  Default 0."
-        ),
-    )
-    parser.add_argument(
-        "--query-vector-weight",
-        type=float,
-        default=0.65,
-        help=(
-            "Weight for the vector retriever (0–1).  BM25 gets 1 minus this "
-            "weight.  Higher values favour semantic similarity; lower values "
-            "favour keyword matches.  Default 0.65."
         ),
     )
     parser.add_argument(
@@ -179,7 +169,6 @@ def _handle(args: argparse.Namespace) -> int:
     if args.query is not None:
         body["query"] = args.query
         body["query_page"] = args.query_page
-        body["query_vector_weight"] = args.query_vector_weight
         body["query_substring_weight"] = args.query_substring_weight
 
     try:
