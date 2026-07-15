@@ -2,8 +2,10 @@
 
 What this module provides
 - ``HybridRetriever``: Combines multiple ``BaseRetriever`` instances with
-  weighted min-max score fusion (mirrors ``QueryFusionRetriever`` in
-  ``_relative_score_fusion`` mode with ``num_queries=1``).
+  weighted score fusion.  Each retriever's raw scores are normalised to
+  [0, 1] — via RRF (for high‑variance scorers like substring) or via raw‑
+  score min‑max (for well‑calibrated scorers like BM25) — then multiplied
+  by per‑retriever weight and summed.
 - ``HybridSearcher``: High-level wrapper that builds an in-memory index from a
   list of ``TextNode`` objects and runs hybrid queries against it.
 
@@ -35,7 +37,7 @@ How to use
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.retrievers import BaseRetriever
@@ -83,18 +85,28 @@ _RRF_K = 60
 
 
 # ---------------------------------------------------------------------------
-# HybridRetriever — mirrors QueryFusionRetriever._relative_score_fusion
+# HybridRetriever — weighted score fusion with per‑retriever normalisation
 # ---------------------------------------------------------------------------
 
 
 class HybridRetriever(BaseRetriever):
     """Combine sub-retrievers with weighted min-max score fusion.
 
-    Algorithm mirrors the built-in ``QueryFusionRetriever`` in
-    ``_relative_score_fusion`` mode with ``num_queries=1``.
+    Each retriever is normalised to [0, 1] then multiplied by its weight.
+    Retriever‑specific normalisation is controlled via ``rrf_indices``:
 
-    When *labels* are provided (one per retriever), raw per‑retriever
-    scores are stored in a ``_per_retriever_scores`` dict keyed by
+    * **RRF normalisation** (default for all, or opt‑in per retriever):
+      replaces raw scores with Reciprocal Rank Fusion scores computed
+      from rank positions.  This suppresses outlier dominance from
+      high‑variance scorers (e.g. substring matching where one chunk
+      can have 200× the matches of the next).
+    * **Raw‑score min‑max normalisation** (for retrievers NOT in
+      ``rrf_indices``): scales raw scores directly to [0, 1],
+      preserving the relative signal strength of the retriever's
+      native scoring (e.g. BM25 tf‑idf weights).
+
+    When *labels* are provided (one per retriever), per‑retriever
+    scores are stored in ``_per_retriever_scores`` keyed by
     ``node.hash`` — readable by callers after ``_retrieve()`` completes.
 
     Unlike ``QueryFusionRetriever``, this class does NOT resolve
@@ -107,6 +119,7 @@ class HybridRetriever(BaseRetriever):
         weights: Optional[List[float]] = None,
         labels: Optional[List[str]] = None,
         top_k: int = 8,
+        rrf_indices: Optional[Set[int]] = None,
     ) -> None:
         """Initialise the hybrid retriever.
 
@@ -118,6 +131,12 @@ class HybridRetriever(BaseRetriever):
                 When set, raw per‑retriever scores are stored in
                 ``self._per_retriever_scores`` keyed by ``node.hash``.
             top_k: Number of results to return.
+            rrf_indices: Indices of retrievers that should use Reciprocal
+                Rank Fusion (RRF) normalisation.  Retrievers NOT in this
+                set use raw-score min‑max normalisation instead.  When
+                ``None`` (default), all retrievers use RRF (backward
+                compatible).  Pass an empty set to use raw‑score
+                normalisation for every retriever.
         """
         if weights is None:
             weights = [1.0 / len(retrievers)] * len(retrievers)
@@ -128,6 +147,7 @@ class HybridRetriever(BaseRetriever):
         self._weights = weights
         self._labels = labels or []
         self._top_k = top_k
+        self._rrf_indices: Optional[Set[int]] = rrf_indices
         # Hash-keyed store for per-retriever scores, populated during
         # _retrieve() and read by HybridSearcher.search().
         # Dict[node_hash, Dict[label_key, raw_score]]
@@ -139,10 +159,12 @@ class HybridRetriever(BaseRetriever):
 
         Steps:
         1. Collect results from every sub-retriever.
-        2. Reciprocal Rank Fusion (RRF) + min‑max normalise each retriever's
-           scores to [0, 1], then multiply by weight.  RRF suppresses
-           outlier dominance — a single 200‑match chunk no longer compresses
-           every other result toward zero.
+        2. Normalise each retriever's scores to [0, 1], then multiply by
+           weight.  Retrievers listed in ``rrf_indices`` use Reciprocal Rank
+           Fusion (RRF) normalisation — this suppresses outlier dominance
+           from high‑variance scorers like substring matching.  Other
+           retrievers (e.g. BM25) use raw‑score min‑max normalisation,
+           preserving the relative signal strength of actual relevance scores.
         3. Store normalised‑weighted per‑retriever scores in
            ``self._per_retriever_scores`` (same scale as fused score).
         4. Merge duplicates (keyed by ``node.hash``) — scores are summed.
@@ -153,22 +175,50 @@ class HybridRetriever(BaseRetriever):
         for retriever in self._retrievers:
             per_retriever.append(retriever.retrieve(query_bundle))
 
-        # ── Step 2: RRF normalise, multiply by weight ─────────────────────
-        for nodes, weight in zip(per_retriever, self._weights):
+        # ── Step 2: Normalise each retriever's scores to [0, 1], × weight ──
+        for retriever_idx, (nodes, weight) in enumerate(
+            zip(per_retriever, self._weights)
+        ):
             if not nodes:
                 continue
             n = len(nodes)
-            # RRF score for each rank position (1‑based).
-            rrf_scores = [1.0 / (_RRF_K + rank) for rank in range(1, n + 1)]
-            rrf_min, rrf_max = rrf_scores[-1], rrf_scores[0]
 
-            if rrf_max == rrf_min:
-                # Single node — normalised to 1.0.
-                norm_scores = [1.0] * n if rrf_max > 0 else [0.0] * n
+            # Decide normalisation strategy — RRF or raw‑score min‑max.
+            # None (default) = RRF for every retriever (backward compatible).
+            use_rrf = (
+                self._rrf_indices is None
+                or retriever_idx in (self._rrf_indices or set())
+            )
+
+            if use_rrf:
+                # RRF score for each rank position (1‑based).  Rank scores
+                # ignore raw magnitudes — a chunk with 200 substring matches
+                # and one with 199 get nearly identical RRF scores, preventing
+                # outliers from compressing everything toward zero.
+                rrf_scores = [1.0 / (_RRF_K + rank) for rank in range(1, n + 1)]
+                rrf_min, rrf_max = rrf_scores[-1], rrf_scores[0]
+
+                if rrf_max == rrf_min:
+                    norm_scores = [1.0] * n if rrf_max > 0 else [0.0] * n
+                else:
+                    norm_scores = [
+                        (s - rrf_min) / (rrf_max - rrf_min) for s in rrf_scores
+                    ]
             else:
-                norm_scores = [
-                    (s - rrf_min) / (rrf_max - rrf_min) for s in rrf_scores
-                ]
+                # Raw‑score min‑max normalisation — preserves the relative
+                # signal strength from the retriever's native scoring
+                # (e.g. BM25 tf‑idf weights).  When all raw scores are equal
+                # (including all‑zero for empty queries), contribution is
+                # uniform.
+                raw_scores = [node.score or 0.0 for node in nodes]
+                raw_min, raw_max = min(raw_scores), max(raw_scores)
+
+                if raw_max == raw_min:
+                    norm_scores = [1.0] * n if raw_max > 0 else [0.0] * n
+                else:
+                    norm_scores = [
+                        (s - raw_min) / (raw_max - raw_min) for s in raw_scores
+                    ]
 
             for node, norm in zip(nodes, norm_scores):
                 node.score = round(norm * weight, 4)
@@ -292,6 +342,8 @@ class HybridSearcher:
             weights=[1.0 - substring_weight, substring_weight],
             labels=["bm25", "substring"],
             top_k=num_nodes,
+            rrf_indices={1},  # Only substring retriever uses RRF; BM25 keeps
+            # raw‑score min‑max to preserve tf‑idf signal.
         )
 
     def search(
