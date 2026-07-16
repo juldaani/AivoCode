@@ -30,6 +30,37 @@ _OVERVIEW_KINDS: frozenset[str] = frozenset(
 )
 
 
+# ── Path resolution helper ─────────────────────────────────────────────────────
+
+
+def _resolve_file_path(file_path: str | Path, workspace: Path) -> Path:
+    """Resolve *file_path* to an absolute path relative to *workspace*.
+
+    Bug #1 fix: Relative paths must be resolved against the workspace root,
+    not the Python process CWD.  When the server runs in a container with
+    a different CWD, ``Path(file_path).resolve()`` would resolve against
+    that CWD instead of the workspace, causing "not a valid workspace file
+    path" errors.
+
+    Parameters
+    ----------
+    file_path : str or Path
+        The file path to resolve.  Can be absolute or relative.
+    workspace : Path
+        The workspace root (git repo root).  Relative paths are resolved
+        against this directory.
+
+    Returns
+    -------
+    Path
+        Absolute path to the file.
+    """
+    fp = Path(file_path)
+    if not fp.is_absolute():
+        fp = (workspace / fp).resolve()
+    return fp
+
+
 # ── Per-site helpers ───────────────────────────────────────────────────────────
 
 
@@ -180,7 +211,7 @@ async def _incoming_calls(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
     result = await query_call_hierarchy_incoming(
         fp,
         line=symbol.line,
@@ -226,7 +257,7 @@ async def _outgoing_calls(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
     result = await query_call_hierarchy_outgoing(
         fp,
         line=symbol.line,
@@ -272,7 +303,7 @@ async def _references(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
     result = await query_references(
         fp,
         line=symbol.line,
@@ -309,7 +340,7 @@ async def _overview(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
 
     result = await query_document_symbols(fp, workspace=ws)
     if "error" in result:
@@ -537,7 +568,7 @@ async def _explain(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
 
     body = read_range(fp, symbol.range_start[0], symbol.range_end[0])
     # Truncate huge bodies (e.g. large classes) to keep agent-friendly.
@@ -669,7 +700,7 @@ async def _impact(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
 
     incoming = await _incoming_calls(symbol, fp, ws)
     outgoing = await _outgoing_calls(symbol, fp, ws)
@@ -722,7 +753,7 @@ async def _definition(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
 
     # ── 1. Definition sites ─────────────────────────────────────────────
     def_result = await query_definition(
@@ -794,7 +825,7 @@ async def _hover(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
 
     result = await query_hover(
         fp, line=symbol.line, character=symbol.character, workspace=ws,
@@ -833,7 +864,7 @@ async def _diagnostics(
 
     ws = workspace or Path.cwd()
     ws = detect_workspace(ws)
-    fp = Path(file_path).resolve()
+    fp = _resolve_file_path(file_path, ws)
 
     result = await query_diagnostics(fp, workspace=ws)
     raw_diags: list[dict] = result.get("diagnostics", [])

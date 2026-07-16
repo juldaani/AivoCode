@@ -137,6 +137,49 @@ class TestDependents:
         # depth=2
         assert files[2] == "c.py"
 
+    def test_depth_0_unlimited(self):
+        """Bug #2: depth=0 should mean unlimited (all transitive dependents).
+
+        The help text states "0 = unlimited", but the implementation treated
+        depth=0 as "no results" because ``d >= depth`` evaluated to
+        ``0 >= 0 = True`` on the first iteration, causing an immediate continue.
+        """
+        g = _make_graph({
+            "b.py": {"a.py"},
+            "c.py": {"b.py"},
+            "d.py": {"c.py"},
+            "e.py": {"d.py"},
+        })
+        # depth=0 should return all transitive dependents (same as a large depth)
+        result_unlimited = g.dependents("a.py", depth=0)
+        result_large = g.dependents("a.py", depth=100)
+
+        # Both should return the same files
+        assert _deps_files(result_unlimited) == _deps_files(result_large)
+        assert _deps_files(result_unlimited) == ["b.py", "c.py", "d.py", "e.py"]
+
+        # Verify depths are correct
+        depths = {d["file"]: d["depth"] for d in result_unlimited}
+        assert depths["b.py"] == 1
+        assert depths["c.py"] == 2
+        assert depths["d.py"] == 3
+        assert depths["e.py"] == 4
+
+    def test_depth_0_with_circular_imports(self):
+        """depth=0 with circular imports should not infinite loop."""
+        g = _make_graph({
+            "b.py": {"a.py"},
+            "c.py": {"b.py"},
+            "a.py": {"c.py"},  # circular: a -> c -> b -> a
+        })
+        result = g.dependents("a.py", depth=0)
+        files = _deps_files(result)
+        # Should find b and c, but not infinite loop
+        assert "b.py" in files
+        assert "c.py" in files
+        # No duplicates
+        assert len(files) == len(set(files))
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # dependencies

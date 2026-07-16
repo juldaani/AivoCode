@@ -62,6 +62,22 @@ class ImportGraph:
 
         Returns a list of ``{"file": str, "depth": int}`` dicts sorted by
         depth (shallowest first), then by file path.
+
+        Parameters
+        ----------
+        file : str
+            The file to query dependents for.
+        depth : int
+            Maximum traversal depth.  ``depth=0`` means unlimited (all
+            transitive dependents).  ``depth=1`` returns only direct
+            importers.
+
+        Bug #2 fix
+        ----------
+        Previously, ``depth=0`` returned an empty list because the check
+        ``d >= depth`` evaluated to ``0 >= 0 = True`` on the first iteration.
+        Now ``depth=0`` is treated as unlimited, matching the documented
+        behavior in the CLI help text.
         """
         if file not in self._reverse and file not in self._forward:
             return []
@@ -73,7 +89,8 @@ class ImportGraph:
 
         while queue:
             current, d = queue.popleft()
-            if d >= depth:
+            # depth=0 means unlimited; only check depth limit when depth > 0
+            if depth > 0 and d >= depth:
                 continue
             for importer in self._reverse.get(current, ()):
                 if importer not in seen:
