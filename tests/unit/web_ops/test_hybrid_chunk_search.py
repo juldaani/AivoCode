@@ -458,7 +458,7 @@ class TestFusedSearch:
         """Fused search ranks results from both retrievers."""
         s = HybridSearcher()
         s.build(flat_nodes, substring_weight=0.4)
-        results, total = s.search("license copyright", top_k=10, page=0)
+        results, total = s.search("agent", top_k=10, page=0)
         assert total > 0
         assert len(results) > 0
         assert all(isinstance(r["score_fused"], float) for r in results)

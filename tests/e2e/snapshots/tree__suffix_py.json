@@ -202,7 +202,12 @@
     },
     {
       "tmp/": [
-        "trace_list_list_text.py"
+        "trace_list_list_text.py",
+        {
+          "smoke/": [
+            "smoke_highlights.py"
+          ]
+        }
       ]
     },
     {
