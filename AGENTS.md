@@ -20,6 +20,19 @@
 - Do not hardcode language specifics (for instance python filenames etc). Aim is to keep 
   the main code generic and language agnostic so its easy to add more programming languages.
 
+## Caching (Webfetch)
+- The webfetch pipeline caches **four layers** per URL under `.aivocode/cache/`:
+  1. `<hash>.json`         — raw markdown + navigation links  (primary cache)
+  2. `<hash>_chunked.json`  — heading-anchored chunked tree    (for --heading)
+  3. `<hash>_nodes.json`    — flattened TextNode list          (for --query)
+  4. `<hash>_bm25/`         — persisted BM25 inverted index    (for --query)
+- Cache TTL: **30 minutes**.  All layers expire together.
+- **If the chunking algorithm in `web_ops/fetcher.py` changes**, cached chunked
+  trees and downstream layers become stale.  Use `--refresh-cache` to force a
+  full rebuild for affected URLs — this deletes all four layers atomically.
+- On BM25 cache corruption (library update, disk error), the index is silently
+  rebuilt from cached nodes and re‑persisted.
+
 ## Docs & Comments Policy
 - Docstrings/comments should explain: what it does (short), why it exists/why this way,
   and how to use or extend it (contract, lifecycle, invariants).

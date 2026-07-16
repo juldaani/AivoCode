@@ -13,7 +13,18 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from web_ops import HybridSearcher, fetch_urls, web_search
-from web_ops.fetcher import _flatten_chunks, _parse_chunked, _read_cache_markdown
+from web_ops.fetcher import (
+    _add_bm25_keywords_to_tree,
+    _chunked_to_toc,
+    _flatten_chunks,
+    _load_bm25_retriever,
+    _parse_chunked,
+    _read_cache_markdown,
+    _read_cache_nodes,
+    _write_bm25_cache,
+    _write_chunked_cache,
+    _write_nodes_cache,
+)
 
 router = APIRouter(prefix="/web_ops", tags=["web_ops"])
 
@@ -98,14 +109,35 @@ async def webfetch(body: WebfetchBody):
                 }
             markdown = cached
 
-        chunked = _parse_chunked(markdown)
-        nodes = _flatten_chunks(chunked, include_headers=True)
-        searcher = HybridSearcher()
-        searcher.build(
-            nodes,
-            vector_weight=body.query_vector_weight,
-            substring_weight=body.query_substring_weight,
-        )
+        # ── Build search index (try cache first) ─────────────────────────
+        cached_nodes = _read_cache_nodes(body.url)
+        if cached_nodes is not None:
+            # Cache hit — skip chunking and use pre‑built BM25 index.
+            nodes = cached_nodes
+            bm25 = _load_bm25_retriever(body.url, nodes)
+            searcher = HybridSearcher()
+            searcher.build_from_cache(
+                nodes,
+                bm25,
+                substring_weight=body.query_substring_weight,
+            )
+        else:
+            # Cache miss — full compute then persist for next time.
+            chunked = _parse_chunked(markdown)
+            nodes = _flatten_chunks(chunked, include_headers=True)
+            searcher = HybridSearcher()
+            searcher.build(
+                nodes,
+                vector_weight=body.query_vector_weight,
+                substring_weight=body.query_substring_weight,
+            )
+            # Persist all downstream layers so the next query is instant.
+            _add_bm25_keywords_to_tree(chunked)
+            toc = _chunked_to_toc(chunked)
+            _write_chunked_cache(body.url, chunked, toc)
+            _write_nodes_cache(body.url, nodes)
+            _write_bm25_cache(body.url, searcher._retriever._retrievers[0])
+
         page_results, total = searcher.search(
             body.query, top_k=5, page=body.query_page,
         )

@@ -352,6 +352,46 @@ class HybridSearcher:
             # raw‑score min‑max to preserve tf‑idf signal.
         )
 
+    def build_from_cache(
+        self,
+        nodes: List[TextNode],
+        bm25_retriever: Any,
+        substring_weight: float = _DEFAULT_SUBSTRING_WEIGHT,
+    ) -> None:
+        """Index *nodes* for hybrid retrieval using a pre‑loaded BM25 retriever.
+
+        This is the cache‑aware variant of ``build()``.  Instead of building
+        a fresh ``BM25Retriever`` from scratch (expensive — tokenises and
+        indexes the full corpus), it reuses a pre‑loaded retriever (e.g.
+        loaded from disk via ``_load_bm25_retriever()``).
+
+        The ``SubstringRetriever`` is always built fresh from *nodes* — it
+        is cheap (pure‑Python list scan) and not worth caching separately.
+
+        Args:
+            nodes: TextNodes to index (from cache or freshly flattened).
+            bm25_retriever: A ready‑to‑use ``BM25Retriever`` instance (e.g.
+                loaded from ``BM25Retriever.from_persist_dir()``).
+            substring_weight: Weight for the substring retriever (0–1).
+                BM25 gets ``1 − substring_weight``.  Default 0.4.
+        """
+        self._nodes = nodes
+        num_nodes = len(nodes)
+
+        # Build substring retriever (cheap — no caching needed).
+        self._substring_retriever = SubstringRetriever.from_defaults(
+            nodes=nodes, similarity_top_k=num_nodes
+        )
+
+        # Wire hybrid using the pre‑loaded BM25 retriever.
+        self._retriever = HybridRetriever(
+            retrievers=[bm25_retriever, self._substring_retriever],
+            weights=[1.0 - substring_weight, substring_weight],
+            labels=["bm25", "substring"],
+            top_k=num_nodes,
+            rrf_indices={1},
+        )
+
     def search(
         self,
         query: str,

@@ -183,13 +183,16 @@ _DENSE_LINE_CHARS_THRESHOLD: int = 300
 _CACHE_DIR: Path = Path(".aivocode/cache")
 
 # Cache TTL in seconds.  After this period the cache is considered stale and
-# a fresh fetch is triggered automatically.  News sites update frequently;
-# 15 min balances freshness against repeated browser launches.
-_CACHE_TTL_S: float = 900
+# a fresh fetch is triggered automatically.  30 min balances freshness against
+# repeated browser launches while allowing downstream caches (chunked tree,
+# nodes, BM25 index) to survive long enough for follow‑up queries.
+_CACHE_TTL_S: float = 1800
 
-# Maximum number of cached files.  When exceeded, the oldest files (by
-# modification time) are evicted to keep the cache within bounds.
-_CACHE_MAX_FILES: int = 200
+# Maximum number of cache *JSON* files.  When exceeded, the oldest files (by
+# modification time) are evicted to keep the cache within bounds.  Each URL
+# produces up to 3 JSON files (markdown, chunked tree, nodes), so bumping this
+# to 400 allows ~130 cached URLs with all layers.
+_CACHE_MAX_FILES: int = 400
 
 
 def _free_port() -> int:
@@ -1396,6 +1399,29 @@ def _cache_path(url: str) -> Path:
     return _CACHE_DIR / _cache_key(url)
 
 
+def _cache_key_stem(url: str) -> str:
+    """Return the hash portion of the cache key (no extension)."""
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
+
+
+def _cache_path_for_layer(url: str, suffix: str) -> Path:
+    """Return the cache path for a named layer file.
+
+    Example: ``_cache_path_for_layer(url, "chunked.json")`` →
+    ``.aivocode/cache/<hash>_chunked.json``.
+    """
+    return _CACHE_DIR / f"{_cache_key_stem(url)}_{suffix}"
+
+
+def _bm25_cache_dir(url: str) -> Path:
+    """Return the cache directory for the BM25 search index.
+
+    The BM25 index is persisted as a directory (not a single file) via
+    ``BM25Retriever.persist()``, which writes ~8 files.
+    """
+    return _CACHE_DIR / f"{_cache_key_stem(url)}_bm25"
+
+
 def _cache_is_fresh(path: Path) -> bool:
     """Return True if the cache file exists and is within the TTL."""
     if not path.exists():
@@ -1477,7 +1503,12 @@ def _evict_if_needed() -> None:
     Files are sorted by modification time (oldest first); surplus entries
     are deleted.  This runs after every cache write so the limit is a hard
     cap.
+
+    Also cleans up orphaned ``_bm25/`` directories whose corresponding
+    main ``.json`` cache file has already been evicted.
     """
+    import shutil  # noqa: E402
+
     try:
         all_files = sorted(
             _CACHE_DIR.glob("*.json"),
@@ -1486,14 +1517,264 @@ def _evict_if_needed() -> None:
     except OSError:
         return  # Directory doesn't exist or isn't readable — ignore.
 
-    if len(all_files) <= _CACHE_MAX_FILES:
-        return
+    # Collect the set of hash stems that still have a main .json file.
+    active_stems: set[str] = set()
+    for f in all_files:
+        # Extract the hash stem — main files are <stem>.json,
+        # layer files are <stem>_<suffix>.json.
+        stem = f.name.split("_")[0].replace(".json", "")
+        active_stems.add(stem)
 
-    for old_file in all_files[: len(all_files) - _CACHE_MAX_FILES]:
+    if len(all_files) > _CACHE_MAX_FILES:
+        to_delete = all_files[: len(all_files) - _CACHE_MAX_FILES]
+        for old_file in to_delete:
+            stem = old_file.name.split("_")[0].replace(".json", "")
+            # If we're deleting the main .json, remove the stem from active set
+            # so the BM25 directory gets cleaned up below.
+            if "_" not in old_file.name.replace(".json", ""):
+                # This is the main cache file (no suffix like _chunked).
+                active_stems.discard(stem)
+            try:
+                old_file.unlink()
+            except OSError:
+                pass  # Best-effort — don't fail the fetch over cleanup.
+
+    # Clean up orphaned BM25 directories (no matching main .json file).
+    try:
+        for bm25_dir in _CACHE_DIR.glob("*_bm25"):
+            if not bm25_dir.is_dir():
+                continue
+            stem = bm25_dir.name.replace("_bm25", "")
+            if stem not in active_stems:
+                shutil.rmtree(str(bm25_dir), ignore_errors=True)
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Downstream cache layers (chunked tree, nodes, BM25 index)
+# ---------------------------------------------------------------------------
+# Beyond the raw markdown cache, these helpers persist the three query‑agnostic
+# layers that make follow‑up --query and --heading calls instant:
+#
+#   1. Chunked tree  (_chunked.json)      — heading-anchored parse tree
+#   2. TextNode list  (_nodes.json)        — flattened nodes for search indexing
+#   3. BM25 index     (_bm25/ directory)   — persisted inverted index
+#
+# Layers 1‑2 are plain JSON.  Layer 3 uses BM25Retriever.persist() which writes
+# ~8 files (npy, jsonl, json) into a directory.
+#
+# On --refresh-cache, all three layers are deleted alongside the main cache.
+
+
+def _write_chunked_cache(
+    url: str, chunked_tree: dict[str, Any], toc: list[Any],
+) -> None:
+    """Persist the enriched chunked tree and computed ToC as JSON to the cache.
+
+    The chunked tree is the output of ``_parse_chunked()``, enriched with
+    BM25 keywords via ``_add_bm25_keywords_to_tree()``.  The ToC is the
+    compact projection from ``_chunked_to_toc()``.
+
+    Caching both together saves the expensive (4+ s for large pages)
+    BM25 enrichment + ToC building pass on every subsequent request.
+
+    A ``url`` field is embedded so readers can detect cache collisions
+    (same pattern as the main markdown cache).
+    """
+    path = _cache_path_for_layer(url, "chunked.json")
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {"url": url, "tree": chunked_tree, "toc": toc},
+            indent=2, ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    _evict_if_needed()
+
+
+def _write_nodes_cache(url: str, nodes: list[Any]) -> None:
+    """Persist the flat TextNode list as JSON to the cache.
+
+    Each TextNode is serialised via ``.to_dict()`` (Pydantic v2).  The
+    resulting JSON array is enough to reconstruct identical TextNodes via
+    ``TextNode.from_dict()`` — preserving text, metadata, and node_id.
+
+    A ``url`` field is embedded so readers can detect cache collisions.
+    """
+    # Lazy import — TextNode is only needed for the search code path.
+    from llama_index.core.schema import TextNode  # noqa: E402
+
+    node_dicts: list[dict[str, Any]] = []
+    for n in nodes:
+        if isinstance(n, TextNode):
+            node_dicts.append(n.to_dict())
+        else:
+            # Already a dict (shouldn't happen, but be safe).
+            node_dicts.append(n)
+    path = _cache_path_for_layer(url, "nodes.json")
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"url": url, "nodes": node_dicts}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    _evict_if_needed()
+
+
+def _write_bm25_cache(url: str, bm25_retriever: Any) -> None:
+    """Persist the BM25 search index to a cache directory.
+
+    Uses ``BM25Retriever.persist()`` which writes the full inverted index
+    (sparse matrix, vocabulary, corpus) as ~8 files to `<hash>_bm25/`.
+
+    A ``.url`` marker file is written so readers can detect cache collisions
+    (the BM25 directory cannot embed a URL in its native format).
+
+    Errors during persistence (e.g. disk full) are silently ignored — the
+    index will simply be rebuilt from nodes on the next request.
+    """
+    persist_dir = _bm25_cache_dir(url)
+    try:
+        # Clean any previous partial data before writing.
+        import shutil  # noqa: E402
+        if persist_dir.exists():
+            shutil.rmtree(str(persist_dir))
+        persist_dir.mkdir(parents=True, exist_ok=True)
+        bm25_retriever.persist(str(persist_dir))
+        # Write a URL marker so readers can verify this directory was written
+        # for the expected URL (guards against SHA‑256 key collisions).
+        (persist_dir / ".url").write_text(url, encoding="utf-8")
+    except (OSError, RuntimeError):
+        # Best-effort: don't fail the request over cache write errors.
+        pass
+
+
+def _read_cache_chunked(url: str) -> dict[str, Any] | None:
+    """Read the cached chunked tree and ToC, or ``None`` on miss / corruption.
+
+    Returns a dict with keys ``"tree"`` (enriched chunked tree) and ``"toc"``
+    (compact ToC list).  When the cache was written by an older version that
+    did not store the ToC, ``"toc"`` will be ``None`` — the caller falls back
+    to recomputing it on the fly.
+
+    Verifies that the stored ``url`` field matches *url* — the two URLs
+    produce different SHA‑256 keys, so a mismatch means the cache entry
+    was corrupted or collided.  Old cache files without a ``url`` field
+    are treated as trusted (they expire naturally after the TTL).
+    """
+    path = _cache_path_for_layer(url, "chunked.json")
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    stored_url = data.get("url")
+    if stored_url is not None and stored_url != url:
+        return None  # cache entry belongs to a different URL
+    tree = data.get("tree")
+    if tree is None:
+        return None  # malformed cache entry
+    return {"tree": tree, "toc": data.get("toc")}
+
+
+def _read_cache_nodes(url: str) -> list[Any] | None:
+    """Read the cached TextNode list, or ``None`` on miss / corruption.
+
+    Reconstructs full ``TextNode`` objects from the serialised dicts via
+    ``TextNode.from_dict()`` — preserving ``text``, ``metadata``, and
+    ``node_id`` so the loaded nodes produce identical search results.
+
+    Verifies the stored ``url`` field (same guard as ``_read_cache_markdown``).
+    """
+    from llama_index.core.schema import TextNode  # noqa: E402
+
+    path = _cache_path_for_layer(url, "nodes.json")
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    stored_url = data.get("url")
+    if stored_url is not None and stored_url != url:
+        return None  # cache entry belongs to a different URL
+    node_dicts: list[dict[str, Any]] = data.get("nodes", [])
+    return [TextNode.from_dict(d) for d in node_dicts]
+
+
+def _load_bm25_retriever(
+    url: str,
+    nodes: list[Any],
+) -> Any:
+    """Load the cached BM25 retriever, falling back to a fresh build.
+
+    1. Verify the ``.url`` marker inside ``<hash>_bm25/`` matches *url*.
+       If not, the cache entry belongs to a different URL (hash collision or
+       corruption) — skip it and rebuild.
+    2. If the directory is valid, try ``BM25Retriever.from_persist_dir()``.
+    3. On any failure (corrupt files, library update, missing dir), rebuild
+       the retriever from *nodes* and re‑persist to fix the cache.
+    4. Always returns a usable ``BM25Retriever``.
+
+    The *nodes* fallback argument is required — without it we cannot rebuild.
+    """
+    from llama_index.retrievers.bm25 import BM25Retriever  # noqa: E402
+
+    persist_dir = _bm25_cache_dir(url)
+    if persist_dir.exists():
+        # Verify the URL marker to guard against cache collisions.
+        url_marker = persist_dir / ".url"
         try:
-            old_file.unlink()
+            if url_marker.exists():
+                stored_url = url_marker.read_text(encoding="utf-8").strip()
+                if stored_url != url:
+                    # Belongs to a different URL — treat as a miss.
+                    pass
+                else:
+                    return BM25Retriever.from_persist_dir(str(persist_dir))
+        except (OSError, RuntimeError, ValueError, KeyError):
+            # Corrupt or incompatible — rebuild and re‑persist below.
+            pass
+
+    # Build fresh from nodes and persist for next time.
+    bm25 = BM25Retriever.from_defaults(
+        nodes=nodes, similarity_top_k=len(nodes)
+    )
+    _write_bm25_cache(url, bm25)
+    return bm25
+
+
+def _delete_cache_layers(url: str) -> None:
+    """Delete all downstream cache files for *url* (chunked, nodes, BM25).
+
+    Called on ``--refresh-cache`` to force a full rebuild of all layers.
+    The main markdown cache file is deleted separately by the refresh path.
+    """
+    import shutil  # noqa: E402
+
+    # Delete chunked tree JSON.
+    path_chunked = _cache_path_for_layer(url, "chunked.json")
+    try:
+        path_chunked.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    # Delete nodes JSON.
+    path_nodes = _cache_path_for_layer(url, "nodes.json")
+    try:
+        path_nodes.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    # Delete BM25 index directory.
+    bm25_dir = _bm25_cache_dir(url)
+    if bm25_dir.exists():
+        try:
+            shutil.rmtree(str(bm25_dir))
         except OSError:
-            pass  # Best-effort — don't fail the fetch over cleanup.
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -1937,15 +2218,26 @@ async def _fetch_url(
             # (page was cached before links were stored in the unified
             # format), fall through to a fresh fetch.
             if nav is not None or not include_navigation:
-                # Always recompute the chunked tree from markdown rather
-                # than trusting a cached version — the chunking algorithm
-                # may have changed since the cache was written.
+                # Try to reuse the cached chunked tree + ToC to skip the
+                # expensive parsing and enrichment passes.  Falls back to
+                # ``None`` when the cache is missing or stale (handled via
+                # --refresh-cache).
+                cached = _read_cache_chunked(url)
                 return _result_with_truncation(
-                    cached_md, navigation=nav, chunked=None, limit=limit,
+                    cached_md,
+                    navigation=nav,
+                    chunked=cached["tree"] if cached else None,
+                    limit=limit,
                     url=url,
+                    cached_toc=cached["toc"] if cached else None,
                 )
 
     # ── Fresh fetch ──────────────────────────────────────────────────────
+    # When explicitly refreshing, clean all downstream cache layers so
+    # stale chunked trees / nodes / BM25 indices don't survive.
+    if refresh_cache:
+        _delete_cache_layers(url)
+
     result = await _fetch_once(url, wait_until)
     if not result.success:
         return result
@@ -1992,17 +2284,85 @@ def _result_with_truncation(
     *,
     url: str = "",
     limit: int = _WEBFETCH_TRUNCATION_THRESHOLD,
+    cached_toc: list[Any] | None = None,
 ) -> FetchResult:
-    """Build a FetchResult with optional truncation and compact ToC.
+    """Build a FetchResult, computing and caching intermediate results.
 
-    When *markdown* exceeds *limit* chars, replaces it with a compact ToC
-    and stores a helpful info message.  Below *limit* the raw markdown is
-    returned as-is.
+    **Always** runs the full pipeline for every page, regardless of size:
+    1. Chunked tree (``_parse_chunked``)
+    2. BM25 keyword enrichment (``_add_bm25_keywords_to_tree``)
+    3. ToC projection (``_chunked_to_toc``)
+    4. TextNode list (``_flatten_chunks``)
 
-    If *chunked* is ``None`` (old cache without it, or not yet computed),
-    the verbose chunked tree is generated on the fly from *markdown*.
+    All intermediate results are cached to disk so subsequent requests
+    (``--heading``, ``--query``) are instant.
+
+    When *chunked* and *cached_toc* are provided (cache hit), the parse,
+    enrichment, and ToC steps are skipped entirely.
+
+    The *limit* parameter controls only the **display** decision — whether
+    the user sees raw markdown or a ToC — not whether the pipeline runs.
+
+    Args:
+        markdown: Full page content as markdown.
+        navigation: Optional navigation links dict.
+        chunked: Pre‑built chunked tree (from cache hit), or ``None``.
+        url: Source URL (for cache file names).  When empty, no cache is
+            written.
+        limit: Character threshold above which raw markdown is replaced
+            with a compact ToC in the returned ``FetchResult``.
+        cached_toc: Pre‑computed ToC from cache, or ``None``.  When provided
+            alongside *chunked*, the expensive enrichment + ToC steps are
+            skipped.
     """
     total_chars = len(markdown)
+
+    # ── Build or reuse chunked tree ─────────────────────────────────────
+    is_fresh_tree = chunked is None
+    if is_fresh_tree:
+        chunked = _parse_chunked(markdown)
+
+    # ── Build or reuse ToC ──────────────────────────────────────────────
+    is_fresh_toc = cached_toc is None
+    if is_fresh_toc:
+        _add_bm25_keywords_to_tree(chunked)
+        toc = _chunked_to_toc(chunked)
+
+        # ── ToC pruning for very large / noisy reference docs ──────────
+        toc_json = json.dumps(toc, ensure_ascii=False)
+        toc_n_chars = len(toc_json)
+        if (
+            toc_n_chars > _TOC_PRUNING_SIZE_THRESHOLD
+            and total_chars / toc_n_chars < _TOC_PRUNING_RATIO_THRESHOLD
+        ):
+            toc = _chunked_to_toc(
+                chunked, max_per_depth=_TOC_MAX_CHUNKS_PER_DEPTH_PRUNED,
+            )
+    else:
+        toc = cached_toc
+
+    # ── Cache intermediate results ──────────────────────────────────────
+    # Only write when we computed something new.  On a full cache hit
+    # (tree + ToC both from disk) we skip redundant writes entirely.
+    if url and (is_fresh_tree or is_fresh_toc):
+        # Tree was built fresh, or ToC was missing (old cache format).
+        # Write both together so the next request is a full cache hit.
+        _write_chunked_cache(url, chunked, toc)
+
+    if url:
+        # Nodes may already be cached from a previous call to
+        # _result_with_truncation or the search‑mode route handler.
+        # Only write when they're missing.
+        existing_nodes = _read_cache_nodes(url)
+        if existing_nodes is None:
+            nodes = _flatten_chunks(chunked, include_headers=True)
+            _write_nodes_cache(url, nodes)
+
+    # ── Display decision ────────────────────────────────────────────────
+    # The truncation limit only affects what the user sees, not the cached
+    # intermediate results (which are always fully computed above).
+    # The verbose ``chunked`` tree is cached on disk for --query/--heading
+    # but never returned in the API response (it's an internal detail).
     if total_chars <= limit:
         return FetchResult(
             success=True,
@@ -2011,36 +2371,16 @@ def _result_with_truncation(
             total_chars=total_chars,
             url=url,
         )
-
-    # Ensure we have a chunked tree — compute it if missing.
-    if chunked is None:
-        chunked = _parse_chunked(markdown)
-
-    # Enrich the chunked tree with BM25 keyword metadata (mutates in-place).
-    _add_bm25_keywords_to_tree(chunked)
-
-    toc = _chunked_to_toc(chunked)
-
-    # ── Pruning: re‑build ToC with depth‑aware caps when the ToC is
-    # both large and achieves poor compression — typical of reference
-    # docs with hundreds of deeply nested sections (e.g. node_fs).
-    toc_json = json.dumps(toc, ensure_ascii=False)
-    toc_n_chars = len(toc_json)
-    if (
-        toc_n_chars > _TOC_PRUNING_SIZE_THRESHOLD
-        and total_chars / toc_n_chars < _TOC_PRUNING_RATIO_THRESHOLD
-    ):
-        toc = _chunked_to_toc(chunked, max_per_depth=_TOC_MAX_CHUNKS_PER_DEPTH_PRUNED)
-
-    return FetchResult(
-        success=True,
-        markdown=_truncation_message(),
-        navigation=navigation,
-        toc=toc,
-        info=_truncation_info(total_chars, markdown, limit=limit),
-        total_chars=total_chars,
-        url=url,
-    )
+    else:
+        return FetchResult(
+            success=True,
+            markdown=_truncation_message(),
+            navigation=navigation,
+            toc=toc,
+            info=_truncation_info(total_chars, markdown, limit=limit),
+            total_chars=total_chars,
+            url=url,
+        )
 
 
 async def fetch_urls(
