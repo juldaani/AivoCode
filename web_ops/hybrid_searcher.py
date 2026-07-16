@@ -298,6 +298,7 @@ class HybridSearcher:
         nodes: List[TextNode],
         vector_weight: float = _DEFAULT_VECTOR_WEIGHT,
         substring_weight: float = _DEFAULT_SUBSTRING_WEIGHT,
+        heading_boost_factor: float = 2.0,
     ) -> None:
         """Index *nodes* for hybrid retrieval.
 
@@ -313,6 +314,9 @@ class HybridSearcher:
                 when re‑enabled.  Currently unused.
             substring_weight: Weight for the substring retriever (0–1).
                 BM25 gets ``1 − substring_weight``.  Default 0.4.
+            heading_boost_factor: Multiplier for heading matches in substring
+                scoring (default 2.0).  A value of 2.0 means heading matches
+                count double.
         """
         # The FastEmbed model is heavy to load (~33 MB download on first use),
         # but the Settings singleton caches it after the first assignment.
@@ -330,9 +334,11 @@ class HybridSearcher:
             nodes=nodes, similarity_top_k=num_nodes
         )
 
-        # Build substring retriever.
+        # Build substring retriever with heading boost.
         self._substring_retriever = SubstringRetriever.from_defaults(
-            nodes=nodes, similarity_top_k=num_nodes
+            nodes=nodes,
+            similarity_top_k=num_nodes,
+            heading_boost_factor=heading_boost_factor,
         )
 
         # Wire hybrid — fetch all nodes from sub-retrievers so pagination
@@ -357,6 +363,7 @@ class HybridSearcher:
         nodes: List[TextNode],
         bm25_retriever: Any,
         substring_weight: float = _DEFAULT_SUBSTRING_WEIGHT,
+        heading_boost_factor: float = 2.0,
     ) -> None:
         """Index *nodes* for hybrid retrieval using a pre‑loaded BM25 retriever.
 
@@ -374,13 +381,18 @@ class HybridSearcher:
                 loaded from ``BM25Retriever.from_persist_dir()``).
             substring_weight: Weight for the substring retriever (0–1).
                 BM25 gets ``1 − substring_weight``.  Default 0.4.
+            heading_boost_factor: Multiplier for heading matches in substring
+                scoring (default 2.0).  A value of 2.0 means heading matches
+                count double.
         """
         self._nodes = nodes
         num_nodes = len(nodes)
 
-        # Build substring retriever (cheap — no caching needed).
+        # Build substring retriever with heading boost (cheap — no caching needed).
         self._substring_retriever = SubstringRetriever.from_defaults(
-            nodes=nodes, similarity_top_k=num_nodes
+            nodes=nodes,
+            similarity_top_k=num_nodes,
+            heading_boost_factor=heading_boost_factor,
         )
 
         # Wire hybrid using the pre‑loaded BM25 retriever.
@@ -473,7 +485,6 @@ class HybridSearcher:
                 "score_substring": per_retriever_scores.get("score_substring", 0.0),
                 "n_substring_matches": n_matches,
                 "text": display_text,
-                "heading_path": node_metadata.get("heading_path", []),
                 "line_range": node_metadata.get("lines", []),
             }
 

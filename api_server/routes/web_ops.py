@@ -166,6 +166,9 @@ async def webfetch(body: WebfetchBody):
                 "density is highest.  Uppercase spans show what matched "
                 "(case‑insensitive).  When no matches exist in the hidden "
                 "region the \"highlights\" key is absent from the result."
+                "\n\nThe [Section 1 > Section 1.2 > ...] prefix in the text "
+                "field shows the section hierarchy under which the chunk is "
+                "located."
             ),
             "results": page_results,
         }

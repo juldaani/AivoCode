@@ -146,40 +146,74 @@ def generate_sub_queries(cleaned_query: str) -> List[str]:
 # ── Chunk scoring ──────────────────────────────────────────────────────────────
 
 
-def score_chunk(sub_queries: List[str], chunk_text: str) -> float:
-    """Score one chunk against a set of sub‑queries.
+def score_chunk(
+    sub_queries: List[str],
+    chunk_text: str,
+    heading_path: Optional[List[str]] = None,
+    heading_boost_factor: float = 2.0,
+) -> float:
+    """Score one chunk against a set of sub-queries with optional heading boost.
 
-    Each sub‑query that appears as a case‑insensitive substring contributes
+    Each sub-query that appears as a case-insensitive substring contributes
     ``len(sub_query_in_chars) * occurrence_count`` to the raw score.
 
-    Occurrences are counted as non‑overlapping matches (``str.find`` with
+    When *heading_path* is provided, sub-queries that also appear in the
+    heading hierarchy receive an additional boost of
+    ``len(sub_query) * heading_occurrences * heading_boost_factor``.
+    This rewards chunks whose section headings contain the search terms,
+    since heading matches indicate higher topical importance.
+
+    Occurrences are counted as non-overlapping matches (``str.find`` with
     advancing start index).
 
     Args:
         sub_queries: Output of ``generate_sub_queries``.
         chunk_text: The chunk's text content.
+        heading_path: List of ancestor heading strings (e.g. ``["API", "Auth"]``).
+            When provided, matches in headings get extra weight.
+        heading_boost_factor: Multiplier for heading matches (default 2.0).
+            A value of 2.0 means heading matches count double.
 
     Returns:
-        Raw score (not normalised).  ``HybridRetriever`` applies min‑max
+        Raw score (not normalised).  ``HybridRetriever`` applies min-max
         normalisation during fusion.
     """
     text_lower = chunk_text.lower()
+    # Join headings with space to allow phrase matching across heading levels
+    heading_text = " ".join(heading_path).lower() if heading_path else ""
     total: float = 0.0
 
     for sub in sub_queries:
         sub_lower = sub.lower()
-        # Count non‑overlapping matches.
-        count = 0
+        # Count non-overlapping matches in chunk text.
+        text_count = 0
         start = 0
         while True:
             idx = text_lower.find(sub_lower, start)
             if idx == -1:
                 break
-            count += 1
+            text_count += 1
             start = idx + len(sub_lower)
 
-        if count > 0:
-            total += len(sub) * count
+        # Count non-overlapping matches in heading path.
+        heading_count = 0
+        if heading_text:
+            start = 0
+            while True:
+                idx = heading_text.find(sub_lower, start)
+                if idx == -1:
+                    break
+                heading_count += 1
+                start = idx + len(sub_lower)
+
+        # Add base score from text matches
+        if text_count > 0:
+            total += len(sub) * text_count
+
+        # Add boost from heading matches (independent of text matches)
+        if heading_count > 0:
+            boost = len(sub) * heading_count * heading_boost_factor
+            total += boost
 
     return total
 
@@ -200,15 +234,19 @@ class SubstringRetriever(BaseRetriever):
         self,
         nodes: List[TextNode],
         similarity_top_k: int = 100,
+        heading_boost_factor: float = 2.0,
     ) -> None:
         """Initialise with a node list and a retrieval cap.
 
         Args:
             nodes: TextNodes to search (typically flattened from a chunked tree).
             similarity_top_k: Max number of results to return per query.
+            heading_boost_factor: Multiplier for heading matches (default 2.0).
+                A value of 2.0 means heading matches count double in scoring.
         """
         self._nodes_stored: List[TextNode] = nodes
         self._similarity_top_k: int = similarity_top_k
+        self._heading_boost_factor: float = heading_boost_factor
         # Expose the cleaned query + removed words from the most recent
         # _retrieve() call so HybridSearcher can read them.
         self._last_cleaned_query: str = ""
@@ -220,28 +258,34 @@ class SubstringRetriever(BaseRetriever):
         cls,
         nodes: List[TextNode],
         similarity_top_k: int = 100,
+        heading_boost_factor: float = 2.0,
     ) -> "SubstringRetriever":
         """Factory matching the ``BM25Retriever`` API.
 
         Args:
             nodes: TextNodes to index.
             similarity_top_k: Max results per query.
+            heading_boost_factor: Multiplier for heading matches (default 2.0).
 
         Returns:
-            A ready‑to‑use ``SubstringRetriever`` instance.
+            A ready-to-use ``SubstringRetriever`` instance.
         """
-        return cls(nodes, similarity_top_k=similarity_top_k)
+        return cls(
+            nodes,
+            similarity_top_k=similarity_top_k,
+            heading_boost_factor=heading_boost_factor,
+        )
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        """Run the full substring‑match pipeline.
+        """Run the full substring-match pipeline.
 
         1. Strip stopwords.
-        2. Generate sub‑queries (words, bigrams, full phrase).
-        3. Score every chunk.
-        4. Return top‑*k* results sorted by raw score descending.
+        2. Generate sub-queries (words, bigrams, full phrase).
+        3. Score every chunk (with heading boost if heading_path is present).
+        4. Return top-*k* results sorted by raw score descending.
 
         Scores are **not** normalised here — ``HybridRetriever`` applies
-        min‑max normalisation during fusion.
+        min-max normalisation during fusion.
 
         Returns:
             List of ``NodeWithScore``, sorted by ``score`` descending.
@@ -255,7 +299,14 @@ class SubstringRetriever(BaseRetriever):
         results: List[NodeWithScore] = []
 
         for node in self._nodes_stored:
-            score = score_chunk(sub_queries, node.text)
+            # Extract heading_path from metadata for heading boost
+            heading_path = node.metadata.get("heading_path", [])
+            score = score_chunk(
+                sub_queries,
+                node.text,
+                heading_path=heading_path,
+                heading_boost_factor=self._heading_boost_factor,
+            )
             if score > 0.0:
                 results.append(NodeWithScore(node=node, score=score))
 
