@@ -151,7 +151,7 @@
           "files": 1,
           "folders": {
             "codebase": {
-              "files": 3,
+              "files": 4,
               "folders": {},
               "imports": [
                 "codebase"
@@ -176,7 +176,7 @@
               "imported_by": []
             },
             "web_ops": {
-              "files": 4,
+              "files": 5,
               "folders": {},
               "imports": [
                 "web_ops"
@@ -228,31 +228,31 @@
     {
       "file": "file_watcher/filters.py",
       "imported_by": 2,
-      "imported_by_transitive": 36
+      "imported_by_transitive": 37
     },
     {
       "file": "file_watcher/gitignore.py",
       "imported_by": 3,
-      "imported_by_transitive": 36
+      "imported_by_transitive": 37
     },
     {
       "file": "file_watcher/types.py",
       "imported_by": 10,
-      "imported_by_transitive": 39
+      "imported_by_transitive": 40
     },
     {
       "file": "file_watcher/watcher.py",
       "imported_by": 4,
-      "imported_by_transitive": 34
+      "imported_by_transitive": 35
     },
     {
       "file": "lsp/_symbols.py",
       "imported_by": 3,
-      "imported_by_transitive": 32
+      "imported_by_transitive": 33
     }
   ],
   "summary": {
-    "total_files": 110,
+    "total_files": 112,
     "total_dirs": 23
   },
   "workspace": "/workspaces/aivocode",

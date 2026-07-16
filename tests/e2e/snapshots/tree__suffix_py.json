@@ -166,6 +166,7 @@
             "__init__.py",
             {
               "codebase/": [
+                "test_analyze_path_resolution.py",
                 "test_architecture.py",
                 "test_import_graph.py",
                 "test_lang_handler_python.py"
