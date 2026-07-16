@@ -39,10 +39,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Set, Tuple
 
-from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
-from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.retrievers.bm25 import BM25Retriever
 
 from web_ops.substring_retriever import (
@@ -240,7 +238,8 @@ class HybridRetriever(BaseRetriever):
                     continue
                 label_key = f"score_{self._labels[retriever_idx]}"
                 for node in nodes:
-                    h = node.node.hash
+                    # Use node_id as fallback if hash is None (defensive programming)
+                    h = node.node.hash or node.node.node_id
                     if h not in self._per_retriever_scores:
                         self._per_retriever_scores[h] = {}
                     self._per_retriever_scores[h][label_key] = round(
@@ -251,7 +250,8 @@ class HybridRetriever(BaseRetriever):
         merged: Dict[str, NodeWithScore] = {}
         for nodes in per_retriever:
             for node in nodes:
-                h = node.node.hash
+                # Use node_id as fallback if hash is None (defensive programming)
+                h = node.node.hash or node.node.node_id
                 if h in merged:
                     merged[h].score = (
                         (merged[h].score or 0.0) + (node.score or 0.0)

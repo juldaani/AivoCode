@@ -191,6 +191,7 @@
             {
               "web_ops/": [
                 "__init__.py",
+                "test_bm25_and_hash.py",
                 "test_cache_url_verification.py",
                 "test_chunking.py",
                 "test_hybrid_chunk_search.py"
@@ -202,7 +203,10 @@
     },
     {
       "tmp/": [
+        "benchmark_bm25.py",
         "diag_cache_timing.py",
+        "probe_bm25_deep.py",
+        "probe_bm25_matrix.py",
         "probe_bm25_persistence.py",
         "probe_chunked_tree_serialization.py",
         "probe_e2e_cache_roundtrip.py",

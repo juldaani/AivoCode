@@ -1115,27 +1115,39 @@ def _get_top_bm25_keywords(
     """Return top-N (token_string) lists for each document from the CSR matrix.
 
     Reads the internal CSR-format term-document matrix from
-    ``bm25_obj.scores``, collects every term that appears in a given
-    document, sorts by the BM25 weight, and returns the top *top_n*
+    ``bm25_obj.scores``. The matrix is **term-major** (rows = terms),
+    so we build a document-to-terms mapping in a single pass, then
+    sort each document's terms by BM25 weight and return the top *top_n*
     **token strings only** (scores are discarded — the keywords are for
     informational display, not ranking).
+
+    **Performance**: O(num_terms × avg_docs_per_term + num_docs × avg_terms_per_doc × log(...))
+    instead of the previous O(num_docs × num_terms × avg_docs_per_term).
     """
     data = bm25_obj.scores["data"]
     indices = bm25_obj.scores["indices"]
     indptr = bm25_obj.scores["indptr"]
     num_terms = len(indptr) - 1
+    num_docs = len(token_ids_per_doc)
 
+    # Build document-to-terms mapping in a single pass through the term-major matrix.
+    # Each entry: doc_to_terms[doc_id] = [(term_str, score), ...]
+    doc_to_terms: List[List[Tuple[str, float]]] = [[] for _ in range(num_docs)]
+
+    for term_id in range(num_terms):
+        token_str = id_to_token.get(term_id, f"<unk:{term_id}>")
+        start = indptr[term_id]
+        end = indptr[term_id + 1]
+        # Iterate through all documents containing this term
+        for pos in range(start, end):
+            doc_id = indices[pos]
+            score = float(data[pos])
+            doc_to_terms[doc_id].append((token_str, score))
+
+    # For each document, sort by score descending and extract top-N keywords
     results: List[List[str]] = []
-    for doc_id in range(len(token_ids_per_doc)):
-        term_scores: List[Tuple[str, float]] = []
-        for term_id in range(num_terms):
-            start = indptr[term_id]
-            end = indptr[term_id + 1]
-            for pos in range(start, end):
-                if indices[pos] == doc_id:
-                    token_str = id_to_token.get(term_id, f"<unk:{term_id}>")
-                    term_scores.append((token_str, float(data[pos])))
-                    break
+    for doc_id in range(num_docs):
+        term_scores = doc_to_terms[doc_id]
         term_scores.sort(key=lambda x: x[1], reverse=True)
         results.append([t for t, _ in term_scores[:top_n]])
 
@@ -2306,7 +2318,7 @@ def _build_toc_with_pruning(chunked: dict[str, Any], total_chars: int) -> list[A
 
 def _result_with_truncation(
     markdown: str,
-    navigation: dict[str, list[dict[str, Any]]] | None = None,
+    navigation: dict[str, list[str]] | None = None,
     chunked: dict[str, Any] | None = None,
     *,
     url: str = "",
