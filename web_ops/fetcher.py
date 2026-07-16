@@ -77,7 +77,7 @@ class FetchResult:
     success: bool = False
     status_code: int | None = None
     error: str | None = field(default=None, compare=False)
-    navigation: dict[str, list[dict[str, Any]]] | None = None
+    navigation: dict[str, list[str]] | None = None
     toc: list[Any] | None = None
     chunked: dict[str, Any] | None = None
     info: str | None = None
@@ -1454,7 +1454,7 @@ def _read_cache_markdown(url: str) -> str | None:
 
 def _read_cache_links(
     url: str,
-) -> dict[str, list[dict[str, Any]]] | None:
+) -> dict[str, list[str]] | None:
     """Read cached navigation links from the unified JSON cache, or ``None``.
 
     Same URL‑verification semantics as ``_read_cache_markdown``.
@@ -1475,7 +1475,7 @@ def _read_cache_links(
 def _write_cache(
     url: str,
     markdown: str,
-    links: dict[str, list[dict[str, Any]]] | None = None,
+    links: dict[str, list[str]] | None = None,
 ) -> None:
     """Write markdown, links, and source URL to a unified JSON cache file.
 
@@ -2020,16 +2020,14 @@ async def _fetch_once(
             )
 
         # Always extract structured navigation links for caching.
-        navigation: dict[str, list[dict[str, Any]]] | None = None
+        navigation: dict[str, list[str]] | None = None
         if result.links:
             navigation = {
                 "internal": [
-                    {"href": link["href"], "text": link["text"]}
-                    for link in result.links.get("internal", [])
+                    link["href"] for link in result.links.get("internal", [])
                 ],
                 "external": [
-                    {"href": link["href"], "text": link["text"]}
-                    for link in result.links.get("external", [])
+                    link["href"] for link in result.links.get("external", [])
                 ],
             }
 
@@ -2377,6 +2375,9 @@ def _result_with_truncation(
     # intermediate results (which are always fully computed above).
     # The verbose ``chunked`` tree is cached on disk for --query/--heading
     # but never returned in the API response (it's an internal detail).
+    #
+    # When --navigation is used, the user wants structured links, not a ToC.
+    # So we skip the toc field when navigation is provided.
     if total_chars <= limit:
         return FetchResult(
             success=True,
@@ -2390,7 +2391,7 @@ def _result_with_truncation(
             success=True,
             markdown=_truncation_message(),
             navigation=navigation,
-            toc=toc,
+            toc=toc if navigation is None else None,
             info=_truncation_info(total_chars, markdown, limit=limit),
             total_chars=total_chars,
             url=url,
