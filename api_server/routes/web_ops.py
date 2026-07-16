@@ -14,11 +14,11 @@ from pydantic import BaseModel
 
 from web_ops import HybridSearcher, fetch_urls, web_search
 from web_ops.fetcher import (
-    _add_bm25_keywords_to_tree,
-    _chunked_to_toc,
+    _build_toc_with_pruning,
     _flatten_chunks,
     _load_bm25_retriever,
     _parse_chunked,
+    _read_cache_chunked,
     _read_cache_markdown,
     _read_cache_nodes,
     _write_bm25_cache,
@@ -122,8 +122,13 @@ async def webfetch(body: WebfetchBody):
                 substring_weight=body.query_substring_weight,
             )
         else:
-            # Cache miss — full compute then persist for next time.
-            chunked = _parse_chunked(markdown)
+            # Cache miss — try to use cached chunked tree to avoid re-parsing markdown.
+            cached_chunked = _read_cache_chunked(body.url)
+            if cached_chunked is not None:
+                chunked = cached_chunked["tree"]
+            else:
+                chunked = _parse_chunked(markdown)
+            
             nodes = _flatten_chunks(chunked, include_headers=True)
             searcher = HybridSearcher()
             searcher.build(
@@ -132,8 +137,7 @@ async def webfetch(body: WebfetchBody):
                 substring_weight=body.query_substring_weight,
             )
             # Persist all downstream layers so the next query is instant.
-            _add_bm25_keywords_to_tree(chunked)
-            toc = _chunked_to_toc(chunked)
+            toc = _build_toc_with_pruning(chunked, len(markdown))
             _write_chunked_cache(body.url, chunked, toc)
             _write_nodes_cache(body.url, nodes)
             _write_bm25_cache(body.url, searcher._retriever._retrievers[0])

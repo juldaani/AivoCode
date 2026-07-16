@@ -1517,23 +1517,20 @@ def _evict_if_needed() -> None:
     except OSError:
         return  # Directory doesn't exist or isn't readable — ignore.
 
-    # Collect the set of hash stems that still have a main .json file.
-    active_stems: set[str] = set()
+    # Build set of stems that have their main .json file (no _chunked/_nodes suffix).
+    # Main cache files are <hash>.json; layer files are <hash>_chunked.json, etc.
+    main_stems: set[str] = set()
     for f in all_files:
-        # Extract the hash stem — main files are <stem>.json,
-        # layer files are <stem>_<suffix>.json.
-        stem = f.name.split("_")[0].replace(".json", "")
-        active_stems.add(stem)
+        # Check if this is a main cache file (stem has no underscore)
+        if "_" not in f.stem:
+            main_stems.add(f.stem)
 
     if len(all_files) > _CACHE_MAX_FILES:
         to_delete = all_files[: len(all_files) - _CACHE_MAX_FILES]
         for old_file in to_delete:
-            stem = old_file.name.split("_")[0].replace(".json", "")
-            # If we're deleting the main .json, remove the stem from active set
-            # so the BM25 directory gets cleaned up below.
-            if "_" not in old_file.name.replace(".json", ""):
-                # This is the main cache file (no suffix like _chunked).
-                active_stems.discard(stem)
+            # If deleting main file, remove from main_stems
+            if "_" not in old_file.stem:
+                main_stems.discard(old_file.stem)
             try:
                 old_file.unlink()
             except OSError:
@@ -1545,7 +1542,7 @@ def _evict_if_needed() -> None:
             if not bm25_dir.is_dir():
                 continue
             stem = bm25_dir.name.replace("_bm25", "")
-            if stem not in active_stems:
+            if stem not in main_stems:
                 shutil.rmtree(str(bm25_dir), ignore_errors=True)
     except OSError:
         pass
@@ -1701,6 +1698,8 @@ def _read_cache_nodes(url: str) -> list[Any] | None:
     if stored_url is not None and stored_url != url:
         return None  # cache entry belongs to a different URL
     node_dicts: list[dict[str, Any]] = data.get("nodes", [])
+    if not node_dicts:
+        return None  # empty nodes list — treat as cache miss
     return [TextNode.from_dict(d) for d in node_dicts]
 
 
@@ -2277,6 +2276,36 @@ async def _fetch_url(
     )
 
 
+def _build_toc_with_pruning(chunked: dict[str, Any], total_chars: int) -> list[Any]:
+    """Build a compact ToC from a chunked tree, applying pruning for large docs.
+
+    Enriches the tree with BM25 keywords (mutates in-place), builds the ToC,
+    and applies depth-aware pruning if the ToC is too large relative to the
+    page size (typical of reference docs with hundreds of sections).
+
+    Args:
+        chunked: Chunked tree (will be mutated to add BM25 keywords).
+        total_chars: Total character count of the page (for pruning heuristic).
+
+    Returns:
+        Compact ToC list.
+    """
+    _add_bm25_keywords_to_tree(chunked)
+    toc = _chunked_to_toc(chunked)
+
+    # ── ToC pruning for very large / noisy reference docs ──────────
+    toc_json = json.dumps(toc, ensure_ascii=False)
+    toc_n_chars = len(toc_json)
+    if (
+        toc_n_chars > _TOC_PRUNING_SIZE_THRESHOLD
+        and total_chars / toc_n_chars < _TOC_PRUNING_RATIO_THRESHOLD
+    ):
+        toc = _chunked_to_toc(
+            chunked, max_per_depth=_TOC_MAX_CHUNKS_PER_DEPTH_PRUNED,
+        )
+    return toc
+
+
 def _result_with_truncation(
     markdown: str,
     navigation: dict[str, list[dict[str, Any]]] | None = None,
@@ -2325,19 +2354,7 @@ def _result_with_truncation(
     # ── Build or reuse ToC ──────────────────────────────────────────────
     is_fresh_toc = cached_toc is None
     if is_fresh_toc:
-        _add_bm25_keywords_to_tree(chunked)
-        toc = _chunked_to_toc(chunked)
-
-        # ── ToC pruning for very large / noisy reference docs ──────────
-        toc_json = json.dumps(toc, ensure_ascii=False)
-        toc_n_chars = len(toc_json)
-        if (
-            toc_n_chars > _TOC_PRUNING_SIZE_THRESHOLD
-            and total_chars / toc_n_chars < _TOC_PRUNING_RATIO_THRESHOLD
-        ):
-            toc = _chunked_to_toc(
-                chunked, max_per_depth=_TOC_MAX_CHUNKS_PER_DEPTH_PRUNED,
-            )
+        toc = _build_toc_with_pruning(chunked, total_chars)
     else:
         toc = cached_toc
 
@@ -2348,13 +2365,10 @@ def _result_with_truncation(
         # Tree was built fresh, or ToC was missing (old cache format).
         # Write both together so the next request is a full cache hit.
         _write_chunked_cache(url, chunked, toc)
-
-    if url:
-        # Nodes may already be cached from a previous call to
-        # _result_with_truncation or the search‑mode route handler.
-        # Only write when they're missing.
-        existing_nodes = _read_cache_nodes(url)
-        if existing_nodes is None:
+        
+        # Also write nodes if we built a fresh tree.  On cache hits, assume
+        # nodes are already cached (eviction deletes all layers together).
+        if is_fresh_tree:
             nodes = _flatten_chunks(chunked, include_headers=True)
             _write_nodes_cache(url, nodes)
 
