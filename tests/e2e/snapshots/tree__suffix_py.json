@@ -202,6 +202,11 @@
     },
     {
       "tmp/": [
+        "diag_cache_timing.py",
+        "probe_bm25_persistence.py",
+        "probe_chunked_tree_serialization.py",
+        "probe_e2e_cache_roundtrip.py",
+        "probe_textnode_serialization.py",
         "trace_list_list_text.py",
         {
           "smoke/": [
